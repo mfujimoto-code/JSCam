@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>JSCam — live camera bench</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23090b10'/%3E%3Ccircle cx='16' cy='16' r='8' fill='none' stroke='%23e23eaf' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%233ec8e2'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="cam2.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="mark" aria-hidden="true"></span>
+        <div>
+          <h1>JSCam</h1>
+          <p>カメラ画像のリアルタイム処理</p>
+        </div>
+      </div>
+      <div class="fps-hud">
+        <p id="s18-fps-caption">FPS</p>
+        <canvas id="s18-fps-chart" width="240" height="56"></canvas>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <div class="io-hud">
+        <button type="button" id="io-pause" data-io-pause aria-pressed="false" disabled>一時停止</button>
+        <span id="io-paused-badge" hidden>一時停止中</span>
+      </div>
+      <section id="s18-layers" class="stage">
+        <div id="s18-dcanvas-layer" class="stage-layer">
+          <div class="stage-placeholder" id="camera-overlay">
+            <p id="camera-status">カメラを開始すると、処理映像がここに表示されます。</p>
+            <div id="camera-help" hidden>
+              <p>HTTP で localhost 以外から開いているため、ブラウザがカメラを止めます。</p>
+              <ol>
+                <li>同じパソコンなら <a id="link-localhost" href="http://127.0.0.1:8888/">http://127.0.0.1:8888/</a></li>
+                <li>今のホストのまま使うなら <a id="link-https" href="#">同じポートの HTTPS</a>。警告が出たら「詳細」→「アクセスする」</li>
+              </ol>
+            </div>
+            <button type="button" id="camera-start">カメラを開始</button>
+          </div>
+          <canvas id="s18-d-canvas" width="640" height="480">このブラウザは canvas に対応していません。</canvas>
+        </div>
+      </section>
+    </main>
+
+    <button type="button" id="s18-panel-open-button" class="panel-fab" aria-label="コントロールパネルを開く" aria-controls="s18-side-panel">
+      設定
+    </button>
+    <button type="button" id="s18-panel-close-button" class="panel-close" aria-label="コントロールパネルを閉じる" aria-controls="s18-side-panel">
+      閉じる
+    </button>
+
+    <aside id="s18-side-panel" class="panel" aria-label="処理コントロール">
+      <header class="panel-head">
+        <h2>コントロール</h2>
+        <p>モードとパラメータ。ヒストグラムは映像下部に重畳されます。</p>
+      </header>
+
+      <label class="field">
+        <span>画像モード</span>
+        <select id="s18-image-mode"></select>
+      </label>
+
+      <label class="check">
+        <input type="checkbox" id="s18-show-image" checked>
+        <span>映像を描画する</span>
+      </label>
+
+      <div class="preview">
+        <span>入力プレビュー</span>
+        <video id="s18-video" autoplay playsinline muted></video>
+      </div>
+
+      <div class="field">
+        <div class="field-row">
+          <span>蓄積係数</span>
+          <output id="s18-afactor-output" for="s18-afactor">0.5</output>
+        </div>
+        <div class="stepper">
+          <button type="button" id="s18-afactor-decrease" aria-label="蓄積係数を下げる">−</button>
+          <input id="s18-afactor" type="range" min="0" max="1" step="0.05" value="0.5">
+          <button type="button" id="s18-afactor-increase" aria-label="蓄積係数を上げる">+</button>
+        </div>
+        <p class="hint">GRAY-accum / delta 系モードのブレンド比。大きいほど新しいフレームを強く反映します。</p>
+      </div>
+
+      <div class="field">
+        <div class="field-row">
+          <span>フレーム間隔</span>
+          <output id="s18-pause-output" for="s18-pause">0</output>
+        </div>
+        <div class="stepper">
+          <button type="button" id="s18-pause-decrease" aria-label="フレーム間隔を下げる">−</button>
+          <input id="s18-pause" type="range" min="0" max="500" step="10" value="0">
+          <button type="button" id="s18-pause-increase" aria-label="フレーム間隔を上げる">+</button>
+        </div>
+        <p class="hint">各フレーム処理のあとに足す待ち時間（ミリ秒）。0 が最速です。</p>
+      </div>
+
+      <section class="log" aria-label="実行ログ">
+        <h3>ログ</h3>
+        <div id="s18-message"></div>
+      </section>
+    </aside>
+  </div>
+
+  <canvas id="s18-i-canvas" width="640" height="480"></canvas>
+
+  <script src="cam2.js"></script>
+</body>
+</html>

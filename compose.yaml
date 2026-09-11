@@ -1,0 +1,20 @@
+name: jscam
+
+services:
+  web:
+    build:
+      context: ./jscam
+      dockerfile: Dockerfile
+    image: jscam:local
+    ports:
+      - "8888:8080"
+    environment:
+      # Extra certificate names/IPs, comma-separated.
+      # Example: TLS_SAN=IP:192.168.1.10,DNS:myhost.local
+      TLS_SAN: ${TLS_SAN:-}
+    init: true
+    volumes:
+      - ./jscam/index.html:/usr/share/nginx/html/index.html:ro
+      - ./jscam/cam2.css:/usr/share/nginx/html/cam2.css:ro
+      - ./jscam/cam2.js:/usr/share/nginx/html/cam2.js:ro
+      - ./jscam/nginx.conf:/etc/nginx/conf.d/default.conf:ro
