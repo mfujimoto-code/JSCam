@@ -230,9 +230,9 @@ select {
 
 .io-hud {
   position: absolute;
-  top: 0.6rem;
-  left: 0.6rem;
-  z-index: 8;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 4;
   display: flex;
   gap: 0.45rem;
   align-items: center;
