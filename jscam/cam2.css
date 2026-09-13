@@ -52,14 +52,17 @@ select {
   overflow: hidden;
   display: grid;
   grid-template-rows: auto 1fr;
+  grid-template-columns: 1fr auto;
 }
 
 .topbar {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.7rem 1rem 0.7rem 1.1rem;
+  padding: 0.45rem 1rem 0.45rem 1.1rem;
+  min-height: 0;
   border-bottom: 1px solid var(--line);
   background:
     linear-gradient(90deg, rgba(226, 62, 175, 0.08), transparent 42%),
@@ -111,22 +114,28 @@ select {
 
 #fps-caption {
   font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", monospace;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   color: #f4a8de;
   white-space: nowrap;
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 #fps-chart {
   display: block;
-  width: 240px;
-  height: 56px;
+  width: 160px;
+  height: 36px;
   background: rgba(226, 62, 175, 0.06);
   border: 1px solid rgba(226, 62, 175, 0.28);
   border-radius: 2px;
 }
 
 .workspace {
+  grid-column: 1;
+  grid-row: 2;
   position: relative;
+  min-width: 0;
   min-height: 0;
   height: 100%;
   background: var(--stage);
@@ -289,9 +298,9 @@ select {
 }
 
 .panel-close {
+  position: static;
   display: block;
-  top: calc(var(--topbar) + 0.7rem);
-  right: 0.7rem;
+  flex: none;
   padding: 0.35rem 0.7rem;
   font-size: 0.75rem;
 }
@@ -299,22 +308,25 @@ select {
 .panel {
   display: block;
   opacity: 1;
-  position: fixed;
-  top: var(--topbar);
-  right: 0;
-  bottom: 0;
+  grid-column: 2;
+  grid-row: 2;
+  position: relative;
   z-index: 15;
   width: var(--panel-width);
+  min-height: 0;
+  height: 100%;
   padding: 1.1rem 1.1rem 1.5rem;
   overflow: auto;
   background: var(--panel);
   background: color-mix(in srgb, var(--panel) 92%, transparent);
   border-left: 1px solid var(--line);
-  backdrop-filter: blur(10px);
 }
 
 .panel-head {
-  padding-right: 3.5rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
   margin-bottom: 1.1rem;
 }
 
@@ -329,6 +341,11 @@ select {
   font-size: 0.72rem;
   line-height: 1.5;
   margin-top: 0.35rem;
+}
+
+.field[hidden],
+.check[hidden] {
+  display: none;
 }
 
 .field,
@@ -445,21 +462,17 @@ select {
 }
 
 @media (max-width: 720px) {
-  :root {
-    --topbar: auto;
-  }
-
   .topbar {
-    flex-wrap: wrap;
-    padding: 0.65rem 0.8rem;
+    flex-wrap: nowrap;
+    padding: 0.5rem 0.8rem;
   }
 
   #fps-chart {
-    width: min(240px, 70vw);
-    height: 48px;
+    width: 120px;
+    height: 32px;
   }
 
-  .panel-close {
-    top: 0.7rem;
+  .panel {
+    width: min(18rem, 100vw);
   }
 }

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -15,7 +15,7 @@
         <span class="mark" aria-hidden="true"></span>
         <div>
           <h1>JSCam</h1>
-          <p>カメラ画像のリアルタイム処理</p>
+          <p>Live camera image processing</p>
         </div>
       </div>
       <div class="fps-hud">
@@ -28,81 +28,83 @@
       <section id="layers" class="stage">
         <div id="dcanvas-layer" class="stage-layer">
           <div class="io-hud">
-            <button type="button" id="io-pause" data-io-pause aria-pressed="false" disabled>一時停止</button>
-            <span id="io-paused-badge" hidden>一時停止中</span>
+            <button type="button" id="io-pause" data-io-pause aria-pressed="false" disabled>Pause</button>
+            <span id="io-paused-badge" hidden>Paused</span>
           </div>
           <div class="stage-placeholder" id="camera-overlay">
-            <p id="camera-status">カメラを開始すると、処理映像がここに表示されます。</p>
+            <p id="camera-status">Start the camera to show the processed video here.</p>
             <div id="camera-help" hidden>
-              <p>HTTP で localhost 以外から開いているため、ブラウザがカメラを止めます。</p>
+              <p>The browser blocks the camera on HTTP unless the host is localhost.</p>
               <ol>
-                <li>同じパソコンなら <a id="link-localhost" href="http://127.0.0.1:8888/">http://127.0.0.1:8888/</a></li>
-                <li>今のホストのまま使うなら <a id="link-https" href="#">同じポートの HTTPS</a>。警告が出たら「詳細」→「アクセスする」</li>
+                <li>On this machine use <a id="link-localhost" href="http://127.0.0.1:8888/">http://127.0.0.1:8888/</a></li>
+                <li>On this host name or IP use <a id="link-https" href="#">HTTPS on the same port</a>. If a certificate warning appears, choose Advanced, then Proceed.</li>
               </ol>
             </div>
-            <button type="button" id="camera-start">カメラを開始</button>
+            <button type="button" id="camera-start">Start camera</button>
           </div>
-          <canvas id="d-canvas" width="640" height="480">このブラウザは canvas に対応していません。</canvas>
+          <canvas id="d-canvas" width="640" height="480">This browser does not support canvas.</canvas>
         </div>
       </section>
     </main>
 
-    <button type="button" id="panel-open-button" class="panel-fab" aria-label="コントロールパネルを開く" aria-controls="side-panel">
-      設定
-    </button>
-    <button type="button" id="panel-close-button" class="panel-close" aria-label="コントロールパネルを閉じる" aria-controls="side-panel">
-      閉じる
+    <button type="button" id="panel-open-button" class="panel-fab" aria-label="Open control panel" aria-controls="side-panel">
+      Settings
     </button>
 
-    <aside id="side-panel" class="panel" aria-label="処理コントロール">
+    <aside id="side-panel" class="panel" aria-label="Processing controls">
       <header class="panel-head">
-        <h2>コントロール</h2>
-        <p>モードとパラメータ。ヒストグラムは映像下部に重畳されます。</p>
+        <div>
+          <h2>Controls</h2>
+          <p>Mode and parameters. The histogram overlays the bottom-left of the image.</p>
+        </div>
+        <button type="button" id="panel-close-button" class="panel-close" aria-label="Close control panel" aria-controls="side-panel">
+          Close
+        </button>
       </header>
 
       <label class="field">
-        <span>画像モード</span>
+        <span>Image mode</span>
         <select id="image-mode"></select>
       </label>
 
       <label class="check">
         <input type="checkbox" id="show-image" checked>
-        <span>映像を描画する</span>
+        <span>Draw image</span>
       </label>
 
       <div class="preview">
-        <span>入力プレビュー</span>
+        <span>Input preview</span>
         <video id="video" autoplay playsinline muted></video>
       </div>
 
-      <div class="field">
+      <div class="field" id="field-afactor" data-modes="GRAY-accum,BW-delta,Gray-delta" hidden>
         <div class="field-row">
-          <span>蓄積係数</span>
+          <span>Accumulation factor</span>
           <output id="afactor-output" for="afactor">0.5</output>
         </div>
         <div class="stepper">
-          <button type="button" id="afactor-decrease" aria-label="蓄積係数を下げる">−</button>
+          <button type="button" id="afactor-decrease" aria-label="Decrease accumulation factor">−</button>
           <input id="afactor" type="range" min="0" max="1" step="0.05" value="0.5">
-          <button type="button" id="afactor-increase" aria-label="蓄積係数を上げる">+</button>
+          <button type="button" id="afactor-increase" aria-label="Increase accumulation factor">+</button>
         </div>
-        <p class="hint">GRAY-accum / delta 系モードのブレンド比。大きいほど新しいフレームを強く反映します。</p>
+        <p class="hint">Blend ratio for GRAY-accum and delta modes. Higher values weight the newest frame more.</p>
       </div>
 
       <div class="field">
         <div class="field-row">
-          <span>フレーム間隔</span>
+          <span>Frame interval</span>
           <output id="pause-output" for="pause">0</output>
         </div>
         <div class="stepper">
-          <button type="button" id="pause-decrease" aria-label="フレーム間隔を下げる">−</button>
+          <button type="button" id="pause-decrease" aria-label="Decrease frame interval">−</button>
           <input id="pause" type="range" min="0" max="500" step="10" value="0">
-          <button type="button" id="pause-increase" aria-label="フレーム間隔を上げる">+</button>
+          <button type="button" id="pause-increase" aria-label="Increase frame interval">+</button>
         </div>
-        <p class="hint">各フレーム処理のあとに足す待ち時間（ミリ秒）。0 が最速です。</p>
+        <p class="hint">Extra delay after each frame (milliseconds). 0 is fastest.</p>
       </div>
 
-      <section class="log" aria-label="実行ログ">
-        <h3>ログ</h3>
+      <section class="log" aria-label="Run log">
+        <h3>Log</h3>
         <div id="message"></div>
       </section>
     </aside>

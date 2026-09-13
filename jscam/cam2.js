@@ -50,9 +50,8 @@ const Graph = function * (data, label, canvasName, captionName, color) {
   const scale = (max == 0) ? 0 : canvas.height / Math.abs(max);
 
   caption.innerText =
-     label
-   + ' range ' + Math.round(min) + ':' + Math.round(max) 
-   + ', ave ' + Math.round(sum / values.length);
+     label + ' ' + Math.round(sum / values.length)
+   + '  (' + Math.round(min) + '–' + Math.round(max) + ')';
 
   c.clearRect(0, 0, canvas.width, canvas.height);
   c.fillRect(0, canvas.height - 1, canvas.width, 1);
@@ -721,11 +720,6 @@ render.dc = e('d-canvas'); // for display
 
 const fitDisplaySize = (videoW, videoH)=>{
  const stage = e('layers');
- const panel = e('side-panel');
- const panelOpen = panel && getComputedStyle(panel).display != 'none';
- stage.style.paddingRight = panelOpen
-  ? panel.getBoundingClientRect().width + 'px'
-  : '';
  const cs = getComputedStyle(stage);
  const maxW = Math.max(1,
   stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
@@ -897,11 +891,34 @@ for (let k in buildImageFuncs) {
  e('image-mode').add(new Option(k, k));
 }
 render.buildImage = buildImageFuncs[e('image-mode').options[0].value];
+
+const currentImageMode = ()=>{
+ const sel = e('image-mode');
+ if (!sel || sel.selectedIndex < 0) return '';
+ return sel.options[sel.selectedIndex].value;
+}
+
+const syncModeSettings = ()=>{
+ const mode = currentImageMode();
+ const fields = document.querySelectorAll('[data-modes]');
+ for (let i = 0; i < fields.length; ++i) {
+  const raw = fields[i].getAttribute('data-modes') || '';
+  const modes = raw.split(',');
+  let show = false;
+  for (let j = 0; j < modes.length; ++j) {
+   if (modes[j] === mode) { show = true; break; }
+  }
+  fields[i].hidden = !show;
+ }
+}
+
 e('image-mode').onchange = function () {
  const mode = this.options[this.selectedIndex].value;
  print('image mode:' + mode);
  render.buildImage = buildImageFuncs[mode];
+ syncModeSettings();
 }
+syncModeSettings();
 
 const setupRange = (name, label, cb) => {
  const range = e(name)
@@ -950,7 +967,7 @@ const syncIoPauseButtons = ()=>{
   const btn = nodes[i];
   btn.disabled = !hasStream;
   btn.setAttribute('aria-pressed', paused ? 'true' : 'false');
-  btn.textContent = paused ? '再開' : '一時停止';
+  btn.textContent = paused ? 'Resume' : 'Pause';
  }
  const badge = e('io-paused-badge');
  if (badge) badge.hidden = !paused;
@@ -965,7 +982,7 @@ const setIoPaused = (paused)=>{
   } else {
    const playing = video.play();
    if (playing && playing.catch) {
-    playing.catch((err)=>print('映像の再生に失敗: ' + err));
+    playing.catch((err)=>print('playback failed: ' + err));
    }
   }
  }
@@ -1011,16 +1028,17 @@ const showInsecureHelp = ()=>{
  }
  if (help) help.hidden = false;
  setCameraStatus(
-  'このURLではカメラを使えません（' + location.origin + '）。'
-  + ' 同じPCなら ' + localUrl + ' 。別ホストなら ' + httpsUrl
-  + ' （証明書警告は「詳細」→「アクセスする」）。'
+  'Camera is blocked at ' + location.origin + '.'
+  + ' On this machine use ' + localUrl + '.'
+  + ' On this host use ' + httpsUrl
+  + ' (if a certificate warning appears, choose Advanced, then Proceed).'
  );
 }
 
 const startCamera = ()=>{
  const video = e('video');
  if (!video) {
-  setCameraStatus('video 要素が見つかりません');
+  setCameraStatus('video element not found');
   return;
  }
 
@@ -1036,7 +1054,7 @@ const startCamera = ()=>{
 
  const media = navigator.mediaDevices;
  if (!media || !media.getUserMedia) {
-  setCameraStatus('このブラウザでは camera API が使えません。');
+  setCameraStatus('This browser does not support the camera API.');
   return;
  }
 
@@ -1045,7 +1063,7 @@ const startCamera = ()=>{
    video.srcObject = stream;
    const playing = video.play();
    if (playing && playing.catch) {
-    playing.catch((err)=>setCameraStatus('映像の再生に失敗: ' + err));
+    playing.catch((err)=>setCameraStatus('playback failed: ' + err));
    }
    const overlay = e('camera-overlay');
    if (overlay) overlay.classList.add('is-live');
