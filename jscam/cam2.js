@@ -1012,6 +1012,8 @@ const syncIoPauseButtons = ()=>{
  }
  const badge = e('io-paused-badge');
  if (badge) badge.hidden = !paused;
+ const stopBtn = e('camera-stop');
+ if (stopBtn) stopBtn.disabled = !hasStream;
 }
 
 const setIoPaused = (paused)=>{
@@ -1041,6 +1043,19 @@ const toggleIoPause = ()=>{
 }
 
 const constraints = {audio: false, video: true};
+
+const stopStreamTracks = (stream)=>{
+ if (!stream || !stream.getTracks) return;
+ const tracks = stream.getTracks();
+ for (let i = 0; i < tracks.length; ++i) {
+  tracks[i].stop();
+ }
+}
+
+const setStartCameraEnabled = (enabled)=>{
+ const startBtn = e('camera-start');
+ if (startBtn) startBtn.disabled = !enabled;
+}
 
 const setCameraStatus = (msg)=>{
  print(msg);
@@ -1099,8 +1114,16 @@ const startCamera = ()=>{
   return;
  }
 
+ const generation = ++startCamera.generation;
+ setStartCameraEnabled(false);
+
  media.getUserMedia(constraints)
   .then((stream)=>{
+   if (generation !== startCamera.generation) {
+    stopStreamTracks(stream);
+    return;
+   }
+   stopStreamTracks(video.srcObject);
    video.srcObject = stream;
    const playing = video.play();
    if (playing && playing.catch) {
@@ -1110,18 +1133,50 @@ const startCamera = ()=>{
    if (overlay) overlay.classList.add('is-live');
    const help = e('camera-help');
    if (help) help.hidden = true;
+   setStartCameraEnabled(true);
    setIoPaused(false);
    setCameraStatus('camera enabled');
   })
   .catch((error)=>{
+   if (generation !== startCamera.generation) return;
+   setStartCameraEnabled(true);
    const name = (error && error.name) ? error.name : 'Error';
    const msg = (error && error.message) ? error.message : String(error);
    setCameraStatus('camera disabled: ' + name + ' — ' + msg);
   });
 }
+startCamera.generation = 0;
+
+const stopCamera = ()=>{
+ startCamera.generation += 1;
+ setStartCameraEnabled(true);
+
+ const video = e('video');
+ const overlay = e('camera-overlay');
+ const stream = video && video.srcObject;
+ const wasLive = !!(overlay && overlay.classList.contains('is-live'));
+
+ stopStreamTracks(stream);
+ if (video) video.srcObject = null;
+
+ if (!stream && !wasLive) return;
+
+ if (overlay) overlay.classList.remove('is-live');
+ const help = e('camera-help');
+ if (help) help.hidden = true;
+
+ setIoPaused(false);
+ setCameraStatus('camera stopped');
+}
 
 const startButton = e('camera-start');
 if (startButton) startButton.onclick = startCamera;
+
+const stopButton = e('camera-stop');
+if (stopButton) stopButton.onclick = stopCamera;
+
+window.addEventListener('pagehide', stopCamera);
+window.addEventListener('beforeunload', stopCamera);
 
 const ioPauseNodes = document.querySelectorAll('[data-io-pause]');
 for (let i = 0; i < ioPauseNodes.length; ++i) {

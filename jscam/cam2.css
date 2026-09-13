@@ -264,6 +264,10 @@ select {
   opacity: 0.45;
 }
 
+#camera-stop:hover:not(:disabled) {
+  background: #2a1633;
+}
+
 .io-hud button[aria-pressed="true"] {
   border-color: var(--cyan);
   color: var(--cyan);
