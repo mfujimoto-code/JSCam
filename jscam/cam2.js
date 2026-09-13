@@ -743,21 +743,32 @@ const layoutDisplay = (video, resizeBitmap)=>{
  return disp;
 }
 
+const displayResize = new ResizeObserver(()=>{
+ layoutDisplay(e('video'), false);
+});
+displayResize.observe(e('layers'));
+displayResize.observe(e('side-panel'));
+
 function dispatch () {
  if (!dispatch.run) return;
+ requestAnimationFrame(dispatch.loop);
+}
+dispatch.loop = ()=>{
+ if (!dispatch.run) return;
 
- if (dispatch.paused) {
-  layoutDisplay(e('video'), false);
-  setTimeout(dispatch, 100);
-  return;
+ if (!dispatch.paused) {
+  const now = performance.now();
+  const minWait = Math.max(dispatch.duration, dispatch.lastSuggestion);
+  if (now - dispatch.lastProcessedEnd >= minWait) {
+   const r = dispatch.iDISP.next();
+   dispatch.lastSuggestion = r.value;
+   dispatch.lastProcessedEnd = performance.now();
+   // suggestion==100 is camera/layout idle, not a capture/processing frame
+   if (r.value != 100) dispatch.count.value++;
+  }
  }
 
- const r = dispatch.iDISP.next();
-
- setTimeout(dispatch, dispatch.duration + r.value);
-
- // suggestion==100 is camera/layout idle, not a capture/processing frame
- if (r.value != 100) dispatch.count.value++;
+ if (dispatch.run) requestAnimationFrame(dispatch.loop);
 }
 dispatch.iDISP = (function * () {
  const video = e('video');
@@ -817,6 +828,8 @@ dispatch.run = false;
 dispatch.paused = false;
 dispatch.count = {'value':0};
 dispatch.showImage = true;
+dispatch.lastProcessedEnd = 0;
+dispatch.lastSuggestion = 0;
 dispatch.time = {
   getImage: 0
 , frame: 0
