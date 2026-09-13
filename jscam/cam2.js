@@ -971,6 +971,8 @@ const syncIoPauseButtons = ()=>{
  }
  const badge = e('io-paused-badge');
  if (badge) badge.hidden = !paused;
+ const stopBtn = e('camera-stop');
+ if (stopBtn) stopBtn.disabled = !hasStream;
 }
 
 const setIoPaused = (paused)=>{
@@ -1079,8 +1081,34 @@ const startCamera = ()=>{
   });
 }
 
+const stopCamera = ()=>{
+ const video = e('video');
+ const stream = video && video.srcObject;
+ if (stream && stream.getTracks) {
+  const tracks = stream.getTracks();
+  for (let i = 0; i < tracks.length; ++i) {
+   tracks[i].stop();
+  }
+ }
+ if (video) video.srcObject = null;
+
+ const overlay = e('camera-overlay');
+ if (overlay) overlay.classList.remove('is-live');
+ const help = e('camera-help');
+ if (help) help.hidden = true;
+
+ setIoPaused(false);
+ setCameraStatus('camera stopped');
+}
+
 const startButton = e('camera-start');
 if (startButton) startButton.onclick = startCamera;
+
+const stopButton = e('camera-stop');
+if (stopButton) stopButton.onclick = stopCamera;
+
+window.addEventListener('pagehide', stopCamera);
+window.addEventListener('beforeunload', stopCamera);
 
 const ioPauseNodes = document.querySelectorAll('[data-io-pause]');
 for (let i = 0; i < ioPauseNodes.length; ++i) {
