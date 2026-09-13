@@ -329,6 +329,11 @@ Frame.prototype = {
   Frame._Laplacian(raw, this.getGray(), O);
   for (let i = 0; i < e.length; ++i) e[i] = Math.abs(raw[i]);
  }
+ else if (method == 'laplacian.signed') {
+  const raw = new Int16Array(e.length);
+  Frame._Laplacian(raw, this.getGray(), O);
+  for (let i = 0; i < e.length; ++i) e[i] = raw[i] + 128;
+ }
  else if (method == 'sobel') {
   Frame._Sobel(e, this.getGray(), O);
  }
@@ -386,6 +391,23 @@ const buildImageFuncs = {
   }
 , 'G-edge(Laplacian)': function (ic, frame) {
  const e = frame.getEdge('laplacian')
+ , num  = frame.getNum()
+ , size = frame.getSize()
+ , imageData = new ImageData(size[0], size[1])
+ , data = imageData.data
+ ;
+ for (let i = 0, o = 0; i < num; ++i, o += 4) {
+  const C = e[i];
+  data[o  ] = C;
+  data[o+1] = C;
+  data[o+2] = C;
+  data[o+3] = 255;
+ }
+
+ return imageData
+  }
+, 'G-edge(Laplacian signed)': function (ic, frame) {
+ const e = frame.getEdge('laplacian.signed')
  , num  = frame.getNum()
  , size = frame.getSize()
  , imageData = new ImageData(size[0], size[1])
