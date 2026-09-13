@@ -756,7 +756,8 @@ function dispatch () {
 
  setTimeout(dispatch, dispatch.duration + r.value);
 
- dispatch.count.value++;
+ // suggestion==100 is camera/layout idle, not a capture/processing frame
+ if (r.value != 100) dispatch.count.value++;
 }
 dispatch.iDISP = (function * () {
  const video = e('video');
@@ -780,18 +781,33 @@ dispatch.iDISP = (function * () {
    continue;
   }
 
+  const t0 = performance.now();
   const imageData = render.getImage(video);
+  const t1 = performance.now();
 
   const newFrame = new Frame(imageData);
+  let t2 = performance.now()
+  , t3 = t2
+  , t4 = t2
+  ;
 
   if (dispatch.showImage) {
    render.frame(newFrame);
+   t2 = performance.now();
    render.histogram.color = 0;
    for (let k in newFrame.histogram) {
     render.histogram(newFrame, newFrame.histogram[k]);
    }
+   t3 = performance.now();
    render.show();
+   t4 = performance.now();
   }
+
+  dispatch.time.getImage += t1 - t0;
+  dispatch.time.frame += t2 - t1;
+  dispatch.time.histogram += t3 - t2;
+  dispatch.time.show += t4 - t3;
+  dispatch.time.n++;
 
   //delta.accum(newFrame);
  }
@@ -801,10 +817,31 @@ dispatch.run = false;
 dispatch.paused = false;
 dispatch.count = {'value':0};
 dispatch.showImage = true;
+dispatch.time = {
+  getImage: 0
+, frame: 0
+, histogram: 0
+, show: 0
+, n: 0
+};
 
 
 const watch = ()=>{
  watch.iFPS.next();
+ const n = dispatch.time.n;
+ if (n > 0) {
+  const avg = (k)=>(dispatch.time[k] / n).toFixed(1);
+  e('fps-caption').innerText +=
+     '  get ' + avg('getImage')
+   + ' frm ' + avg('frame')
+   + ' hist ' + avg('histogram')
+   + ' show ' + avg('show');
+ }
+ dispatch.time.getImage = 0;
+ dispatch.time.frame = 0;
+ dispatch.time.histogram = 0;
+ dispatch.time.show = 0;
+ dispatch.time.n = 0;
  setTimeout(watch, 500);
 }
 watch.iFPS = Graph(
