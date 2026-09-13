@@ -237,6 +237,17 @@ select {
   background: transparent;
 }
 
+#h-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background: transparent;
+}
+
 .io-hud {
   position: absolute;
   top: 0.5rem;
