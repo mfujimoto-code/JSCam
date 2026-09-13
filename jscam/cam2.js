@@ -574,8 +574,6 @@ const buildImageFuncs = {
 const delta = {
   //aBuffer: new Uint8ClampedArray(10)
   aBuffer: [0,0,0,0,0,0,0,0,0,0]
-, threshold: 20
-, id:  0
 , factor: 0.5
 , time:  100
 , _delta:  [0,0,0,0,0,0,0,0,0,0]
@@ -760,9 +758,6 @@ function dispatch () {
 }
 dispatch.iDISP = (function * () {
  const video = e('video');
- const ic = e('i-canvas');
- const dc = e('d-canvas');
- new Frame; new Frame; new Frame; new Frame;
 
  let  suggestion = 0;
  while (true) {
@@ -792,8 +787,6 @@ dispatch.iDISP = (function * () {
    }
    render.show();
   }
-
-  //delta.accum(newFrame);
  }
 })();
 dispatch.duration = 0;
@@ -814,7 +807,6 @@ watch.iFPS = Graph(
 , 'fps-caption'
 , 'rgba(255,0,255,0.5)'
 );
-watch.last = 0;
 watch();
 
 dispatch.run = true;
@@ -954,7 +946,6 @@ const setupRange = (name, label, cb) => {
  }
 } 
 
-//setupRange('dthreshold', 'delta threshold', (v)=>(delta.threshold = v));
 setupRange('afactor', 'accumulation factor', (v)=>(delta.factor = Number(v)));
 setupRange('pause', 'pause@frame', (v)=>(dispatch.duration = Number(v)));
 
