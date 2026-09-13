@@ -649,12 +649,12 @@ const render = {
  , [255, 255, 255]
   ]
 , histogram: function (frame, histogram) {
- const ic = render.ic
- , gc = ic.getContext('2d')
+ const hc = render.hc
+ , gc = hc.getContext('2d')
  , num = frame.getNum()
  , max = histogram.reduce((a,b)=>(Math.max(a,b)), 0)
- , barScale = (ic.height / 3) / max
- , lineScale = (ic.height / 3) / num
+ , barScale = (hc.height / 3) / max
+ , lineScale = (hc.height / 3) / num
  ;
 
  const rgba = ()=>{
@@ -667,10 +667,10 @@ const render = {
  gc.fillStyle = rgba();
  for (let x = 10, i = 0; i < histogram.length; ++i, ++x) {
   const h = histogram[i] * barScale;
-  gc.fillRect(x, ic.height - 1 - h, 1, h);
+  gc.fillRect(x, hc.height - 1 - h, 1, h);
  }
  let y = histogram[0];
- const yStart = ic.height - 1;
+ const yStart = hc.height - 1;
  gc.strokeStyle = rgba();
  gc.beginPath();
  gc.moveTo(10, yStart - y * lineScale);
@@ -679,6 +679,10 @@ const render = {
   gc.lineTo(x, yStart - y * lineScale);
  }
  gc.stroke();
+}
+, clearHistogram: function () {
+ const hc = render.hc;
+ hc.getContext('2d').clearRect(0, 0, hc.width, hc.height);
 }
 , frame: function (frame) {
  const ic = render.ic
@@ -710,11 +714,16 @@ const render = {
    render.ic.width  = internal[0];
    render.ic.height = internal[1];
   }
+  if (render.hc.width != internal[0] || render.hc.height != internal[1]) {
+   render.hc.width  = internal[0];
+   render.hc.height = internal[1];
+  }
  }
   }
 }
 render.ic = e('i-canvas'); // for internal use
 render.dc = e('d-canvas'); // for display
+render.hc = e('h-canvas'); // histogram overlay (ic bitmap, contain-scaled)
 
 const fitDisplaySize = (videoW, videoH)=>{
  const stage = e('layers');
@@ -800,9 +809,14 @@ dispatch.iDISP = (function * () {
   if (dispatch.showImage) {
    render.frame(newFrame);
    t2 = performance.now();
-   render.histogram.color = 0;
-   for (let k in newFrame.histogram) {
-    render.histogram(newFrame, newFrame.histogram[k]);
+   if (dispatch.showHistogram) {
+    render.clearHistogram();
+    render.histogram.color = 0;
+    for (let k in newFrame.histogram) {
+     render.histogram(newFrame, newFrame.histogram[k]);
+    }
+   } else {
+    render.clearHistogram();
    }
    t3 = performance.now();
    render.show();
@@ -821,6 +835,7 @@ dispatch.run = false;
 dispatch.paused = false;
 dispatch.count = {'value':0};
 dispatch.showImage = true;
+dispatch.showHistogram = true;
 dispatch.lastProcessedEnd = 0;
 dispatch.lastSuggestion = 0;
 dispatch.time = {
@@ -927,6 +942,11 @@ print.messages = ['','','','','','',''];
 
 e('show-image').onchange = function () {
  dispatch.showImage = this.checked;
+}
+
+e('show-histogram').onchange = function () {
+ dispatch.showHistogram = this.checked;
+ if (!this.checked) render.clearHistogram();
 }
 
 for (let k in buildImageFuncs) {
