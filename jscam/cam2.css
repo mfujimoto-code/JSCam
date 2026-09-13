@@ -109,14 +109,14 @@ select {
   min-width: 0;
 }
 
-#s18-fps-caption {
+#fps-caption {
   font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", monospace;
   font-size: 0.72rem;
   color: #f4a8de;
   white-space: nowrap;
 }
 
-#s18-fps-chart {
+#fps-chart {
   display: block;
   width: 240px;
   height: 56px;
@@ -218,7 +218,7 @@ select {
   background: #2a1633;
 }
 
-#s18-d-canvas {
+#d-canvas {
   position: relative;
   z-index: 1;
   display: block;
@@ -405,7 +405,7 @@ select {
   margin-bottom: 0.4rem;
 }
 
-#s18-message {
+#message {
   font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", monospace;
   font-size: 0.72rem;
   line-height: 1.45;
@@ -427,7 +427,7 @@ select {
   letter-spacing: 0.06em;
 }
 
-#s18-video {
+#video {
   display: block;
   width: 100%;
   height: auto;
@@ -435,7 +435,7 @@ select {
   border: 1px solid var(--line);
 }
 
-#s18-i-canvas {
+#i-canvas {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -454,7 +454,7 @@ select {
     padding: 0.65rem 0.8rem;
   }
 
-  #s18-fps-chart {
+  #fps-chart {
     width: min(240px, 70vw);
     height: 48px;
   }

@@ -716,12 +716,12 @@ const render = {
  }
   }
 }
-render.ic = e('s18-i-canvas'); // for internal use
-render.dc = e('s18-d-canvas'); // for display
+render.ic = e('i-canvas'); // for internal use
+render.dc = e('d-canvas'); // for display
 
 const fitDisplaySize = (videoW, videoH)=>{
- const stage = e('s18-layers');
- const panel = e('s18-side-panel');
+ const stage = e('layers');
+ const panel = e('side-panel');
  const panelOpen = panel && getComputedStyle(panel).display != 'none';
  stage.style.paddingRight = panelOpen
   ? panel.getBoundingClientRect().width + 'px'
@@ -741,7 +741,7 @@ const fitDisplaySize = (videoW, videoH)=>{
 const layoutDisplay = (video, resizeBitmap)=>{
  if (!video || video.videoWidth == 0 || video.videoHeight == 0) return null;
  const disp = fitDisplaySize(video.videoWidth, video.videoHeight);
- const layer = e('s18-dcanvas-layer');
+ const layer = e('dcanvas-layer');
  layer.style.width = disp[0] + 'px';
  layer.style.height = disp[1] + 'px';
  layer.style.aspectRatio = 'auto';
@@ -753,7 +753,7 @@ function dispatch () {
  if (!dispatch.run) return;
 
  if (dispatch.paused) {
-  layoutDisplay(e('s18-video'), false);
+  layoutDisplay(e('video'), false);
   setTimeout(dispatch, 100);
   return;
  }
@@ -765,9 +765,9 @@ function dispatch () {
  dispatch.count.value++;
 }
 dispatch.iDISP = (function * () {
- const video = e('s18-video');
- const ic = e('s18-i-canvas');
- const dc = e('s18-d-canvas');
+ const video = e('video');
+ const ic = e('i-canvas');
+ const dc = e('d-canvas');
  new Frame; new Frame; new Frame; new Frame;
 
  let  suggestion = 0;
@@ -816,8 +816,8 @@ const watch = ()=>{
 watch.iFPS = Graph(
  dispatch.count
 , 'FPS'
-, 's18-fps-chart'
-, 's18-fps-caption'
+, 'fps-chart'
+, 'fps-caption'
 , 'rgba(255,0,255,0.5)'
 );
 watch.last = 0;
@@ -864,16 +864,16 @@ IN: (ele, time)=>{
   }
 }
 
-e('s18-panel-open-button').onclick = function() {
- e('s18-panel-close-button').style.display = 'block';
- e('s18-panel-open-button').style.display = 'none';
- slide.IN(e('s18-side-panel'), 250);
+e('panel-open-button').onclick = function() {
+ e('panel-close-button').style.display = 'block';
+ e('panel-open-button').style.display = 'none';
+ slide.IN(e('side-panel'), 250);
 };
 
-e('s18-panel-close-button').onclick = function() {
- e('s18-panel-close-button').style.display = 'none';
- e('s18-panel-open-button').style.display = 'block';
- slide.OUT(e('s18-side-panel'), 250);
+e('panel-close-button').onclick = function() {
+ e('panel-close-button').style.display = 'none';
+ e('panel-open-button').style.display = 'block';
+ slide.OUT(e('side-panel'), 250);
 };
 
 function print(msg) {
@@ -885,19 +885,19 @@ function print(msg) {
   html += '<br />' + print.messages[i];
  } html += '</span>';
 
- e('s18-message').innerHTML = html;
+ e('message').innerHTML = html;
 }
 print.messages = ['','','','','','',''];
 
-e('s18-show-image').onchange = function () {
+e('show-image').onchange = function () {
  dispatch.showImage = this.checked;
 }
 
 for (let k in buildImageFuncs) {
- e('s18-image-mode').add(new Option(k, k));
+ e('image-mode').add(new Option(k, k));
 }
-render.buildImage = buildImageFuncs[e('s18-image-mode').options[0].value];
-e('s18-image-mode').onchange = function () {
+render.buildImage = buildImageFuncs[e('image-mode').options[0].value];
+e('image-mode').onchange = function () {
  const mode = this.options[this.selectedIndex].value;
  print('image mode:' + mode);
  render.buildImage = buildImageFuncs[mode];
@@ -937,13 +937,13 @@ const setupRange = (name, label, cb) => {
  }
 } 
 
-//setupRange('s18-dthreshold', 'delta threshold', (v)=>(delta.threshold = v));
-setupRange('s18-afactor', 'accumulation factor', (v)=>(delta.factor = Number(v)));
-setupRange('s18-pause', 'pause@frame', (v)=>(dispatch.duration = Number(v)));
+//setupRange('dthreshold', 'delta threshold', (v)=>(delta.threshold = v));
+setupRange('afactor', 'accumulation factor', (v)=>(delta.factor = Number(v)));
+setupRange('pause', 'pause@frame', (v)=>(dispatch.duration = Number(v)));
 
 const syncIoPauseButtons = ()=>{
  const paused = dispatch.paused;
- const video = e('s18-video');
+ const video = e('video');
  const hasStream = !!(video && video.srcObject);
  const nodes = document.querySelectorAll('[data-io-pause]');
  for (let i = 0; i < nodes.length; ++i) {
@@ -958,7 +958,7 @@ const syncIoPauseButtons = ()=>{
 
 const setIoPaused = (paused)=>{
  dispatch.paused = !!paused;
- const video = e('s18-video');
+ const video = e('video');
  if (video && video.srcObject) {
   if (dispatch.paused) {
    video.pause();
@@ -973,7 +973,7 @@ const setIoPaused = (paused)=>{
 }
 
 const toggleIoPause = ()=>{
- const video = e('s18-video');
+ const video = e('video');
  if (!video || !video.srcObject) {
   print('camera not started');
   return;
@@ -1018,7 +1018,7 @@ const showInsecureHelp = ()=>{
 }
 
 const startCamera = ()=>{
- const video = e('s18-video');
+ const video = e('video');
  if (!video) {
   setCameraStatus('video 要素が見つかりません');
   return;
