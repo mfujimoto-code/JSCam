@@ -2,6 +2,12 @@
 !index.html
 !cam2.css
 !cam2.js
+!frame.js
+!delta.js
+!render.js
+!dispatch.js
+!ui.js
+!camera.js
 !nginx.conf
 !nginx.main.conf
 !40-gen-tls.sh
