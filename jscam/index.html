@@ -47,7 +47,6 @@
           <canvas id="h-canvas" width="640" height="480"></canvas>
         </div>
       </section>
-    </main>
 
     <button type="button" id="panel-open-button" class="panel-fab" aria-label="Open control panel" aria-controls="side-panel">
       Settings
@@ -80,7 +79,14 @@
       </label>
 
       <div class="preview">
-        <span>Input preview</span>
+        <div class="field-row">
+          <span>Input preview</span>
+          <output id="preview-size" for="video"></output>
+        </div>
+        <label class="field" id="field-camera-select" hidden>
+          <span>Camera</span>
+          <select id="camera-select"></select>
+        </label>
         <video id="video" autoplay playsinline muted></video>
       </div>
 
@@ -110,11 +116,19 @@
         <p class="hint">Extra delay after each frame (milliseconds). 0 is fastest.</p>
       </div>
 
+      <div class="field" id="field-support">
+        <span>Camera support</span>
+        <button type="button" id="support-scan">Scan support</button>
+        <p class="hint">Checks this browser and the current camera for selection, resolution, zoom/focus, frame rate, and ImageCapture. Start the camera first for live track ranges.</p>
+        <pre id="support-report" hidden></pre>
+      </div>
+
       <section class="log" aria-label="Run log">
         <h3>Log</h3>
         <div id="message"></div>
       </section>
     </aside>
+    </main>
   </div>
 
   <canvas id="i-canvas" width="640" height="480"></canvas>

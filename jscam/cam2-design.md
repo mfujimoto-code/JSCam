@@ -5,7 +5,7 @@
 | 文書タイトル | JSCam live-camera bench 現行アーキテクチャ設計書 |
 | 対象 | `/app/jscam/` の分割グローバルスクリプト（`cam2.js` / `frame.js` / `delta.js` / `render.js` / `dispatch.js` / `ui.js` / `camera.js`）および付随する HTML / CSS / Docker / nginx |
 | 著者 | JSCam maintainers |
-| 日付 | 2026-09-13 |
+| 日付 | 2026-09-14 |
 | ステータス | Draft（PR 1, 2, 3, 5, 6, 7, 8 まで実装済み。PR 4 は延期） |
 | 種別 | 現行システムの記述（greenfield 再設計ではない） |
 
@@ -27,7 +27,7 @@ JSCam はブラウザ上で動作するライブカメラ画像処理ベンチ�
 
 `cam2.js`（`e`, `Graph`）→ `frame.js` → `delta.js` → `render.js` → `dispatch.js` → `ui.js` → `camera.js`
 
-ES module の `import` / `export` は無い。契約は DOM id とページグローバルである。
+ES module の `import` / `export` は無い。契約は DOM id とページグローバルである。現行 JS（`cam2.js` と 6 分割ファイル）のインデントはタブ。オブジェクトリテラルのメソッド本体は `{` の内側で 1 段下げる（`cam.js` 由来の `Frame.prototype` / `buildImageFuncs` のずれは直した）。`cam.js` スナップショットはスペースのまま。
 
 ### `cam.js` から `cam2` への修正（事実）
 
@@ -47,7 +47,7 @@ ES module の `import` / `export` は無い。契約は DOM id とページグ�
 ### 解決している運用上の痛み
 
 1. **getUserMedia は secure context 必須**。LAN IP の `http://` ではカメラが動かない。nginx stream で同一ポート `8888` に HTTP と HTTPS を載せ、`http://127.0.0.1:8888` か `https://<host>:8888` で開ける。
-2. **表示サイズと内部解像度の分離**。処理はカメラ生解像度、表示はステージ（開いているサイドパネル幅を差し引く）への contain フィット。
+2. **表示サイズと内部解像度の分離**。処理はカメラ生解像度、表示は全画面ステージへの contain フィット。Controls / トップバーは映像の上に overlay。
 3. **一時停止でフレームを残す**。`canvas.width` / `height` 代入はビットマップをクリアするため、pause 中は CSS サイズだけ更新する（`ResizeObserver`。rAF では layout しない）。
 4. **一時停止 / 停止ボタンは映像のレイアウトを壊さない**。`#dcanvas-layer` 左上の absolute overlay（`.io-hud`）。`Pause` は凍結、`Stop camera` はトラック解放。
 5. **モードに関係ないスライダを出さない**。蓄積係数は `GRAY-accum` / `BW-delta` / `Gray-delta` のときだけ `#field-afactor` を見せる。
@@ -62,10 +62,12 @@ ES module の `import` / `export` は無い。契約は DOM id とページグ�
 
 - ブラウザだけでカメラ映像をリアルタイム処理し、モード切替で結果を確認できること。
 - 内部処理解像度は `video.videoWidth` × `video.videoHeight`。表示はアスペクト比を保った contain。
-- サイドパネル開閉に応じてステージ実効幅を変え、映像がパネルの下に潜らないこと。パネルは `.app` の CSS grid 列に入り、`slide.OUT` の `display:none` で列が潰れる。
+- トップバー・Controls・Pause/Stop は映像レイヤ上の overlay。Controls 背景は 50% 透明。ステージは常に全画面。`#layers` クリック（操作部品以外）で chrome を全非表示／再表示。
 - 選択中の画像モードに関係ない設定をパネルから隠すこと（現行は Accumulation factor のみ）。
 - 一時停止中は最後の処理フレームを表示し続け、ウィンドウリサイズには CSS だけで追従すること。
 - カメラ停止は全トラックを `stop()` し、`srcObject` を外し、overlay を戻すこと。pause とは別操作。
+- 起動前に `enumerateDevices` で `videoinput` をスキャンすること。1 台なら従来どおり起動。2 台以上なら列挙の先頭で起動し、`#camera-select` で切替できること。
+- 入力プレビュー `#video` の表示は縦横とも最大 640 CSS px。超える辺はアスペクト比を保って縮小（内部処理解像度は生サイズのまま）。
 - ヒストグラムは `#h-canvas` overlay。画素契約は ic 座標（x=10、1px×256、高さ `height/3`、底 `height-1`、キーあたり色 2 つ）。`Draw histogram` は `Draw image` から独立。
 - 非 secure context ではカメラを呼ばず、localhost HTTP / 同一ポート HTTPS への誘導を出すこと。
 - ホスト `8888` 一ポートで HTTP と HTTPS の両方を受け付けること。
@@ -77,7 +79,7 @@ ES module の `import` / `export` は無い。契約は DOM id とページグ�
 - WebGL / WebGPU / WASM / Worker へのオフロード（現状はメインスレッドの画素ループ）。
 - 認証・マルチユーザ・永続設定。
 - `cam.js` との並行メンテ。正本は分割後の cam2 スクリプト群。`cam.js` 自体は修正前スナップショットとしてリポジトリに残す（決定 5）。
-- マイク、複数カメラ選択 UI、解像度キャップ（constraints は `{audio:false, video:true}` のまま。PR 4 は延期）。
+- マイク、キャプチャ解像度キャップ（PR 4 は延期。プレビュー表示の 640px 制限は対象。constraints の `width`/`height` ideal は入れない）。
 - ES modules / TypeScript / バンドラ。現状はグローバルスクリプト（ファイルは分割済み）。
 - `file://` で開くこと。`originWithScheme` は `location.port` が空だと `:8888` 無しの URL を作り、誘導リンクが壊れる。
 
@@ -141,13 +143,14 @@ index.html          lang="en"。画面コピーは英語
 
 DOM の役割分担:
 
-- `#video` … getUserMedia のシンク。サイドパネルの `Input preview`。`autoplay playsinline muted`。
+- `#video` … getUserMedia のシンク。サイドパネルの `Input preview`。`autoplay playsinline muted`。CSS: `max-width: min(100%, 640px); max-height: 640px; object-fit: contain`。内部処理は `videoWidth/Height` の生解像度。ラベル右の `#preview-size` に同じ生サイズ（`W×H`）を出す。
+- `#field-camera-select` / `#camera-select` … 2 台以上のときだけ表示。起動前スキャンの先頭デバイスで開始し、change で `deviceId.exact` 切替。
 - `#i-canvas` … 内部処理バッファ。`body` 直下。CSS は `position:absolute; width/height:1px; opacity:0; pointer-events:none; overflow:hidden`。ヒストグラムはここには描かない。
 - `#d-canvas` … ユーザに見える出力。`#dcanvas-layer` 内。内部 canvas を `drawImage`。
 - `#h-canvas` … ヒストグラム overlay。ビットマップは ic と同じ生解像度。CSS は `#d-canvas` と同様に layer いっぱい（`position:absolute; inset:0; width/height:100%; pointer-events:none`）。
 - `#dcanvas-layer` … 表示サイズの CSS ボックス。一時停止 HUD と `#h-canvas` の containing block。
-- `#layers` (`.stage`) … contain フィットの親。CSS `padding: 0.5rem`。JS は padding を書かない。`ResizeObserver` の対象。
-- `#side-panel` … `.app` grid の 2 列目。`Image mode` / `Draw image` / `Draw histogram` / `Input preview` / 条件付き `Accumulation factor` / `Frame interval` / `Log`。初期状態は開。`ResizeObserver` の対象。
+- `#layers` (`.stage`) … contain フィットの親。ヘッダー下の `.workspace` 内。CSS `padding: 0.5rem`。JS は padding を書かない。`ResizeObserver` の対象。クリックで `.app.chrome-hidden` をトグル（`button` / `.panel` / `.topbar` / `.io-hud` 上は無視）。
+- `#side-panel` … `.workspace` 内の overlay（右。幅 720px 以下は下からのシート）。ヘッダーとは重ならない。背景 `rgba(18, 21, 29, 0.5)`。初期状態は開。レイアウト幅は取らない。
 - `#field-afactor` … `data-modes="GRAY-accum,BW-delta,Gray-delta"`。初期 `hidden`。`syncModeSettings` がトグル。
 - `.io-hud` … `#io-pause[data-io-pause]`、`#camera-stop`、`#io-paused-badge`。`position:absolute; top/left:0.5rem`。レイアウト幅を取らない。
 
@@ -207,13 +210,16 @@ flowchart TB
 | `delta` | `delta.js` | オブジェクト | グレースケール EMA 蓄積と差分。 |
 | `render` | `render.js` | オブジェクト | 内部/表示/ヒストグラム canvas、リサイズ。 |
 | `fitDisplaySize` / `layoutDisplay` | `dispatch.js` | 関数 | contain フィット。pause 時は CSS のみ。 |
-| `displayResize` | `dispatch.js` | `ResizeObserver` | `#layers` と `#side-panel` を監視し `layoutDisplay(video, false)`。 |
+| `displayResize` | `dispatch.js` | `ResizeObserver` | `#layers` だけを監視し `layoutDisplay(video, false)`。パネルは overlay なので見ない。 |
 | `dispatch` / `dispatch.loop` / `dispatch.iDISP` | `dispatch.js` | 関数 + rAF + generator | メインループ。`dispatch()` は開始/再開だけ。 |
 | `watch` | `dispatch.js` | 関数 | 500ms 周期で `Graph` を進め、caption にステージ時間を足す。 |
 | `slide` | `ui.js` | オブジェクト | パネルの opacity / display アニメ。 |
+| chrome トグル | `ui.js` | `#layers` click | `.app.chrome-hidden`。操作部品上の click は無視。 |
 | `setupRange` | `ui.js` | 関数 | range + ± ボタン + output をコールバックに接続。 |
 | `currentImageMode` / `syncModeSettings` | `ui.js` | 関数 | `#image-mode` のキーと `[data-modes]` の `hidden` を同期。 |
-| `startCamera` / `stopCamera` | `camera.js` | 関数 | secure context 検査、getUserMedia、generation token、トラック停止。 |
+| `startCamera` / `stopCamera` / `switchCamera` | `camera.js` | 関数 | 許可プローブ → enumerate → 先頭 `deviceId` で起動。2 台以上はセレクト。切替は旧 track を stop して取り直し。 |
+| `syncPreviewSize` | `camera.js` | 関数 | `#preview-size` に生解像度。`loadedmetadata` / `resize` / attach / stop。 |
+| `scanCameraSupport` | `camera.js` | 関数 | 対応スキャン。`#support-report` に YES/PARTIAL/NO。ストリームは止めない。 |
 | I/O pause 一式 | `camera.js` | 関数 | `dispatch.paused` と `video.pause()`。トラックは止めない。 |
 
 ### 1 フレームのデータフロー
@@ -300,8 +306,13 @@ sequenceDiagram
       SC->>U: This browser does not support the camera API.
     else API あり
       SC->>SC: ++startCamera.generation<br/>Start を disabled
-      SC->>GUM: {audio:false, video:true}
+      SC->>GUM: 許可プローブ {audio:false, video:true}
       alt 許可かつ generation 一致
+        GUM-->>SC: probe stream
+        SC->>SC: probe を即 stop（処理ループには載せない）
+        SC->>SC: enumerateDevices → videoinput
+        Note over SC: 2台以上なら #camera-select を表示
+        SC->>GUM: 先頭 deviceId.exact（id 無ければ video:true）
         GUM-->>SC: MediaStream
         SC->>V: 旧 stream を stop; srcObject = stream; play()
         SC->>OV: classList.add("is-live")
@@ -395,11 +406,13 @@ pause / リサイズパスで `width = cssW * dpr` してはならない。ビ�
 
 パネル配置:
 
-- `.app` は `grid-template-columns: 1fr auto`、`grid-template-rows: auto 1fr`。`.workspace` は列 1、`#side-panel` は列 2 行 2（`position: relative`、幅 `min(22rem, 100vw)`）。
-- パネルが開いている間は grid が workspace を狭める。`#layers` の client 幅がそのまま contain の上限になる。
-- `slide.OUT` が `display:none` にすると auto 列が潰れ、workspace が全幅になる。`slide.IN` は `display:block` のあと 250ms で opacity を線形補間する（1ms `setTimeout`。パネルアニメは rAF ではない）。
-- `#panel-close-button` はパネル見出し内（`.panel-close` は `position:static`）。`#panel-open-button` は閉時だけ出す FAB（`.panel-fab`）。
-- パネル幅変化は `ResizeObserver` が `layoutDisplay(video, false)` する。pause 中でも凍結フレームの CSS フィットは追従する。
+- `.app` は `grid-template-rows: auto 1fr`。`.topbar` は 1 行目（フロー。パネルや Pause と重ならない）。`.workspace` は 2 行目で映像 + overlay。
+- `#side-panel` と Settings FAB は `.workspace` 内。右 overlay（`z-index: 15`、幅 `min(22rem, 100vw)`）。背景 50% 透明 `rgba(18, 21, 29, 0.5)`。ヘッダーの下にだけ乗る。
+- 幅 720px 以下ではパネルは workspace 下端シート（高さ最大 58dvh）。上側の映像をタップして chrome を隠せる。
+- `slide.OUT` がパネルだけ `display:none`。`slide.IN` は 250ms opacity（1ms `setTimeout`）。
+- `.app.chrome-hidden` はトップバー、パネル、FAB、`.io-hud`、`#camera-overlay` をまとめて `display:none`。トップバー行が潰れて映像が全画面になる。再クリックで外す。
+- `#panel-close-button` はパネル見出し内。`#panel-open-button` はパネル閉かつ chrome 表示のとき FAB。
+- リサイズは `#layers` の `ResizeObserver` のみ。pause 中でも凍結フレームの CSS フィットは追従する。
 
 ### 画像処理の詳細
 
@@ -504,9 +517,9 @@ out[i]     = abs( blend(aBuffer, currentGray)[i] - aBuffer[i] )
 2. `frame.js` … `Frame` 定義。
 3. `delta.js` … `delta` 定義。
 4. `render.js` … `buildImageFuncs` / `render` 定義。`render.ic` / `dc` / `hc` を DOM から取得。初期 `render.buildImage` は `'RGB-frame'`（直後に ui が先頭モードへ差し替え）。
-5. `dispatch.js` … `fitDisplaySize` / `layoutDisplay` / `ResizeObserver`（`#layers`, `#side-panel`）。`watch()` 開始（カメラより先、500ms `setTimeout`）。`dispatch.run=true; dispatch()`。カメラ前から rAF が回る。`videoWidth==0` なら suggestion=100 の idle。HUD の FPS は idle count を足さないので **0 に近づく**。
-6. `ui.js` … パネル open/close、`print`、`show-image` / `show-histogram`、`image-mode` を `for (let k in buildImageFuncs)` で填充（`Object.keys` ではない。プレーンオブジェクトでは同じ順だが、プロトタイプにメソッドを足すと変わる）。初期モードは挿入順の先頭 `'GRAY-frame'`。`image-mode.onchange` は `render.buildImage` を差し替え、`syncModeSettings()` を呼ぶ。填充直後にも `syncModeSettings()` する（初期 `GRAY-frame` なので `#field-afactor` は隠れたまま）。`setupRange('afactor', ...)` / `setupRange('pause', ...)`。range は **`onchange`（ドラッグ中は発火せず、離したとき）**。`±` ボタンは即時 `cb`。`input` イベントは未使用。`#afactor` は hidden 中でも配線済み。値は `delta.factor` に残る。
-7. `camera.js` … `[data-io-pause]` に `toggleIoPause`。`#camera-start` → `startCamera`。`#camera-stop` → `stopCamera`。`pagehide` / `beforeunload` → `stopCamera`。初期 `syncIoPauseButtons`（ストリーム無し → Pause / Stop は disabled）。insecure ならヘルプ表示。`getUserMedia` が無ければ `This browser does not support the camera API.`
+5. `dispatch.js` … `fitDisplaySize` / `layoutDisplay` / `ResizeObserver`（`#layers` のみ）。`watch()` 開始（カメラより先、500ms `setTimeout`）。`dispatch.run=true; dispatch()`。カメラ前から rAF が回る。`videoWidth==0` なら suggestion=100 の idle。HUD の FPS は idle count を足さないので **0 に近づく**。
+6. `ui.js` … パネル open/close、`#layers` クリックで `.app.chrome-hidden` トグル、`print`、`show-image` / `show-histogram`、`image-mode` を `for (let k in buildImageFuncs)` で填充（`Object.keys` ではない。プレーンオブジェクトでは同じ順だが、プロトタイプにメソッドを足すと変わる）。初期モードは挿入順の先頭 `'GRAY-frame'`。`image-mode.onchange` は `render.buildImage` を差し替え、`syncModeSettings()` を呼ぶ。填充直後にも `syncModeSettings()` する（初期 `GRAY-frame` なので `#field-afactor` は隠れたまま）。`setupRange('afactor', ...)` / `setupRange('pause', ...)`。range は **`onchange`（ドラッグ中は発火せず、離したとき）**。`±` ボタンは即時 `cb`。`input` イベントは未使用。`#afactor` は hidden 中でも配線済み。値は `delta.factor` に残る。
+7. `camera.js` … `[data-io-pause]` に `toggleIoPause`。`#camera-start` → `startCamera`（プローブ stop → enumerate → 先頭カメラで本起動）。`#camera-stop` → `stopCamera`（セレクトを隠す）。`#camera-select` → `switchCamera`。`#support-scan` → `scanCameraSupport`。`pagehide` / `beforeunload` → `stopCamera`。初期 `syncIoPauseButtons`（ストリーム無し → Pause / Stop は disabled）。insecure ならヘルプ表示。`getUserMedia` が無ければ `This browser does not support the camera API.`
 
 `dispatch.iDISP` に空 `new Frame`×4 は無い。未使用ローカル `ic`/`dc`、`watch.last`、コメントの `delta.accum`、`delta.id` / `delta.threshold`、コメントアウト `setupRange('dthreshold')` も削除済み（PR 1）。
 
@@ -522,15 +535,18 @@ out[i]     = abs( blend(aBuffer, currentGray)[i] - aBuffer[i] )
 
 | id | 要素 | 契約 |
 | --- | --- | --- |
-| `video` | `<video autoplay playsinline muted>` | getUserMedia シンク兼プレビュー。`srcObject` の有無が「カメラ起動済み」。 |
+| `video` | `<video autoplay playsinline muted>` | getUserMedia シンク兼プレビュー。`srcObject` の有無が「カメラ起動済み」。表示は max 640×640 contain。処理は生 `videoWidth/Height`。 |
+| `preview-size` | `<output for="video">` | `Input preview` の右。生解像度 `W×H`。未起動・0 サイズは空。`loadedmetadata` / `resize` / attach / stop で `syncPreviewSize`。 |
+| `field-camera-select` | `.field` | 2 台以上のとき `hidden=false`。1 台以下と stop 後は hidden。 |
+| `camera-select` | `<select>` | `enumerateDevices` の `videoinput`。value は `deviceId`。change で `switchCamera`。GUM 待ち中 disabled。 |
 | `i-canvas` | `<canvas>` body 直下 | 内部ビットマップ。CSS: `position:absolute; width/height:1px; opacity:0; overflow:hidden; pointer-events:none`。`width/height` 属性は JS が生解像度に更新。ヒストグラムは描かない。 |
 | `d-canvas` | `<canvas width=640 height=480>` | 表示。CSS は layer いっぱい。ビットマップは CSS px（dpr なし）。 |
 | `h-canvas` | `<canvas width=640 height=480>` | ヒストグラム overlay。ビットマップは ic 生解像度。CSS contain（`inset:0; 100%`）。`pointer-events:none`。 |
 | `dcanvas-layer` | `.stage-layer` | 表示ボックス。JS が px 幅高さを書く。`.io-hud` と `#h-canvas` の親。 |
-| `layers` | `.stage` | contain 計算の基準。CSS padding のみ。JS は padding を書かない。`ResizeObserver`。 |
+| `layers` | `.stage` | contain 計算の基準。全画面。CSS padding のみ。`ResizeObserver`。素の click で chrome トグル。 |
 | `fps-chart` | `<canvas 240×56>` | Graph 描画先。 |
 | `fps-caption` | `<p>` | Graph が `FPS ave  (min–max)` を書き、`watch` が `get / frm / hist / show` 平均 ms を足す。CSS: wrap 可、`max-width: 22rem`。 |
-| `side-panel` | `<aside class="panel">` | `.app` grid 列 2。初期 display=block。`slide` が display/opacity を操作。`ResizeObserver`。 |
+| `side-panel` | `<aside class="panel">` | `.workspace` 内 overlay。ヘッダー下。背景 50% 透明。初期 display=block。`slide` が display/opacity。幅 720px 以下は下端シート。 |
 | `panel-open-button` | `.panel-fab` | CSS 既定 `display:none`。パネル閉後に JS が `block`。 |
 | `panel-close-button` | `.panel-close` | パネル見出し内。`position:static`。初期表示。 |
 | `image-mode` | `<select>` | JS が `buildImageFuncs` のキーで `Option` を add。change で `syncModeSettings`。 |
@@ -539,11 +555,13 @@ out[i]     = abs( blend(aBuffer, currentGray)[i] - aBuffer[i] )
 | `field-afactor` | `.field[data-modes]` | 蓄積 UI のラッパ。`data-modes="GRAY-accum,BW-delta,Gray-delta"`。初期 `hidden`。 |
 | `afactor` / `-output` / `-increase` / `-decrease` | range 一式 | `setupRange` 命名規則 `name`, `name-output`, `name-increase`, `name-decrease`。range は `onchange`（ドラッグ中は無視）。 |
 | `pause` / `-output` / `-increase` / `-decrease` | range 一式 | `dispatch.duration`（ms）。I/O pause とは別。`data-modes` 無し（常時表示）。ラベルは `Frame interval`。 |
+| `support-scan` | button | カメラ対応スキャン。ライブトラックがあれば `getCapabilities` / `getSettings` も読む。 |
+| `support-report` | `<pre>` | スキャン結果。`textContent`。初期 `hidden`。`#message` の 7 行リングとは別。 |
 | `message` | ログ | `print` が直近 7 行を `<br>` で描く。 |
 | `io-pause` | button `[data-io-pause]` | セレクタは id ではなく `data-io-pause`。複数可。ラベル `Pause` / `Resume`。 |
 | `io-paused-badge` | span | `hidden` トグル。表示時 `Paused`。 |
 | `camera-stop` | button | `Stop camera`。`hasStream` のときだけ enabled。 |
-| `camera-overlay` / `camera-status` / `camera-help` / `camera-start` | 起動 UI | `.is-live` で非表示。Start は GUM 待ち中 disabled。 |
+| `camera-overlay` / `camera-status` / `camera-help` / `camera-start` | 起動 UI | `.is-live` で非表示。Start は GUM 待ち中 disabled。`.chrome-hidden` でも非表示。 |
 | `link-localhost` / `link-https` | 誘導リンク | insecure 時に href/text を書き換え。 |
 
 `setupRange(name, label, cb)` は `name` をベースに 4 id を要求する。新しいスライダを足すなら HTML をこの規則に合わせる。モード限定ならラッパに `data-modes` を付け、`.field` / `.check` を使う（後述）。
@@ -569,6 +587,7 @@ syncModeSettings();   // document.querySelectorAll('[data-modes]') の hidden �
 | `#field-afactor` | `GRAY-accum,BW-delta,Gray-delta` | HTML に `hidden`。起動時モードは `GRAY-frame` なので同期後も隠れる |
 | `#pause` の field | （属性なし） | 常時表示（`Frame interval`） |
 | `Draw image` / `Draw histogram` / `Input preview` / `Log` | （属性なし） | 常時表示 |
+| `#field-camera-select` | （属性なし） | 初期 hidden。`videoinput` が 2 以上のとき `syncCameraSelect` が表示 |
 
 CSS: `.field { display: grid }` が UA の `[hidden] { display: none }` を上書きするため、`.field[hidden], .check[hidden] { display: none }` が必須。新しいモード限定コントロールを `.field` / `.check` 以外にするなら、同じ上書きを足すこと。
 
@@ -679,18 +698,22 @@ dispatch();                // 開始/再開。loop を 1 回 rAF 予約
 ### カメラ起動 / 停止
 
 ```javascript
-const constraints = { audio: false, video: true };
-startCamera();          // #camera-start
-                        // generation を進め、GUM 待ち中は Start を disabled
-                        // 解決時 generation 不一致なら stream を stop して破棄
-                        // !mediaDevices.getUserMedia →
-                        //   setCameraStatus('This browser does not support the camera API.')
-stopCamera();           // #camera-stop, pagehide, beforeunload
-                        // generation++、全 track.stop()、srcObject=null
-                        // overlay の .is-live を外す、Pause を disabled へ
-showInsecureHelp();     // isSecureContext が false。file:// ではポート無し URL になりうる
-setCameraStatus(msg);   // print + #camera-status
-originWithScheme(scheme, hostname); // ポート維持
+gumConstraints(deviceId); // deviceId があれば {audio:false, video:{deviceId:{exact}}}
+                          // 無ければ {audio:false, video:true}
+startCamera();            // #camera-start
+                          // 1) 許可プローブ GUM → 即 stop（処理には載せない）
+                          // 2) enumerateDevices で videoinput をスキャン
+                          // 3) 先頭 deviceId で本起動。2台以上なら #camera-select
+                          // generation 不一致なら stream を stop して破棄
+switchCamera(deviceId);   // #camera-select change。旧 track.stop のあと取り直し
+                          // pause 状態は維持。overlay は live のまま
+stopCamera();             // #camera-stop, pagehide, beforeunload
+                          // generation++、全 track.stop()、srcObject=null
+                          // overlay の .is-live を外す、セレクトを隠す
+showInsecureHelp();
+setCameraStatus(msg);
+syncPreviewSize();      // #preview-size ← video.videoWidth×videoHeight。0 なら空
+originWithScheme(scheme, hostname);
 ```
 
 pause はここには無い。`setIoPaused` はトラックを止めない。
@@ -705,6 +728,24 @@ syncIoPauseButtons(); // Pause/Resume と #camera-stop の enabled
 ```
 
 HTML は `#io-pause` に `data-io-pause` と `aria-pressed="false"` と `disabled` を付ける。JS は Pause を id に依存せず data 属性で探す。Stop は `#camera-stop`。
+
+### カメラ対応スキャン
+
+```javascript
+scanCameraSupport(); // #support-scan。非同期。結果は #support-report（textContent）
+```
+
+現行ストリームは止めない。`takePhoto()` は呼ばない。insecure なら 5 項目とも `NO`。
+
+| # | 項目 | YES | PARTIAL | NO |
+| --- | --- | --- | --- | --- |
+| 1 | Camera selection | `videoinput` が 2 台以上かつ `deviceId` あり | 1 台だけ、または許可前で id/label が空 | `enumerateDevices` 無し／0 台 |
+| 2 | Resolution | ライブ `getCapabilities().width/height` の範囲 | UA は `width`/`height` を知るがトラック無し | UA も非対応 |
+| 3 | Zoom / focus | トラックに `zoom` または `focusMode` / `focusDistance` | UA は制約名を知るがこのカメラは出さない | どちらも無し |
+| 4 | Frame rate | トラックに `frameRate` 範囲 | UA のみ | どちらも無し |
+| 5 | ImageCapture.takePhoto | コンストラクタと `takePhoto` がトラック上で使える | コンストラクタはあるがトラック無し／生成失敗 | `ImageCapture` 無し |
+
+解像度は仕様どおり範囲であり離散列挙ではない、とレポートに書く。`InputDeviceInfo.getCapabilities` があれば幅高さ範囲を追記する。
 
 ---
 
@@ -727,7 +768,7 @@ Frame 1 個あたり:
 
 ### 蓄積バッファ
 
-`delta.aBuffer` は解像度が上がったときだけ伸ばす。下がっても縮めない。カメラ切替で解像度が変わると古い画素が末尾に残る可能性は、現在の単一 `getUserMedia({video:true})` では起きにくい。Stop → Start で解像度が変われば伸びる側だけ追従する。
+`delta.aBuffer` は解像度が上がったときだけ伸ばす。下がっても縮めない。`#camera-select` で解像度の違うカメラへ切替えると、大きい側の長さが残り、新しい画素は先頭から上書きされる。縮まない。
 
 ### ループ状態
 
@@ -804,7 +845,8 @@ PR 6 は既存のグローバル境界に沿った `<script src>` 順である�
 
 ## Observability
 
-- **ログ UI:** `#message`。リング 7 本。`print()`。サイズ変更、モード、range、camera enabled/disabled/stopped、io paused/resumed、playback failed。
+- **ログ UI:** `#message`。リング 7 本。`print()`。サイズ変更、モード、range、camera enabled（先頭デバイス名）/disabled/stopped、`camera: <label>`（切替）、io paused/resumed、playback failed、`support scan done`。
+- **対応スキャン:** `#support-report`。`scanCameraSupport` が選択・解像度・ズーム/フォーカス・フレームレート・ImageCapture の YES/PARTIAL/NO を書く。ライブトラックが無いと範囲は UA レベルまで。
 - **FPS HUD:** 500ms。`Graph` が `FPS ave  (min–max)` を canvas スパークラインと caption に書く。`watch` が同じ caption に `get / frm / hist / show` の 500ms 平均 ms を足す。caption は wrap 可、`max-width: 22rem`。`count` は `suggestion != 100` の `iDISP` 回数。カメラ未起動 / 停止後 / pause 中は 0 に落ちる。`showImage=false` でも capture イテレーションは数える（カーネル時間は hist/show に乗らない）。
 - **ステージ時間:** `dispatch.time` が `getImage` / `new Frame`+`buildImage`（`frame`） / histogram overlay / `show` を積算。idle `continue` では `n` を増やさない。
 - **カメラ状態:** `#camera-status` と `print` の二重。getUserMedia 失敗は `error.name` + `message`。API 欠如は固定英語 `This browser does not support the camera API.`。video 欠如は `video element not found`。insecure は `Camera is blocked at …` と "Advanced, then Proceed"。停止は `camera stopped`。
@@ -855,14 +897,14 @@ PR 6 は既存のグローバル境界に沿った `<script src>` 順である�
 8. **ホスト 8888 を `ssl_preread` で HTTP/HTTPS 多重化。**  
    理由: getUserMedia の secure context。localhost HTTP と LAN HTTPS を同じポート番号で案内できる。
 
-9. **カメラ constraints は `{audio:false, video:true}` のみ。ユーザジェスチャ起動。解像度キャップは入れない。**  
-   理由: 自動再生ポリシと permission UX。解像度は UA 既定のまま。PR 4 は必須作業ではない（決定済みの延期）。
+9. **キャプチャ解像度は UA 既定のまま（`width`/`height` ideal は入れない）。切替時だけ `deviceId.exact`。入力プレビューの表示は最大 640×640 contain。**  
+   理由: 処理は生 `videoWidth/Height`。プレビューだけパネルで縮小する。許可はプローブ GUM で取り、本起動は列挙の先頭デバイス。PR 4（キャプチャ cap）は延期のまま。
 
 10. **派生画像は Frame メソッドの自己上書きでメモ化する。**  
     理由: 同一フレームで gray と Laplacian と histogram が gray を共有。再計算しない。`feed` し直さない限り無効化も無い。
 
-11. **ステージ実効幅は CSS grid が決める。JS は `paddingRight` を書かない。CSS `cqw` の 4:3 ボックスはライブ後に `aspect-ratio:auto` で破棄。**  
-    理由: `.app` は `1fr / auto`。パネルは列 2 のフローに入り、`slide.OUT` の `display:none` で列が潰れる。`fitDisplaySize` は `#layers` の client サイズから CSS padding だけ引く。fixed overlay だと映像の下に潜る。
+11. **ヘッダーは専用行。Controls はヘッダー下の映像エリアに overlay。JS は `paddingRight` を書かない。CSS `cqw` の 4:3 ボックスはライブ後に `aspect-ratio:auto` で破棄。**  
+    理由: トップバーと Close / Pause が重なると操作不能になる。chrome 非表示時はヘッダー行が潰れ映像が全画面。Controls 背景 50% 透過。`fitDisplaySize` は `#layers` から CSS padding だけ引く。
 
 12. **蓄積 `aBuffer` は `Array`（Clamped ではない）。差分出力だけ `Uint8ClampedArray`。遅延は 1 表示フレームではなく 1 accum 周期（`delta.time`）。**  
     理由: EMA の小数を保持する。初回 `current.length` で拡張し、空 `_next` でもバッファ不足にならない。
