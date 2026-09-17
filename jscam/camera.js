@@ -150,6 +150,7 @@ const attachLiveStream = (video, stream, paused)=>{
 	video.srcObject = stream;
 	playAttachedVideo(video);
 	syncPreviewSize();
+	syncCameraParams();
 	const overlay = e('camera-overlay');
 	if (overlay) overlay.classList.add('is-live');
 	const help = e('camera-help');
@@ -271,6 +272,7 @@ const stopCamera = ()=>{
 	startCamera.generation += 1;
 	setStartCameraEnabled(true);
 	hideCameraSelect();
+	clearCameraParams();
 
 	const video = e('video');
 	const overlay = e('camera-overlay');
@@ -317,6 +319,250 @@ const supportLiveTrack = ()=>{
 	if (!stream || !stream.getVideoTracks) return null;
 	const tracks = stream.getVideoTracks();
 	return tracks.length ? tracks[0] : null;
+}
+
+const CAMERA_ENUM_PARAMS = [
+	{ key: 'focusMode', label: 'Focus' }
+	, { key: 'exposureMode', label: 'Exposure' }
+	, { key: 'whiteBalanceMode', label: 'White balance' }
+];
+const CAMERA_BOOL_PARAMS = [
+	{ key: 'torch', label: 'Torch' }
+];
+const CAMERA_RANGE_PARAMS = [
+	{ key: 'zoom', label: 'Zoom' }
+	, { key: 'pan', label: 'Pan' }
+	, { key: 'tilt', label: 'Tilt' }
+	, { key: 'focusDistance', label: 'Focus distance', need: 'focusMode', mode: 'manual' }
+	, { key: 'exposureCompensation', label: 'Exposure compensation', need: 'exposureMode', mode: 'manual' }
+	, { key: 'exposureTime', label: 'Exposure time', need: 'exposureMode', mode: 'manual' }
+	, { key: 'iso', label: 'ISO', need: 'exposureMode', mode: 'manual' }
+	, { key: 'colorTemperature', label: 'Color temperature', need: 'whiteBalanceMode', mode: 'manual' }
+	, { key: 'brightness', label: 'Brightness' }
+	, { key: 'contrast', label: 'Contrast' }
+	, { key: 'saturation', label: 'Saturation' }
+	, { key: 'sharpness', label: 'Sharpness' }
+];
+
+const cameraCapRange = (cap)=>{
+	if (!cap || typeof cap !== 'object') return null;
+	if (!('min' in cap) || !('max' in cap)) return null;
+	const min = Number(cap.min);
+	const max = Number(cap.max);
+	if (!(max > min)) return null;
+	let step = Number(cap.step);
+	if (!(step > 0)) step = (max - min) / 100;
+	return { min: min, max: max, step: step };
+}
+
+const cameraCapEnum = (cap)=>{
+	if (!cap) return null;
+	if (Array.isArray(cap)) return cap.length >= 2 ? cap : null;
+	if (typeof cap === 'string') return null;
+	return null;
+}
+
+const cameraCapBool = (cap)=>{
+	if (cap === true) return true;
+	if (Array.isArray(cap)) {
+		for (let i = 0; i < cap.length; ++i) {
+			if (cap[i] === true) return true;
+		}
+	}
+	return false;
+}
+
+const cameraModeIs = (settings, key, mode)=>{
+	if (!settings || settings[key] == null) return true;
+	return settings[key] === mode;
+}
+
+const applyCameraConstraint = (key, value)=>{
+	const track = supportLiveTrack();
+	if (!track || !track.applyConstraints) {
+		print(key + ' failed: no track');
+		return Promise.resolve();
+	}
+	const advanced = {};
+	advanced[key] = value;
+	const plain = {};
+	plain[key] = value;
+	return track.applyConstraints({ advanced: [advanced] })
+		.catch(()=>track.applyConstraints(plain))
+		.then(()=>{
+			print(key + ':' + value);
+			let settings = null;
+			try { settings = track.getSettings(); } catch (err) {}
+			if (key === 'focusMode' || key === 'exposureMode' || key === 'whiteBalanceMode') {
+				syncCameraParams();
+				return;
+			}
+			const range = e('cam-' + key);
+			const out = e('cam-' + key + '-output');
+			if (settings && key in settings) {
+				if (range) range.value = settings[key];
+				if (out) out.value = settings[key];
+			}
+		})
+		.catch((err)=>{
+			const name = (err && err.name) ? err.name : err;
+			print(key + ' failed: ' + name);
+		});
+}
+
+const addCameraRangeField = (parent, key, label, range, value)=>{
+	const wrap = document.createElement('div');
+	wrap.className = 'field';
+	wrap.id = 'field-cam-' + key;
+	const row = document.createElement('div');
+	row.className = 'field-row';
+	const title = document.createElement('span');
+	title.textContent = label;
+	const output = document.createElement('output');
+	output.id = 'cam-' + key + '-output';
+	output.setAttribute('for', 'cam-' + key);
+	output.value = value;
+	row.appendChild(title);
+	row.appendChild(output);
+	const stepper = document.createElement('div');
+	stepper.className = 'stepper';
+	const dec = document.createElement('button');
+	dec.type = 'button';
+	dec.id = 'cam-' + key + '-decrease';
+	dec.setAttribute('aria-label', 'Decrease ' + label);
+	dec.textContent = '\u2212';
+	const input = document.createElement('input');
+	input.id = 'cam-' + key;
+	input.type = 'range';
+	input.min = String(range.min);
+	input.max = String(range.max);
+	input.step = String(range.step);
+	input.value = String(value);
+	const inc = document.createElement('button');
+	inc.type = 'button';
+	inc.id = 'cam-' + key + '-increase';
+	inc.setAttribute('aria-label', 'Increase ' + label);
+	inc.textContent = '+';
+	stepper.appendChild(dec);
+	stepper.appendChild(input);
+	stepper.appendChild(inc);
+	wrap.appendChild(row);
+	wrap.appendChild(stepper);
+	parent.appendChild(wrap);
+	const clamp = (v)=>{
+		const n = Number(v);
+		if (n < range.min) return range.min;
+		if (n > range.max) return range.max;
+		return n;
+	};
+	input.onchange = ()=>{
+		const v = clamp(input.value);
+		input.value = v;
+		output.value = v;
+		applyCameraConstraint(key, v);
+	};
+	dec.onclick = ()=>{
+		const v = clamp(Number(input.value) - range.step);
+		input.value = v;
+		output.value = v;
+		applyCameraConstraint(key, v);
+	};
+	inc.onclick = ()=>{
+		const v = clamp(Number(input.value) + range.step);
+		input.value = v;
+		output.value = v;
+		applyCameraConstraint(key, v);
+	};
+}
+
+const addCameraSelectField = (parent, key, label, options, value)=>{
+	const wrap = document.createElement('label');
+	wrap.className = 'field';
+	wrap.id = 'field-cam-' + key;
+	const title = document.createElement('span');
+	title.textContent = label;
+	const sel = document.createElement('select');
+	sel.id = 'cam-' + key;
+	for (let i = 0; i < options.length; ++i) {
+		sel.add(new Option(options[i], options[i]));
+	}
+	if (value != null) sel.value = String(value);
+	wrap.appendChild(title);
+	wrap.appendChild(sel);
+	parent.appendChild(wrap);
+	sel.onchange = function () {
+		applyCameraConstraint(key, this.value);
+	};
+}
+
+const addCameraCheckField = (parent, key, label, value)=>{
+	const wrap = document.createElement('label');
+	wrap.className = 'check';
+	wrap.id = 'field-cam-' + key;
+	const input = document.createElement('input');
+	input.type = 'checkbox';
+	input.id = 'cam-' + key;
+	input.checked = !!value;
+	const title = document.createElement('span');
+	title.textContent = label;
+	wrap.appendChild(input);
+	wrap.appendChild(title);
+	parent.appendChild(wrap);
+	input.onchange = function () {
+		applyCameraConstraint(key, this.checked);
+	};
+}
+
+const clearCameraParams = ()=>{
+	const box = e('camera-params');
+	const fields = e('camera-params-fields');
+	if (fields) fields.textContent = '';
+	if (box) box.hidden = true;
+}
+
+const syncCameraParams = ()=>{
+	const box = e('camera-params');
+	const fields = e('camera-params-fields');
+	if (!box || !fields) return;
+	fields.textContent = '';
+	const track = supportLiveTrack();
+	if (!track || !track.getCapabilities) {
+		box.hidden = true;
+		return;
+	}
+	let caps = null;
+	let settings = {};
+	try { caps = track.getCapabilities(); } catch (err) { caps = null; }
+	try { settings = track.getSettings() || {}; } catch (err) { settings = {}; }
+	if (!caps) {
+		box.hidden = true;
+		return;
+	}
+	let n = 0;
+	for (let i = 0; i < CAMERA_ENUM_PARAMS.length; ++i) {
+		const def = CAMERA_ENUM_PARAMS[i];
+		const options = cameraCapEnum(caps[def.key]);
+		if (!options) continue;
+		addCameraSelectField(fields, def.key, def.label, options, settings[def.key]);
+		n += 1;
+	}
+	for (let i = 0; i < CAMERA_BOOL_PARAMS.length; ++i) {
+		const def = CAMERA_BOOL_PARAMS[i];
+		if (!cameraCapBool(caps[def.key])) continue;
+		addCameraCheckField(fields, def.key, def.label, settings[def.key]);
+		n += 1;
+	}
+	for (let i = 0; i < CAMERA_RANGE_PARAMS.length; ++i) {
+		const def = CAMERA_RANGE_PARAMS[i];
+		if (def.need && !cameraModeIs(settings, def.need, def.mode)) continue;
+		const range = cameraCapRange(caps[def.key]);
+		if (!range) continue;
+		let value = Number(settings[def.key]);
+		if (!(value >= range.min && value <= range.max)) value = range.min;
+		addCameraRangeField(fields, def.key, def.label, range, value);
+		n += 1;
+	}
+	box.hidden = n === 0;
 }
 
 const scanCameraSelection = (supported, devices)=>{

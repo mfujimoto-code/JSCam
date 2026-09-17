@@ -25,7 +25,7 @@ JSCam はブラウザ上で動作するライブカメラ画像処理ベンチ�
 
 `/app/jscam` は単一ページの静的アプリである。ビルドツールもモジュールバンドラも無く、`index.html` が `cam2.css` と次の順のグローバルスクリプトを直読みする（PR 6）:
 
-`cam2.js`（`e`, `Graph`）→ `frame.js` → `delta.js` → `render.js` → `dispatch.js` → `ui.js` → `camera.js`
+`cam2.js`（`JSCAM_VERSION`, `e`, `Graph`）→ `frame.js` → `delta.js` → `render.js` → `dispatch.js` → `ui.js` → `camera.js`
 
 ES module の `import` / `export` は無い。契約は DOM id とページグローバルである。現行 JS（`cam2.js` と 6 分割ファイル）のインデントはタブ。オブジェクトリテラルのメソッド本体は `{` の内側で 1 段下げる（`cam.js` 由来の `Frame.prototype` / `buildImageFuncs` のずれは直した）。`cam.js` スナップショットはスペースのまま。
 
@@ -67,6 +67,7 @@ ES module の `import` / `export` は無い。契約は DOM id とページグ�
 - 一時停止中は最後の処理フレームを表示し続け、ウィンドウリサイズには CSS だけで追従すること。
 - カメラ停止は全トラックを `stop()` し、`srcObject` を外し、overlay を戻すこと。pause とは別操作。
 - 起動前に `enumerateDevices` で `videoinput` をスキャンすること。1 台なら従来どおり起動。2 台以上なら列挙の先頭で起動し、`#camera-select` で切替できること。
+- 使っているカメラの `getCapabilities()` に、再構成なしで変えられる項目があれば Controls の `#camera-params` に出すこと。width/height/frameRate は出さない。
 - 入力プレビュー `#video` の表示は縦横とも最大 640 CSS px。超える辺はアスペクト比を保って縮小（内部処理解像度は生サイズのまま）。
 - ヒストグラムは `#h-canvas` overlay。画素契約は ic 座標（x=10、1px×256、高さ `height/3`、底 `height-1`、キーあたり色 2 つ）。`Draw histogram` は `Draw image` から独立。
 - 非 secure context ではカメラを呼ばず、localhost HTTP / 同一ポート HTTPS への誘導を出すこと。
@@ -130,7 +131,7 @@ Host :8888  ──►  container :8080  (nginx stream, ssl_preread)
 ```
 index.html          lang="en"。画面コピーは英語
  ├─ cam2.css          レイアウト / テーマ / overlay / #h-canvas / caption wrap
- ├─ cam2.js           e(id), Graph
+ ├─ cam2.js           JSCAM_VERSION, e(id), Graph
  ├─ frame.js          Frame / カーネル / LRU
  ├─ delta.js          蓄積差分
  ├─ render.js         buildImageFuncs, render（ic / dc / hc）
@@ -145,6 +146,7 @@ DOM の役割分担:
 
 - `#video` … getUserMedia のシンク。サイドパネルの `Input preview`。`autoplay playsinline muted`。CSS: `max-width: min(100%, 640px); max-height: 640px; object-fit: contain`。内部処理は `videoWidth/Height` の生解像度。ラベル右の `#preview-size` に同じ生サイズ（`W×H`）を出す。
 - `#field-camera-select` / `#camera-select` … 2 台以上のときだけ表示。起動前スキャンの先頭デバイスで開始し、change で `deviceId.exact` 切替。
+- `#camera-params` … ライブ `getCapabilities()` で動かせる項目だけ。`applyConstraints`。width/height / frameRate は出さない（再構成の待ち）。Stop で hidden。
 - `#i-canvas` … 内部処理バッファ。`body` 直下。CSS は `position:absolute; width/height:1px; opacity:0; pointer-events:none; overflow:hidden`。ヒストグラムはここには描かない。
 - `#d-canvas` … ユーザに見える出力。`#dcanvas-layer` 内。内部 canvas を `drawImage`。
 - `#h-canvas` … ヒストグラム overlay。ビットマップは ic と同じ生解像度。CSS は `#d-canvas` と同様に layer いっぱい（`position:absolute; inset:0; width/height:100%; pointer-events:none`）。
@@ -179,7 +181,7 @@ flowchart TB
   Static --> Page
 
   subgraph Scripts["グローバルスクリプト（読み込み順）"]
-    Cam2["cam2.js<br/>e / Graph"]
+    Cam2["cam2.js<br/>JSCAM_VERSION / e / Graph"]
     FrameF["frame.js<br/>Frame"]
     DeltaF["delta.js<br/>delta"]
     RenderF["render.js<br/>buildImageFuncs / render"]
@@ -203,6 +205,7 @@ flowchart TB
 
 | シンボル | ファイル | 種類 | 責務 |
 | --- | --- | --- | --- |
+| `JSCAM_VERSION` | `cam2.js` | 文字列 | 実装の一意 ID。`ui.js` が Controls 末尾 `#app-version` に書く。**コードまたは設計の修正の最後に必ず更新する。** 形式は `YYYY.MM.DD-HHMMSSZ-<git short HEAD>`（UTC）。 |
 | `e` | `cam2.js` | 関数 | `document.getElementById` の短縮。 |
 | `Graph` | `cam2.js` | generator function | FPS（または任意のカウンタ）時系列を canvas に描く。 |
 | `Frame` | `frame.js` | コンストラクタ + 静的メソッド | 1 フレームの画素派生キャッシュ。 |
@@ -218,6 +221,7 @@ flowchart TB
 | `setupRange` | `ui.js` | 関数 | range + ± ボタン + output をコールバックに接続。 |
 | `currentImageMode` / `syncModeSettings` | `ui.js` | 関数 | `#image-mode` のキーと `[data-modes]` の `hidden` を同期。 |
 | `startCamera` / `stopCamera` / `switchCamera` | `camera.js` | 関数 | 許可プローブ → enumerate → 先頭 `deviceId` で起動。2 台以上はセレクト。切替は旧 track を stop して取り直し。 |
+| `syncCameraParams` / `clearCameraParams` | `camera.js` | 関数 | ライブ caps から Controls を生成。`applyConstraints`。attach で同期、stop でクリア。 |
 | `syncPreviewSize` | `camera.js` | 関数 | `#preview-size` に生解像度。`loadedmetadata` / `resize` / attach / stop。 |
 | `scanCameraSupport` | `camera.js` | 関数 | 対応スキャン。`#support-report` に YES/PARTIAL/NO。ストリームは止めない。 |
 | I/O pause 一式 | `camera.js` | 関数 | `dispatch.paused` と `video.pause()`。トラックは止めない。 |
@@ -513,12 +517,12 @@ out[i]     = abs( blend(aBuffer, currentGray)[i] - aBuffer[i] )
 
 `index.html` 末尾の script 順（122–128 行）が評価順である。
 
-1. `cam2.js` … `e` / `Graph` 定義。
+1. `cam2.js` … `JSCAM_VERSION` / `e` / `Graph` 定義。
 2. `frame.js` … `Frame` 定義。
 3. `delta.js` … `delta` 定義。
 4. `render.js` … `buildImageFuncs` / `render` 定義。`render.ic` / `dc` / `hc` を DOM から取得。初期 `render.buildImage` は `'RGB-frame'`（直後に ui が先頭モードへ差し替え）。
 5. `dispatch.js` … `fitDisplaySize` / `layoutDisplay` / `ResizeObserver`（`#layers` のみ）。`watch()` 開始（カメラより先、500ms `setTimeout`）。`dispatch.run=true; dispatch()`。カメラ前から rAF が回る。`videoWidth==0` なら suggestion=100 の idle。HUD の FPS は idle count を足さないので **0 に近づく**。
-6. `ui.js` … パネル open/close、`#layers` クリックで `.app.chrome-hidden` トグル、`print`、`show-image` / `show-histogram`、`image-mode` を `for (let k in buildImageFuncs)` で填充（`Object.keys` ではない。プレーンオブジェクトでは同じ順だが、プロトタイプにメソッドを足すと変わる）。初期モードは挿入順の先頭 `'GRAY-frame'`。`image-mode.onchange` は `render.buildImage` を差し替え、`syncModeSettings()` を呼ぶ。填充直後にも `syncModeSettings()` する（初期 `GRAY-frame` なので `#field-afactor` は隠れたまま）。`setupRange('afactor', ...)` / `setupRange('pause', ...)`。range は **`onchange`（ドラッグ中は発火せず、離したとき）**。`±` ボタンは即時 `cb`。`input` イベントは未使用。`#afactor` は hidden 中でも配線済み。値は `delta.factor` に残る。
+6. `ui.js` … パネル open/close、`#layers` クリックで `.app.chrome-hidden` トグル、`print`、`show-image` / `show-histogram`、`image-mode` を `for (let k in buildImageFuncs)` で填充（`Object.keys` ではない。プレーンオブジェクトでは同じ順だが、プロトタイプにメソッドを足すと変わる）。初期モードは挿入順の先頭 `'GRAY-frame'`。`image-mode.onchange` は `render.buildImage` を差し替え、`syncModeSettings()` を呼ぶ。填充直後にも `syncModeSettings()` する（初期 `GRAY-frame` なので `#field-afactor` は隠れたまま）。`setupRange('afactor', ...)` / `setupRange('pause', ...)`。range は **`onchange`（ドラッグ中は発火せず、離したとき）**。`±` ボタンは即時 `cb`。`input` イベントは未使用。`#afactor` は hidden 中でも配線済み。値は `delta.factor` に残る。`#app-version` に `JSCAM_VERSION` を書く。
 7. `camera.js` … `[data-io-pause]` に `toggleIoPause`。`#camera-start` → `startCamera`（プローブ stop → enumerate → 先頭カメラで本起動）。`#camera-stop` → `stopCamera`（セレクトを隠す）。`#camera-select` → `switchCamera`。`#support-scan` → `scanCameraSupport`。`pagehide` / `beforeunload` → `stopCamera`。初期 `syncIoPauseButtons`（ストリーム無し → Pause / Stop は disabled）。insecure ならヘルプ表示。`getUserMedia` が無ければ `This browser does not support the camera API.`
 
 `dispatch.iDISP` に空 `new Frame`×4 は無い。未使用ローカル `ic`/`dc`、`watch.last`、コメントの `delta.accum`、`delta.id` / `delta.threshold`、コメントアウト `setupRange('dthreshold')` も削除済み（PR 1）。
@@ -539,6 +543,7 @@ out[i]     = abs( blend(aBuffer, currentGray)[i] - aBuffer[i] )
 | `preview-size` | `<output for="video">` | `Input preview` の右。生解像度 `W×H`。未起動・0 サイズは空。`loadedmetadata` / `resize` / attach / stop で `syncPreviewSize`。 |
 | `field-camera-select` | `.field` | 2 台以上のとき `hidden=false`。1 台以下と stop 後は hidden。 |
 | `camera-select` | `<select>` | `enumerateDevices` の `videoinput`。value は `deviceId`。change で `switchCamera`。GUM 待ち中 disabled。 |
+| `camera-params` / `camera-params-fields` | 動的フィールド | ライブ制約 UI。caps に幅または 2 値以上あるキーだけ。`cam-<key>`。 |
 | `i-canvas` | `<canvas>` body 直下 | 内部ビットマップ。CSS: `position:absolute; width/height:1px; opacity:0; overflow:hidden; pointer-events:none`。`width/height` 属性は JS が生解像度に更新。ヒストグラムは描かない。 |
 | `d-canvas` | `<canvas width=640 height=480>` | 表示。CSS は layer いっぱい。ビットマップは CSS px（dpr なし）。 |
 | `h-canvas` | `<canvas width=640 height=480>` | ヒストグラム overlay。ビットマップは ic 生解像度。CSS contain（`inset:0; 100%`）。`pointer-events:none`。 |
@@ -558,6 +563,7 @@ out[i]     = abs( blend(aBuffer, currentGray)[i] - aBuffer[i] )
 | `support-scan` | button | カメラ対応スキャン。ライブトラックがあれば `getCapabilities` / `getSettings` も読む。 |
 | `support-report` | `<pre>` | スキャン結果。`textContent`。初期 `hidden`。`#message` の 7 行リングとは別。 |
 | `message` | ログ | `print` が直近 7 行を `<br>` で描く。 |
+| `app-version` | `<p class="app-version">` | Controls の最後。`JSCAM_VERSION`（`cam2.js`）。ログの下。 |
 | `io-pause` | button `[data-io-pause]` | セレクタは id ではなく `data-io-pause`。複数可。ラベル `Pause` / `Resume`。 |
 | `io-paused-badge` | span | `hidden` トグル。表示時 `Paused`。 |
 | `camera-stop` | button | `Stop camera`。`hasStream` のときだけ enabled。 |
@@ -713,6 +719,8 @@ stopCamera();             // #camera-stop, pagehide, beforeunload
 showInsecureHelp();
 setCameraStatus(msg);
 syncPreviewSize();      // #preview-size ← video.videoWidth×videoHeight。0 なら空
+syncCameraParams();     // attach 後。getCapabilities 同期。GUM のやり直しはしない
+clearCameraParams();    // stop
 originWithScheme(scheme, hostname);
 ```
 
@@ -897,8 +905,8 @@ PR 6 は既存のグローバル境界に沿った `<script src>` 順である�
 8. **ホスト 8888 を `ssl_preread` で HTTP/HTTPS 多重化。**  
    理由: getUserMedia の secure context。localhost HTTP と LAN HTTPS を同じポート番号で案内できる。
 
-9. **キャプチャ解像度は UA 既定のまま（`width`/`height` ideal は入れない）。切替時だけ `deviceId.exact`。入力プレビューの表示は最大 640×640 contain。**  
-   理由: 処理は生 `videoWidth/Height`。プレビューだけパネルで縮小する。許可はプローブ GUM で取り、本起動は列挙の先頭デバイス。PR 4（キャプチャ cap）は延期のまま。
+9. **キャプチャ解像度は UA 既定のまま（`width`/`height` ideal は入れない）。切替時だけ `deviceId.exact`。入力プレビューの表示は最大 640×640 contain。ライブで待たない制約（zoom / focus / torch / 露出 / WB / 画質 / pan / tilt）だけ Controls に出す。**  
+   理由: 処理は生 `videoWidth/Height`。`getCapabilities` は同期。`applyConstraints` はトラック再取得しない。frameRate と解像度はパイプライン再構成がありうるので出さない。PTZ のために `zoom: true` で GUM し直さない（追加許可ダイアログを避ける）。PR 4 は延期のまま。
 
 10. **派生画像は Frame メソッドの自己上書きでメモ化する。**  
     理由: 同一フレームで gray と Laplacian と histogram が gray を共有。再計算しない。`feed` し直さない限り無効化も無い。
@@ -977,7 +985,7 @@ PR 6 は既存のグローバル境界に沿った `<script src>` 順である�
 
 ## References
 
-- `/app/jscam/cam2.js` — `e`, `Graph`
+- `/app/jscam/cam2.js` — `JSCAM_VERSION`, `e`, `Graph`
 - `/app/jscam/frame.js` — `Frame` / カーネル / LRU
 - `/app/jscam/delta.js` — 蓄積差分
 - `/app/jscam/render.js` — `buildImageFuncs`, `render`

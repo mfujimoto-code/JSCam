@@ -150,3 +150,6 @@ const setupRange = (name, label, cb) => {
 
 setupRange('afactor', 'accumulation factor', (v)=>(delta.factor = Number(v)));
 setupRange('pause', 'pause@frame', (v)=>(dispatch.duration = Number(v)));
+
+const appVersion = e('app-version');
+if (appVersion) appVersion.textContent = JSCAM_VERSION;

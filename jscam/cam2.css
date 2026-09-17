@@ -387,8 +387,18 @@ select {
 }
 
 .field[hidden],
-.check[hidden] {
+.check[hidden],
+#camera-params[hidden] {
   display: none;
+}
+
+#camera-params {
+  margin-bottom: 1rem;
+}
+
+#camera-params > span {
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
 }
 
 .field,
@@ -504,6 +514,17 @@ select {
   padding: 0.5rem 0.6rem;
   background: #0a0c12;
   border: 1px solid var(--line);
+}
+
+.app-version {
+  margin: 1rem 0 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  word-break: break-all;
 }
 
 .preview {
