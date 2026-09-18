@@ -4,7 +4,7 @@ Live camera image-processing bench in the browser. Grayscale, edges, histogram, 
 
 ## Use
 
-Open **https://mfujimoto-code.github.io/JSCam** over HTTPS, allow the camera, then **Start camera**.
+Open **https://mfujimoto-code.github.io/JSCam/jscam** over HTTPS, allow the camera, then **Start camera**.
 
 Tap the image to hide or show controls. Implementation version is at the bottom of Controls.
 
