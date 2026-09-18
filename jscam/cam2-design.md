@@ -49,7 +49,7 @@ ES module の `import` / `export` は無い。契約は DOM id とページグ�
 1. **getUserMedia は secure context 必須**。LAN IP の `http://` ではカメラが動かない。nginx stream で同一ポート `8888` に HTTP と HTTPS を載せ、`http://127.0.0.1:8888` か `https://<host>:8888` で開ける。
 2. **表示サイズと内部解像度の分離**。処理はカメラ生解像度、表示は全画面ステージへの contain フィット。Controls / トップバーは映像の上に overlay。
 3. **一時停止でフレームを残す**。`canvas.width` / `height` 代入はビットマップをクリアするため、pause 中は CSS サイズだけ更新する（`ResizeObserver`。rAF では layout しない）。
-4. **一時停止 / 停止ボタンは映像のレイアウトを壊さない**。`#dcanvas-layer` 左上の absolute overlay（`.io-hud`）。`Pause` は凍結、`Stop camera` はトラック解放。
+4. **カメラ開始・停止は同じ HUD スロット。** `.io-hud` 左端が `Start camera` ⇄ `Stop camera`（同時には出さない）。ライブ中だけ右に `Pause`。中央 overlay は説明と insecure ヘルプのみ。レイアウト幅は取らない。
 5. **モードに関係ないスライダを出さない**。蓄積係数は `GRAY-accum` / `BW-delta` / `Gray-delta` のときだけ `#field-afactor` を見せる。
 6. **ヒストグラムは映像から独立**。`Draw histogram` は `Draw image` とは別チェック。内部 `ImageData` はクリーン（PR 3）。
 7. **カメラ LED を明示的に消せる**。`Stop camera` と `pagehide` / `beforeunload` で `track.stop()`（PR 2）。pause は `video.pause()` のみでトラックは live。
@@ -154,7 +154,7 @@ DOM の役割分担:
 - `#layers` (`.stage`) … contain フィットの親。ヘッダー下の `.workspace` 内。CSS `padding: 0.5rem`。JS は padding を書かない。`ResizeObserver` の対象。クリックで `.app.chrome-hidden` をトグル（`button` / `.panel` / `.topbar` / `.io-hud` 上は無視）。
 - `#side-panel` … `.workspace` 内の overlay（右。幅 720px 以下は下からのシート）。ヘッダーとは重ならない。背景 `rgba(18, 21, 29, 0.5)`。初期状態は開。レイアウト幅は取らない。
 - `#field-afactor` … `data-modes="GRAY-accum,BW-delta,Gray-delta"`。初期 `hidden`。`syncModeSettings` がトグル。
-- `.io-hud` … `#io-pause[data-io-pause]`、`#camera-stop`、`#io-paused-badge`。`position:absolute; top/left:0.5rem`。レイアウト幅を取らない。
+- `.io-hud` … `#camera-start` と `#camera-stop` は同じ左端スロット（排他表示）。ライブ中のみ `#io-pause` と badge。`position:absolute; top/left:0.5rem`。レイアウト幅を取らない。`#camera-overlay` より前面。
 
 ### モジュール構造
 
@@ -388,7 +388,7 @@ stateDiagram-v2
 
 - `dispatch.paused` を設定。
 - ストリームがあるとき `video.pause()` または `video.play()`（play の rejection は `print`）。**トラックは `stop()` しない。**
-- `syncIoPauseButtons` が `[data-io-pause]` を更新: `disabled = !hasStream`、`aria-pressed`、ラベル `Pause` / `Resume`、`#io-paused-badge` の `hidden`（表示時テキスト `Paused`）。`#camera-stop` も `disabled = !hasStream`。
+- `syncIoPauseButtons` が HUD を同期: 未起動は `#camera-start` のみ。ライブは Start を隠し `#camera-stop` と `#io-pause` を出す。Pause は `aria-pressed` と `Pause` / `Resume`。badge は pause 中だけ。
 
 **なぜ pause で `render.resize` しないか。** `HTMLCanvasElement.width` / `height` の代入はコンテキストをリセットしビットマップを透明にする。一時停止中にウィンドウやパネル幅が変わると `layoutDisplay(..., true)` は凍結フレームを消す。よって pause パス（`ResizeObserver`）は `resizeBitmap=false` で `#dcanvas-layer` の CSS `width`/`height` だけ変え、`#d-canvas` / `#h-canvas` は CSS で引き伸ばす。
 
@@ -406,7 +406,7 @@ stateDiagram-v2
 
 pause / リサイズパスで `width = cssW * dpr` してはならない。ビットマップ代入は凍結フレームを消す（R2）。dpr 対応を足すなら、リサイズ前にビットマップをコピーする。
 
-`.io-hud` は layer の absolute 子であり、`fitDisplaySize` の計算に入らない。これが「pause / stop ボタンはレイアウト空間を取ってはならない」という制約の実装である。
+`.io-hud` は layer の absolute 子であり、`fitDisplaySize` の計算に入らない。これが「pause / start / stop ボタンはレイアウト空間を取ってはならない」という制約の実装である。Start と Stop は左端の同じスロット。Pause はライブ時だけその右。
 
 パネル配置:
 
@@ -523,7 +523,7 @@ out[i]     = abs( blend(aBuffer, currentGray)[i] - aBuffer[i] )
 4. `render.js` … `buildImageFuncs` / `render` 定義。`render.ic` / `dc` / `hc` を DOM から取得。初期 `render.buildImage` は `'RGB-frame'`（直後に ui が先頭モードへ差し替え）。
 5. `dispatch.js` … `fitDisplaySize` / `layoutDisplay` / `ResizeObserver`（`#layers` のみ）。`watch()` 開始（カメラより先、500ms `setTimeout`）。`dispatch.run=true; dispatch()`。カメラ前から rAF が回る。`videoWidth==0` なら suggestion=100 の idle。HUD の FPS は idle count を足さないので **0 に近づく**。
 6. `ui.js` … パネル open/close、`#layers` クリックで `.app.chrome-hidden` トグル、`print`、`show-image` / `show-histogram`、`image-mode` を `for (let k in buildImageFuncs)` で填充（`Object.keys` ではない。プレーンオブジェクトでは同じ順だが、プロトタイプにメソッドを足すと変わる）。初期モードは挿入順の先頭 `'GRAY-frame'`。`image-mode.onchange` は `render.buildImage` を差し替え、`syncModeSettings()` を呼ぶ。填充直後にも `syncModeSettings()` する（初期 `GRAY-frame` なので `#field-afactor` は隠れたまま）。`setupRange('afactor', ...)` / `setupRange('pause', ...)`。range は **`onchange`（ドラッグ中は発火せず、離したとき）**。`±` ボタンは即時 `cb`。`input` イベントは未使用。`#afactor` は hidden 中でも配線済み。値は `delta.factor` に残る。`#app-version` に `JSCAM_VERSION` を書く。
-7. `camera.js` … `[data-io-pause]` に `toggleIoPause`。`#camera-start` → `startCamera`（プローブ stop → enumerate → 先頭カメラで本起動）。`#camera-stop` → `stopCamera`（セレクトを隠す）。`#camera-select` → `switchCamera`。`#support-scan` → `scanCameraSupport`。`pagehide` / `beforeunload` → `stopCamera`。初期 `syncIoPauseButtons`（ストリーム無し → Pause / Stop は disabled）。insecure ならヘルプ表示。`getUserMedia` が無ければ `This browser does not support the camera API.`
+7. `camera.js` … `[data-io-pause]` に `toggleIoPause`。`#camera-start` → `startCamera`。`#camera-stop` → `stopCamera`。HUD は `syncIoPauseButtons` が排他表示。`#camera-select` → `switchCamera`。`#support-scan` → `scanCameraSupport`。`pagehide` / `beforeunload` → `stopCamera`。初期は Start のみ（Pause / Stop は hidden）。insecure なら overlay にヘルプ。`getUserMedia` が無ければ `This browser does not support the camera API.`
 
 `dispatch.iDISP` に空 `new Frame`×4 は無い。未使用ローカル `ic`/`dc`、`watch.last`、コメントの `delta.accum`、`delta.id` / `delta.threshold`、コメントアウト `setupRange('dthreshold')` も削除済み（PR 1）。
 
@@ -564,10 +564,11 @@ out[i]     = abs( blend(aBuffer, currentGray)[i] - aBuffer[i] )
 | `support-report` | `<pre>` | スキャン結果。`textContent`。初期 `hidden`。`#message` の 7 行リングとは別。 |
 | `message` | ログ | `print` が直近 7 行を `<br>` で描く。 |
 | `app-version` | `<p class="app-version">` | Controls の最後。`JSCAM_VERSION`（`cam2.js`）。ログの下。 |
-| `io-pause` | button `[data-io-pause]` | セレクタは id ではなく `data-io-pause`。複数可。ラベル `Pause` / `Resume`。 |
+| `io-pause` | button `[data-io-pause]` | ライブ中だけ表示。セレクタは `data-io-pause`。ラベル `Pause` / `Resume`。 |
 | `io-paused-badge` | span | `hidden` トグル。表示時 `Paused`。 |
 | `camera-stop` | button | `Stop camera`。`hasStream` のときだけ enabled。 |
-| `camera-overlay` / `camera-status` / `camera-help` / `camera-start` | 起動 UI | `.is-live` で非表示。Start は GUM 待ち中 disabled。`.chrome-hidden` でも非表示。 |
+| `camera-overlay` / `camera-status` / `camera-help` | 空状態の説明 | ボタンは持たない。`.is-live` と `.chrome-hidden` で非表示。 |
+| `camera-start` / `camera-stop` | `.io-hud` | 同じスロット。未起動は Start（GUM 待ち中 disabled）。ライブは Stop。 |
 | `link-localhost` / `link-https` | 誘導リンク | insecure 時に href/text を書き換え。 |
 
 `setupRange(name, label, cb)` は `name` をベースに 4 id を要求する。新しいスライダを足すなら HTML をこの規則に合わせる。モード限定ならラッパに `data-modes` を付け、`.field` / `.check` を使う（後述）。
@@ -735,7 +736,7 @@ toggleIoPause();
 syncIoPauseButtons(); // Pause/Resume と #camera-stop の enabled
 ```
 
-HTML は `#io-pause` に `data-io-pause` と `aria-pressed="false"` と `disabled` を付ける。JS は Pause を id に依存せず data 属性で探す。Stop は `#camera-stop`。
+HTML は `#io-pause` に `data-io-pause`。未起動時は Pause / Stop が `hidden`。JS は Pause を data 属性で探す。Start と Stop は `.io-hud` 左端の排他表示。
 
 ### カメラ対応スキャン
 

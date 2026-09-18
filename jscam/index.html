@@ -28,8 +28,9 @@
       <section id="layers" class="stage">
         <div id="dcanvas-layer" class="stage-layer">
           <div class="io-hud">
-            <button type="button" id="io-pause" data-io-pause aria-pressed="false" disabled>Pause</button>
-            <button type="button" id="camera-stop" disabled>Stop camera</button>
+            <button type="button" id="camera-start">Start camera</button>
+            <button type="button" id="camera-stop" hidden>Stop camera</button>
+            <button type="button" id="io-pause" data-io-pause aria-pressed="false" hidden disabled>Pause</button>
             <span id="io-paused-badge" hidden>Paused</span>
           </div>
           <div class="stage-placeholder" id="camera-overlay">
@@ -41,7 +42,6 @@
                 <li>On this host name or IP use <a id="link-https" href="#">HTTPS on the same port</a>. If a certificate warning appears, choose Advanced, then Proceed.</li>
               </ol>
             </div>
-            <button type="button" id="camera-start">Start camera</button>
           </div>
           <canvas id="d-canvas" width="640" height="480">This browser does not support canvas.</canvas>
           <canvas id="h-canvas" width="640" height="480"></canvas>

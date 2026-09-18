@@ -4,17 +4,23 @@ const syncIoPauseButtons = ()=>{
 	const paused = dispatch.paused;
 	const video = e('video');
 	const hasStream = !!(video && video.srcObject);
+	const startBtn = e('camera-start');
+	const stopBtn = e('camera-stop');
+	if (startBtn) startBtn.hidden = hasStream;
+	if (stopBtn) {
+		stopBtn.hidden = !hasStream;
+		stopBtn.disabled = !hasStream;
+	}
 	const nodes = document.querySelectorAll('[data-io-pause]');
 	for (let i = 0; i < nodes.length; ++i) {
 		const btn = nodes[i];
+		btn.hidden = !hasStream;
 		btn.disabled = !hasStream;
 		btn.setAttribute('aria-pressed', paused ? 'true' : 'false');
 		btn.textContent = paused ? 'Resume' : 'Pause';
 	}
 	const badge = e('io-paused-badge');
 	if (badge) badge.hidden = !paused;
-	const stopBtn = e('camera-stop');
-	if (stopBtn) stopBtn.disabled = !hasStream;
 }
 
 const setIoPaused = (paused)=>{

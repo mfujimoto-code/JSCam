@@ -216,16 +216,8 @@ select {
   color: var(--cyan);
 }
 
-#camera-start {
-  pointer-events: auto;
-  cursor: pointer;
-  padding: 0.7rem 1.2rem;
-  border: 1px solid rgba(226, 62, 175, 0.55);
-  background: #1a1020;
-  letter-spacing: 0.08em;
-}
-
-#camera-start:hover {
+#camera-start:hover:not(:disabled),
+#camera-stop:hover:not(:disabled) {
   background: #2a1633;
 }
 
@@ -274,10 +266,6 @@ select {
 .io-hud button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
-}
-
-#camera-stop:hover:not(:disabled) {
-  background: #2a1633;
 }
 
 .io-hud button[aria-pressed="true"] {
