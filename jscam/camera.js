@@ -4,6 +4,11 @@ const syncIoPauseButtons = ()=>{
 	const paused = dispatch.paused;
 	const video = e('video');
 	const hasStream = !!(video && video.srcObject);
+	const hud = document.querySelector('.io-hud');
+	if (hud) {
+		if (hasStream) hud.classList.add('is-live');
+		else hud.classList.remove('is-live');
+	}
 	const startBtn = e('camera-start');
 	const stopBtn = e('camera-stop');
 	if (startBtn) startBtn.hidden = hasStream;
@@ -155,8 +160,6 @@ const attachLiveStream = (video, stream, paused)=>{
 	stopStreamTracks(video.srcObject);
 	video.srcObject = stream;
 	playAttachedVideo(video);
-	syncPreviewSize();
-	syncCameraParams();
 	const overlay = e('camera-overlay');
 	if (overlay) overlay.classList.add('is-live');
 	const help = e('camera-help');
@@ -165,6 +168,8 @@ const attachLiveStream = (video, stream, paused)=>{
 	const sel = e('camera-select');
 	if (sel) sel.disabled = false;
 	setIoPaused(!!paused);
+	try { syncPreviewSize(); } catch (err) {}
+	try { syncCameraParams(); } catch (err) { print('camera params failed: ' + err); }
 }
 
 const gumFail = (error)=>{
