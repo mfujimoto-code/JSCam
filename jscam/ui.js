@@ -148,7 +148,7 @@ const setupRange = (name, label, cb) => {
 	}
 } 
 
-setupRange('afactor', 'accumulation factor', (v)=>(delta.factor = Number(v)));
+setupRange('afactor', 'accumulation factor', (v)=>(accum.factor = Number(v)));
 setupRange('pause', 'pause@frame', (v)=>(dispatch.duration = Number(v)));
 
 const appVersion = e('app-version');

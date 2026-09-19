@@ -142,8 +142,8 @@ const buildImageFuncs = {
 		return frame.getImage();
 	}
 	, 'GRAY-accum': function (ic, frame) {
-		delta.accum(frame);
-		const gray = delta.aBuffer
+		accum.update(frame, 'gray');
+		const gray = accum.planes('gray')[0]
 		, num  = frame.getNum()
 		, size = frame.getSize()
 		, imageData = new ImageData(size[0], size[1])

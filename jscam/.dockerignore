@@ -3,6 +3,7 @@
 !cam2.css
 !cam2.js
 !frame.js
+!accum.js
 !delta.js
 !render.js
 !dispatch.js

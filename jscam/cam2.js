@@ -1,7 +1,7 @@
 'use strict';
 
 // Bump on every change (UTC YYYY.MM.DD-HHMMSSZ-<git short HEAD at edit>).
-const JSCAM_VERSION = '2026.09.19-221147Z-41ae3e7';
+const JSCAM_VERSION = '2026.09.19-231741Z-6a3aa9c';
 
 const e = function(tag) {return document.getElementById(tag);}
 

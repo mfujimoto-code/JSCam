@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 | --- | --- |
 | 文書タイトル | JSCam live-camera bench 現行アーキテクチャ設計書 |
-| 対象 | `/app/jscam/` の分割グローバルスクリプト（`cam2.js` / `frame.js` / `delta.js` / `render.js` / `dispatch.js` / `ui.js` / `camera.js`）および付随する HTML / CSS / Docker / nginx |
+| 対象 | `/app/jscam/` の分割グローバルスクリプト（`cam2.js` / `frame.js` / `accum.js` / `delta.js` / `render.js` / `dispatch.js` / `ui.js` / `camera.js`）および付随する HTML / CSS / Docker / nginx |
 | 著者 | JSCam maintainers |
 | 日付 | 2026-09-19 |
 | ステータス | Draft（PR 1, 2, 3, 5, 6, 7, 8 まで実装済み。PR 4 は延期。画素プール／GC 観測は方式検討のみ） |
@@ -25,9 +25,9 @@ JSCam はブラウザ上で動作するライブカメラ画像処理ベンチ�
 
 `/app/jscam` は単一ページの静的アプリである。ビルドツールもモジュールバンドラも無く、`index.html` が `cam2.css` と次の順のグローバルスクリプトを直読みする（PR 6）:
 
-`cam2.js`（`JSCAM_VERSION`, `e`, `Graph`）→ `frame.js` → `delta.js` → `render.js` → `dispatch.js` → `ui.js` → `camera.js`
+`cam2.js`（`JSCAM_VERSION`, `e`, `Graph`）→ `frame.js` → `accum.js` → `delta.js` → `render.js` → `dispatch.js` → `ui.js` → `camera.js`
 
-ES module の `import` / `export` は無い。契約は DOM id とページグローバルである。現行 JS（`cam2.js` と 6 分割ファイル）のインデントはタブ。オブジェクトリテラルのメソッド本体は `{` の内側で 1 段下げる（`cam.js` 由来の `Frame.prototype` / `buildImageFuncs` のずれは直した）。`cam.js` スナップショットはスペースのまま。
+ES module の `import` / `export` は無い。契約は DOM id とページグローバルである。現行 JS（`cam2.js` と 7 分割ファイル）のインデントはタブ。オブジェクトリテラルのメソッド本体は `{` の内側で 1 段下げる（`cam.js` 由来の `Frame.prototype` / `buildImageFuncs` のずれは直した）。`cam.js` スナップショットはスペースのまま。
 
 ### `cam.js` から `cam2` への修正（事実）
 
@@ -104,7 +104,8 @@ Host :8888  ──►  container :8080  (nginx stream, ssl_preread)
 | ファイル | 役割 |
 | --- | --- |
 | `/app/compose.yaml` | `jscam:local` を build。`8888:8080`。`TLS_SAN` を渡す。下記「再マウント vs 再ビルド」参照。Compose の `healthcheck:` キーは無い。 |
-| `/app/jscam/Dockerfile` | `nginx:1.27-alpine` + openssl。`40-gen-tls.sh` を `/docker-entrypoint.d/` に置く。静的ファイル（`index.html` `cam2.css` と 7 本の JS）を `/usr/share/nginx/html/` へ COPY。`EXPOSE 8080`。**イメージの** `HEALTHCHECK` が `wget -qO- http://127.0.0.1:8081/healthz`（Alpine `wget` の実行は本設計書では未検証）。8081 応答はポート 8080 / `ssl_preread` の生存を証明しない（Open Question 6）。 |
+| `/app/jscam/.dockerignore` | 先頭 `*` のあと許可リスト。イメージに入れるファイルは `!` を足す。抜けると `COPY` が checksum / not found で落ちる。 |
+| `/app/jscam/Dockerfile` | `nginx:1.27-alpine` + openssl。`40-gen-tls.sh` を `/docker-entrypoint.d/` に置く。静的ファイル（`index.html` `cam2.css` と 8 本の JS）を `/usr/share/nginx/html/` へ COPY。`EXPOSE 8080`。**イメージの** `HEALTHCHECK` が `wget -qO- http://127.0.0.1:8081/healthz`（Alpine `wget` の実行は本設計書では未検証）。8081 応答はポート 8080 / `ssl_preread` の生存を証明しない（Open Question 6）。 |
 | `/app/jscam/nginx.main.conf` | `stream { ssl_preread on; }` で 8080 を 8081/8443 に分岐。`http { include conf.d/*.conf; }`。`proxy_timeout 1d`（長寿命接続向け。静的配信では実害は小さい）。 |
 | `/app/jscam/nginx.conf` | 8081 と 8443 で同じ document root。`Cache-Control: no-store`。`Permissions-Policy: camera=(self), microphone=()`。`/healthz` → `200 ok`。 |
 | `/app/jscam/40-gen-tls.sh` | 起動時に自己署名証明書。SAN 既定 `DNS:localhost,IP:127.0.0.1`。`TLS_SAN` で追加（例 `IP:192.168.1.10`）。825 日、RSA 2048。 |
@@ -120,7 +121,7 @@ Host :8888  ──►  container :8080  (nginx stream, ssl_preread)
 
 | 変更対象 | 反映方法 |
 | --- | --- |
-| `index.html`, `cam2.css`, `cam2.js`, `frame.js`, `delta.js`, `render.js`, `dispatch.js`, `ui.js`, `camera.js` | compose の ro bind mount。ブラウザ再読込（`Cache-Control: no-store`）。イメージ再ビルド不要。 |
+| `index.html`, `cam2.css`, `cam2.js`, `frame.js`, `accum.js`, `delta.js`, `render.js`, `dispatch.js`, `ui.js`, `camera.js` | compose の ro bind mount。ブラウザ再読込（`Cache-Control: no-store`）。イメージ再ビルド不要。 |
 | `nginx.conf` → `/etc/nginx/conf.d/default.conf` | ファイルはマウントされるが nginx は自動 reload しない。`nginx -s reload` またはコンテナ再作成。stream / `ssl_preread` / `proxy_timeout` はここには無い。 |
 | `nginx.main.conf`（8080 多重化, `proxy_timeout`） | イメージに COPY されるだけ。`--build` が必要。 |
 | `40-gen-tls.sh`, `Dockerfile` | `--build`。 |
@@ -133,7 +134,8 @@ index.html          lang="en"。画面コピーは英語
  ├─ cam2.css          レイアウト / テーマ / overlay / #h-canvas / caption wrap
  ├─ cam2.js           JSCAM_VERSION, e(id), Graph
  ├─ frame.js          Frame / カーネル / LRU
- ├─ delta.js          蓄積差分
+ ├─ accum.js          指数平滑背景（gray / rgb / yuv）
+ ├─ delta.js          残差 |current − accum|
  ├─ render.js         buildImageFuncs, render（ic / dc / hc）
  ├─ dispatch.js       layout, rAF ループ, watch
  ├─ ui.js             パネル, モード, range, print
@@ -165,7 +167,7 @@ flowchart TB
     Stream["nginx stream ssl_preread<br/>nginx.main.conf"]
     HTTP["nginx :8081 HTTP"]
     TLS["nginx :8443 TLS<br/>certs from 40-gen-tls.sh"]
-    Static["index.html + cam2.css + 7 JS files"]
+    Static["index.html + cam2.css + 8 JS files"]
     Compose --> Stream
     Stream --> HTTP
     Stream --> TLS
@@ -183,18 +185,20 @@ flowchart TB
   subgraph Scripts["グローバルスクリプト（読み込み順）"]
     Cam2["cam2.js<br/>JSCAM_VERSION / e / Graph"]
     FrameF["frame.js<br/>Frame"]
+    AccumF["accum.js<br/>accum"]
     DeltaF["delta.js<br/>delta"]
     RenderF["render.js<br/>buildImageFuncs / render"]
     DispF["dispatch.js<br/>layout / dispatch / watch"]
     UiF["ui.js<br/>slide / setupRange / mode"]
     CamF["camera.js<br/>start / stop / pause"]
-    Cam2 --> FrameF --> DeltaF --> RenderF --> DispF --> UiF --> CamF
+    Cam2 --> FrameF --> AccumF --> DeltaF --> RenderF --> DispF --> UiF --> CamF
   end
 
   HTML --> Scripts
 
   DispF --> RenderF
   RenderF --> FrameF
+  RenderF --> AccumF
   RenderF --> DeltaF
   DispF --> FrameF
   CamF --> DispF
@@ -209,8 +213,9 @@ flowchart TB
 | `e` | `cam2.js` | 関数 | `document.getElementById` の短縮。 |
 | `Graph` | `cam2.js` | generator function | FPS（または任意のカウンタ）時系列を canvas に描く。 |
 | `Frame` | `frame.js` | コンストラクタ + 静的メソッド | 1 フレームの画素派生キャッシュ。 |
+| `accum` | `accum.js` | オブジェクト | space（`gray` / `rgb` / `yuv`）ごとの指数平滑背景。指定 space だけ更新。 |
 | `buildImageFuncs` | `render.js` | オブジェクト | モード名 → `ImageData` 生成関数。 |
-| `delta` | `delta.js` | オブジェクト | グレースケール EMA 蓄積と差分。 |
+| `delta` | `delta.js` | オブジェクト | `accum` 背景に対する残差。`factor` / `time` / `aBuffer` / `accum()` は互換エイリアス。 |
 | `render` | `render.js` | オブジェクト | 内部/表示/ヒストグラム canvas、リサイズ。 |
 | `fitDisplaySize` / `layoutDisplay` | `dispatch.js` | 関数 | contain フィット。pause 時は CSS のみ。 |
 | `displayResize` | `dispatch.js` | `ResizeObserver` | `#layers` だけを監視し `layoutDisplay(video, false)`。パネルは overlay なので見ない。 |
@@ -254,7 +259,8 @@ flowchart LR
   BI --> PI --> SH
   FR -->|getGray / getYUV / getEdge / get3Planars / getEqualized| BI
   FR -->|histogram dict| HG
-  BI -->|GRAY-accum / *delta*| DeltaObj["delta.accum / delta.get"]
+  BI -->|GRAY-accum| AccumObj["accum.update / planes"]
+  BI -->|*delta*| DeltaObj["delta.get"]
   FR -->|showImage false| LRU["LRU 登録のみ（カーネル無し）"]
   HG -->|CSS contain| Layer["#dcanvas-layer"]
   SH --> Layer
@@ -478,19 +484,22 @@ end   = src.length + O[0] = len - w - 1
 
 256 bin のクラス間分散 `w1*w2*(m1-m2)²` を最大にする閾値 `k`。`w1==0 || w2==0` はスキップ。`8colors`（R/G/B 独立）と `Bin-edge`（`sobel.rgb`）が使う。
 
-#### `delta`
+#### `accum` / `delta`
 
 ```
-aBuffer[t] = (1-factor)*aBuffer[t-1] + factor * gray_from_previous_accum
-out[i]     = abs( currentGray[i] - aBuffer[i] )
+planes[space][c][t] = (1-factor)*planes[space][c][t-1] + factor * extract(delayRGBA, space, c)
+out[c][i]           = abs( current[space][c][i] - planes[space][c][i] )
 ```
 
-- `factor` 既定 0.5。`#afactor`（0–1, step 0.05）。大きいほど新フレームを強く反映（HTML の hint と一致）。スライダ UI は `GRAY-accum` / `BW-delta` / `Gray-delta` のときだけ見える。隠しても `delta.factor` は最後の値のまま。`get` の出力は `factor` でスケールしない（背景の追従速度にだけ効く）。
-- `time` 既定 100ms。この間隔未満なら `accum` は return（ただし先に `aBuffer` を `current.length` まで拡張する）。
-- `_next` は「次に成功する `accum` でブレンドする gray」。遅延は表示 1 フレームではなく **1 accum 周期（既定 ~100ms）**。表示 30 FPS ならおよそ 3 フレーム前の gray を混ぜる。
-- コールドスタート: 初回成功時 `_next` はまだ空で、`aBuffer` はゼロ埋め。黒からフェードインする。
-- `_delta` は必要なら `Uint8ClampedArray` に張り替える。`get` は現フレームの `getGray()` と `aBuffer` を直接比較する。中間ブレンド配列 `l` は持たない。
-- `GRAY-accum` は float の `aBuffer[i]` を `ImageData` のチャネルへ代入する。表示時に `ToUint8Clamp` される。
+- `accum.update(frame, space)` が指定 space（`'gray'` / `'rgb'` / `'yuv'`、省略時 `'gray'`）だけを進める。他 space は読まない・混ぜない・捨てない。未知の space は throw。
+- `factor` 既定 0.5。`#afactor`（0–1, step 0.05）。`ui.js` は `accum.factor` に書く。スライダ UI は `GRAY-accum` / `BW-delta` / `Gray-delta` のときだけ見える。隠しても値は残る。残差は `factor` でスケールしない。
+- `time` 既定 100ms。この間隔未満なら混ぜずに return（ただし指定 space の長さ確保と、ヒストグラム用の Frame getter は行う）。
+- 遅延入力は space ごとではなく **RGBA 1 本のコピー**（`getRGBA()` を `_delay.set`。エイリアス禁止）。遅延は 1 表示フレームではなく **1 accum 周期（既定 ~100ms）**。
+- コールドスタート: 遅延が空の成功 tick は混ぜず、今の RGBA を遅延へ。背景はゼロ埋め。遅延が既にある状態で未使用 space を初めて `update` すると、0 埋めの直後にその遅延から混ぜる。
+- `'gray'` と `'yuv'` の Y は同一視しない。gray 入力は `getGray()`（`Math.round`）、遅延からの抜き出しも同じ round。Y 入力は `getYUV()` 相当の `ToUint8Clamp`。
+- `GRAY-accum` は `accum.update(frame, 'gray')` のあと float の `planes('gray')[0][i]` を `ImageData` へ代入。表示時に `ToUint8Clamp`。
+- `delta.get(frame, space)` は内部で `accum.update` し、今 vis の生平面と背景の絶対差を返す。`space` 省略時 `'gray'` は `Uint8ClampedArray` 1 本（現行互換）。`'rgb'` / `'yuv'` は平面配列。
+- `delta.factor` / `delta.time` / `delta.aBuffer` / `delta.accum` は `accum` への互換エイリアス。
 - `delta.id` / `delta.threshold` は削除済み（PR 1）。`BW-delta` は `d[i]==0` かどうかで白黒。
 
 ### 描画とヒストグラム overlay
@@ -515,15 +524,16 @@ out[i]     = abs( currentGray[i] - aBuffer[i] )
 
 ### 起動時配線（スクリプト評価の副作用）
 
-`index.html` 末尾の script 順（122–128 行）が評価順である。
+`index.html` 末尾の script 順が評価順である。
 
 1. `cam2.js` … `JSCAM_VERSION` / `e` / `Graph` 定義。
 2. `frame.js` … `Frame` 定義。
-3. `delta.js` … `delta` 定義。
-4. `render.js` … `buildImageFuncs` / `render` 定義。`render.ic` / `dc` / `hc` を DOM から取得。初期 `render.buildImage` は `'RGB-frame'`（直後に ui が先頭モードへ差し替え）。
-5. `dispatch.js` … `fitDisplaySize` / `layoutDisplay` / `ResizeObserver`（`#layers` のみ）。`watch()` 開始（カメラより先、500ms `setTimeout`）。`dispatch.run=true; dispatch()`。カメラ前から rAF が回る。`videoWidth==0` なら suggestion=100 の idle。HUD の FPS は idle count を足さないので **0 に近づく**。
-6. `ui.js` … パネル open/close、`#layers` クリックで `.app.chrome-hidden` トグル、`print`、`show-image` / `show-histogram`、`image-mode` を `for (let k in buildImageFuncs)` で填充（`Object.keys` ではない。プレーンオブジェクトでは同じ順だが、プロトタイプにメソッドを足すと変わる）。初期モードは挿入順の先頭 `'GRAY-frame'`。`image-mode.onchange` は `render.buildImage` を差し替え、`syncModeSettings()` を呼ぶ。填充直後にも `syncModeSettings()` する（初期 `GRAY-frame` なので `#field-afactor` は隠れたまま）。`setupRange('afactor', ...)` / `setupRange('pause', ...)`。range は **`onchange`（ドラッグ中は発火せず、離したとき）**。`±` ボタンは即時 `cb`。`input` イベントは未使用。`#afactor` は hidden 中でも配線済み。値は `delta.factor` に残る。`#app-version` に `JSCAM_VERSION` を書く。
-7. `camera.js` … `[data-io-pause]` に `toggleIoPause`。`#camera-start` → `startCamera`。`#camera-stop` → `stopCamera`。HUD は `syncIoPauseButtons` が排他表示。`#camera-select` → `switchCamera`。`#support-scan` → `scanCameraSupport`。`pagehide` / `beforeunload` → `stopCamera`。初期は Start のみ（Pause / Stop は hidden）。insecure なら overlay にヘルプ。`getUserMedia` が無ければ `This browser does not support the camera API.`
+3. `accum.js` … `accum` 定義。
+4. `delta.js` … `delta` 定義（`accum` 必須）。
+5. `render.js` … `buildImageFuncs` / `render` 定義。`render.ic` / `dc` / `hc` を DOM から取得。初期 `render.buildImage` は `'RGB-frame'`（直後に ui が先頭モードへ差し替え）。
+6. `dispatch.js` … `fitDisplaySize` / `layoutDisplay` / `ResizeObserver`（`#layers` のみ）。`watch()` 開始（カメラより先、500ms `setTimeout`）。`dispatch.run=true; dispatch()`。カメラ前から rAF が回る。`videoWidth==0` なら suggestion=100 の idle。HUD の FPS は idle count を足さないので **0 に近づく**。
+7. `ui.js` … パネル open/close、`#layers` クリックで `.app.chrome-hidden` トグル、`print`、`show-image` / `show-histogram`、`image-mode` を `for (let k in buildImageFuncs)` で填充（`Object.keys` ではない。プレーンオブジェクトでは同じ順だが、プロトタイプにメソッドを足すと変わる）。初期モードは挿入順の先頭 `'GRAY-frame'`。`image-mode.onchange` は `render.buildImage` を差し替え、`syncModeSettings()` を呼ぶ。填充直後にも `syncModeSettings()` する（初期 `GRAY-frame` なので `#field-afactor` は隠れたまま）。`setupRange('afactor', ...)` / `setupRange('pause', ...)`。range は **`onchange`（ドラッグ中は発火せず、離したとき）**。`±` ボタンは即時 `cb`。`input` イベントは未使用。`#afactor` は hidden 中でも配線済み。値は `accum.factor` に残る。`#app-version` に `JSCAM_VERSION` を書く。
+8. `camera.js` … `[data-io-pause]` に `toggleIoPause`。`#camera-start` → `startCamera`。`#camera-stop` → `stopCamera`。HUD は `syncIoPauseButtons` が排他表示。`#camera-select` → `switchCamera`。`#support-scan` → `scanCameraSupport`。`pagehide` / `beforeunload` → `stopCamera`。初期は Start のみ（Pause / Stop は hidden）。insecure なら overlay にヘルプ。`getUserMedia` が無ければ `This browser does not support the camera API.`
 
 `dispatch.iDISP` に空 `new Frame`×4 は無い。未使用ローカル `ic`/`dc`、`watch.last`、コメントの `delta.accum`、`delta.id` / `delta.threshold`、コメントアウト `setupRange('dthreshold')` も削除済み（PR 1）。
 
@@ -585,7 +595,7 @@ syncModeSettings();   // document.querySelectorAll('[data-modes]') の hidden �
 - `data-modes` はカンマ区切りの `buildImageFuncs` キー。`split(',')` のみ。**空白は trim しない**（`GRAY-accum, BW-delta` は一致しない）。
 - 現在のモードがリストに無ければ `element.hidden = true`。あれば `false`。
 - 呼ぶタイミング: `image-mode` の option 填充直後、および `onchange`。
-- 隠すのは UI だけ。`setupRange` のコールバックと `delta.factor` / `dispatch.duration` は hidden 中も有効。
+- 隠すのは UI だけ。`setupRange` のコールバックと `accum.factor` / `dispatch.duration` は hidden 中も有効。
 
 現行のマーク:
 
@@ -650,14 +660,25 @@ render.show();                  // dc.drawImage(ic) のみ。hc は CSS overlay
 render.resize(dispXY, internalXY); // dc=disp、ic と hc=internal。変更時のみ代入（クリア副作用）
 ```
 
+### `accum`
+
+```javascript
+accum.factor;                 // 0..1 既定 0.5。UI が書く
+accum.time;                   // 最小間隔 ms, 既定 100
+accum.spaces;                 // ['gray','rgb','yuv']（freeze）
+accum.update(frame, space);   // space 省略時 'gray'。指定 space だけ EMA。遅延は RGBA コピー 1 本
+accum.planes(space);          // 背景平面の配列。gray:1, rgb/yuv:3。未 update なら長さ 0。float Array
+```
+
+未使用 space は確保しない（`update` した space だけ持つ）。`num` が変わった vis ではその space と遅延 RGBA だけ張り替える。
+
 ### `delta`
 
 ```javascript
-delta.aBuffer;      // Array of number, 長さは初回以降 num
-delta.factor;       // 0..1
-delta.time;         // accum 最小間隔 ms, 既定 100
-delta.accum(frame); // EMA 更新。スロットルは delta.time（既定 100ms）。_next は 1 accum 周期遅れ
-delta.get(frame);   // accum + |currentGray - aBuffer| を Uint8ClampedArray で返す。初回は aBuffer=0 からフェード
+delta.get(frame, space); // accum.update のあと |current − planes|。gray は Uint8ClampedArray、rgb/yuv は平面配列
+delta.accum(frame);      // ≡ accum.update(frame, 'gray')
+delta.aBuffer;           // ≡ accum.planes('gray')[0]
+delta.factor; delta.time; // accum へのアクセサ
 ```
 
 `delta.id` / `delta.threshold` は存在しない。
@@ -694,7 +715,7 @@ dispatch();                // 開始/再開。loop を 1 回 rAF 予約
 | `YUV-frame` | `getYUV()` | Y+1.402V, Y-0.344U-0.714V, Y+1.772U（canvas がクランプ） |
 | `UV:RG-frame` | `getYUV().UV` | R=U+128, G=V+128, B=0 |
 | `RGB-frame` | `getImage()` | 入力をそのまま返す |
-| `GRAY-accum` | `delta.accum` + float `aBuffer` | 蓄積グレー（代入時クランプ）。`#field-afactor` 表示 |
+| `GRAY-accum` | `accum.update` + `planes('gray')[0]` | 蓄積グレー（代入時クランプ）。`#field-afactor` 表示 |
 | `BW-delta` | `delta.get` | 非零を 255。`#field-afactor` 表示 |
 | `Gray-delta` | `delta.get` | 絶対差分。`#field-afactor` 表示 |
 | `8colors` | 3 planes + Otsu | チャネルごと 0/255 |
@@ -777,7 +798,7 @@ Frame 1 個あたり:
 
 ### 蓄積バッファ
 
-`delta.aBuffer` は解像度が上がったときだけ伸ばす。下がっても縮めない。`#camera-select` で解像度の違うカメラへ切替えると、大きい側の長さが残り、新しい画素は先頭から上書きされる。縮まない。
+`accum` の平面は `update` された space だけ持つ。`frame.getNum()` がその space の長さと違う vis ではその space と遅延 RGBA を張り替える（縮小も含む）。他 space は次の `update` まで旧長さのまま。モード切替では他 space を捨てない（凍結）。`#camera-select` で解像度が変わると、今 `update` している space は新しい `num` に合わせる。
 
 ### ループ状態
 
@@ -785,7 +806,7 @@ Frame 1 個あたり:
 
 ### マイグレーション
 
-サーバ状態が無いのでマイグレーションは不要。静的ファイルを置き換えればよい。HTML / CSS / 7 JS の bind mount は再ビルド無しでブラウザ再読込に反映する。`nginx.conf` はマウントされても reload が要る。`nginx.main.conf` / 証明書スクリプトは `--build` またはコンテナ再作成。証明書はコンテナ起動ごとに作り直す（永続ボリューム無し）。
+サーバ状態が無いのでマイグレーションは不要。静的ファイルを置き換えればよい。HTML / CSS / 8 JS の bind mount は再ビルド無しでブラウザ再読込に反映する。`nginx.conf` はマウントされても reload が要る。`nginx.main.conf` / 証明書スクリプトは `--build` またはコンテナ再作成。証明書はコンテナ起動ごとに作り直す（永続ボリューム無し）。
 
 ---
 
@@ -807,7 +828,7 @@ Frame 1 個あたり:
 
 ### 4. Worker + `OffscreenCanvas`（未採用）
 
-1080p Sobel のメインスレッド占有を避ける。ただし `ImageBitmap` 転送とグローバル状態（`delta.aBuffer`、`render.ic`）の分割が要る。現行の「グローバルスクリプトで追える」ことを優先。ファイル分割（PR 6）はバンドラ無しの script 順であり、Worker 化ではない。
+1080p Sobel のメインスレッド占有を避ける。ただし `ImageBitmap` 転送とグローバル状態（`accum`、`render.ic`）の分割が要る。現行の「グローバルスクリプトで追える」ことを優先。ファイル分割（PR 6）はバンドラ無しの script 順であり、Worker 化ではない。
 
 ### 5. HTTP と HTTPS を別ホストポートにする（棄却）
 
@@ -843,7 +864,7 @@ PR 6 は既存のグローバル境界に沿った `<script src>` 順である�
 
 毎 vis `new Frame(imageData)`。`Frame.array.length > HIGH(20)` で `LOW(10)` まで `delete Frame.map[id]`。ループはローカル `newFrame` のみ。平面は `_get*` 初回の `new` をクロージャでメモ化する。破棄時に配列を外すフックは無い。
 
-例外: `delta._next = frame.getGray()` は成功 `accum`（既定 10 Hz）で gray をエイリアスする。Frame が LRU から落ちても `_next` が gray を掴む。
+遅延入力は `accum` が RGBA をコピー所有する（成功 tick、既定 10 Hz）。Frame の gray をエイリアスしない。
 
 `getXXX` が Frame に残すもの（1080p 目安）:
 
@@ -884,7 +905,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 
 付帯契約:
 
-- **`delta._next` はコピー所有。** 成功 `accum` 時に persistent `Uint8ClampedArray` へ `set`（約 10 Hz）。Frame プールに入れない。モード変更では残す。解像度変更では `aBuffer` / `_next` / `_delta` を張り替える。
+- **遅延 RGBA は `accum` 所有のコピー。** 成功 tick で `_delay.set(getRGBA())`（約 10 Hz）。Frame プールに入れない。モード変更では残す。`num` 変化では遅延と今の space を張り替える。
 - キー: `Uint8ClampedArray(num)` は gray/Y/R/G/B/E/edge で共有可。UV の `Array`（または将来の `Float32Array`）は別。256 ビンは入れない。
 - 上限: おおよそ `LOW` × そのモードの平面数。無制限 Salvage は UV でピークが GC より悪くなる。
 - 長さ不一致は切らない（長いバッファの先頭だけ使うと、縮まない `aBuffer` と同型）。
@@ -975,7 +996,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 | XSS via `print` | Low | `print` は `innerHTML` で文字列連結。`msg` にカメラエラー名が入る。現状ソースは自分たちだが、エスケープしていない。FPS caption は `innerText`。 |
 | キャッシュ | Low | `Cache-Control: no-store`。古い JS がカメラ権限付きで残るのを避ける。 |
 | 権限ポリシー | Low | `Permissions-Policy: camera=(self)` は **クロスオリジン iframe** のカメラを拒否する。同一オリジンの `self` 埋め込みは許可。 |
-| CSP | Low | 未設定。LAN デモとしては許容。インライン script は HTML に無く、script は 7 本のグローバルファイル。 |
+| CSP | Low | 未設定。LAN デモとしては許容。インライン script は HTML に無く、script は 8 本のグローバルファイル。 |
 | ストリーム生存 | Medium | `Stop camera` と `pagehide` / `beforeunload` で `track.stop()`。一時停止は `video.pause()` のみでトラックは live（意図的。凍結表示のため）。Stop せずタブを開き続けると LED は付いたまま。 |
 | 競合する getUserMedia | Low | `startCamera.generation` で古い解決を破棄し、その stream も `stop()` する。 |
 | `file://` | Low | Non-goal。`originWithScheme` のヘルプリンクが `:8888` 無しになる。 |
@@ -1004,7 +1025,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 1. **PR 0（元文書）:** コード変更なし。設計書を `/app/jscam/cam2-design.md` に置いた。
 2. **このスタックで完了:** PR 1, 2, 3, 5, 6, 7, 8。**残りは PR 4（解像度 cap）のみで延期。** 必須チェーンには入れない。
 3. **フラグ:** コードの feature flag は無い。モード select と checkbox が実行時スイッチ。破壊的変更は `buildImageFuncs` キーを残し新キーを足す（PR 8 の `G-edge(Laplacian signed)` がその例）。
-4. **ステージング:** `docker compose up --build`。検証 URL は `http://127.0.0.1:8888/` と `https://<LAN>:8888/`。HTML/CSS/JS だけの変更は mount 済みなら再ビルド不要（7 JS すべて mount）。
+4. **ステージング:** `docker compose up --build`。検証 URL は `http://127.0.0.1:8888/` と `https://<LAN>:8888/`。HTML/CSS/JS だけの変更は mount 済みなら再ビルド不要（8 JS すべて mount）。
 5. **ロールバック:** 静的ファイルとイメージタグを戻す。サーバ状態なし。bind mount 開発の HTML/CSS/JS は git revert で即反映。nginx stream / TLS はイメージ戻し。
 6. **証明書:** 起動時生成。ロールバック単位に含めない。
 
@@ -1047,8 +1068,8 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 11. **ヘッダーは専用行。Controls はヘッダー下の映像エリアに overlay。JS は `paddingRight` を書かない。CSS `cqw` の 4:3 ボックスはライブ後に `aspect-ratio:auto` で破棄。**  
     理由: トップバーと Close / Pause が重なると操作不能になる。chrome 非表示時はヘッダー行が潰れ映像が全画面。Controls 背景 50% 透過。`fitDisplaySize` は `#layers` から CSS padding だけ引く。
 
-12. **蓄積 `aBuffer` は `Array`（Clamped ではない）。差分出力だけ `Uint8ClampedArray`。遅延は 1 表示フレームではなく 1 accum 周期（`delta.time`）。`get` は現フレームの gray 生値と `aBuffer` の差。**  
-    理由: EMA の小数を保持する。初回 `current.length` で拡張し、空 `_next` でもバッファ不足にならない。差分を intra-frame ブレンド（`factor * |gray-a|`）にしない。`factor` は背景の追従だけに効く。
+12. **蓄積平面は `Array`（Clamped ではない）。差分出力だけ `Uint8ClampedArray`。遅延は RGBA コピー 1 本で 1 accum 周期（`accum.time`）。`delta.get` は現フレームの生平面と背景の差。`update` は指定 space だけ進める。**  
+    理由: EMA の小数と U/V の符号を保持する。`ImageData` には積まない。gray と Y は同一視しない。他 space はモード切替で捨てない。差分を intra-frame ブレンド（`factor * |gray-a|`）にしない。`factor` は背景の追従だけに効く。
 
 13. **`dispatch.showImage === false` は capture + Frame LRU のみ。カーネルも blit もしない。`showHistogram` は overlay 専用。**  
     理由: `buildImageFuncs` は `render.frame()` 経由だけで、それが `if (dispatch.showImage)` 内。チェックラベルは `Draw image` だが、負荷を落とすスイッチとしても機能する（R5）。ヒストグラム dict はカーネルが埋めるため、overlay 更新も同じ枝に置く。`Draw histogram` を外すと映像は動き overlay だけ消える。
@@ -1063,7 +1084,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
     理由: pause は凍結フレームを残すため `video.pause()` のみ（トラック live、LED 点灯）。stop は全 `track.stop()`、`srcObject=null`、overlay 復帰、generation token で進行中 GUM を破棄。`pagehide` / `beforeunload` でも stop。R10 の緩和。
 
 17. **スクリプト分割はグローバルのまま、読み込み順を契約にする。**  
-    理由: バンドラ無し（Non-goal）。順は `cam2.js` → `frame.js` → `delta.js` → `render.js` → `dispatch.js` → `ui.js` → `camera.js`。Dockerfile COPY と compose bind mount に 7 本すべてを含める。`histogram` / `edgeFuncs` は `Object.create(null)` のまま。
+    理由: バンドラ無し（Non-goal）。順は `cam2.js` → `frame.js` → `accum.js` → `delta.js` → `render.js` → `dispatch.js` → `ui.js` → `camera.js`。Dockerfile COPY と compose bind mount に 8 本すべてを含める。`histogram` / `edgeFuncs` は `Object.create(null)` のまま。
 
 ---
 
@@ -1081,7 +1102,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 | R8 | `getGray` と `getYUV` が両方 `histogram['gray']` を書く | Low | 呼び出し順でヒストグラム重畳が変わる。`GRAY-frame` は YUV 経路 |
 | R9 | `print` の `innerHTML` 非エスケープ | Low | 入力は内部文字列。外部入力を足すなら textContent へ |
 | R10 | pause してもカメラ占有（トラック live） | Low | 意図的。明示 `Stop camera` と `pagehide` / `beforeunload` で解放済み |
-| R11 | `delta.time=100` により蓄積は最大約 10 Hz。EMA 入力は 1 accum 周期遅れ。表示 30 FPS なら約 3 フレーム前 | Low | 仕様。スライダ未接続。コールドスタートはゼロ埋めからフェード |
+| R11 | `accum.time=100` により蓄積は最大約 10 Hz。EMA 入力は 1 accum 周期遅れの RGBA。表示 30 FPS なら約 3 フレーム前 | Low | 仕様。スライダ未接続。コールドスタートはゼロ埋めからフェード |
 | R12 | CSS `.stage-layer` の 4:3 はカメラ前プレースホルダ。実カメラが 16:9 でも起動前は 4:3 | Low | 起動後 JS が上書き |
 | R13 | `slide` が 1ms timeout。バックグラウンドタブでパネルアニメが伸びる | Low | 250ms 想定。機能影響なし。メインループの rAF とは別 |
 | R14 | `YUV-frame` / `UV:RG-frame` の計算値が 0–255 外。ImageData 経由でクランプ | Low | 色ずれとして受容 |
@@ -1121,7 +1142,8 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 
 - `/app/jscam/cam2.js` — `JSCAM_VERSION`, `e`, `Graph`
 - `/app/jscam/frame.js` — `Frame` / カーネル / LRU
-- `/app/jscam/delta.js` — 蓄積差分
+- `/app/jscam/accum.js` — 指数平滑背景
+- `/app/jscam/delta.js` — 残差
 - `/app/jscam/render.js` — `buildImageFuncs`, `render`
 - `/app/jscam/dispatch.js` — layout, rAF ループ, `watch`
 - `/app/jscam/ui.js` — パネル / モード / range
