@@ -5,8 +5,8 @@
 | 文書タイトル | JSCam live-camera bench 現行アーキテクチャ設計書 |
 | 対象 | `/app/jscam/` の分割グローバルスクリプト（`cam2.js` / `frame.js` / `delta.js` / `render.js` / `dispatch.js` / `ui.js` / `camera.js`）および付随する HTML / CSS / Docker / nginx |
 | 著者 | JSCam maintainers |
-| 日付 | 2026-09-14 |
-| ステータス | Draft（PR 1, 2, 3, 5, 6, 7, 8 まで実装済み。PR 4 は延期） |
+| 日付 | 2026-09-19 |
+| ステータス | Draft（PR 1, 2, 3, 5, 6, 7, 8 まで実装済み。PR 4 は延期。画素プール／GC 観測は方式検討のみ） |
 | 種別 | 現行システムの記述（greenfield 再設計ではない） |
 
 ---
@@ -829,6 +829,138 @@ LAN デモで公開 DNS と 80 番 ACME を要求しない。`40-gen-tls.sh` の
 
 PR 6 は既存のグローバル境界に沿った `<script src>` 順である。`type="module"` や bundler は Non-goal。`histogram` の `Object.create(null)` と script 順の副作用（`watch` が camera より先）を維持する。
 
+### 10. LRU 追い出し平面の手動プール（**未実装。方式検討**）
+
+採用も棄却もしない。実装するなら先に確保流量の観測（後述）でベースラインを取る。詳細は「方式検討メモ」節。
+
+---
+
+## 方式検討メモ（画素配列プールと GC 観測）
+
+2026-09-19。コード未着手。現行は LRU 破棄で参照を切り、GC に回収させる。本節は「安定時だけ手動プールし、切替で GC に戻す」案と、それを決めるための観測の置き方を固定する。
+
+### 現状の寿命
+
+毎 vis `new Frame(imageData)`。`Frame.array.length > HIGH(20)` で `LOW(10)` まで `delete Frame.map[id]`。ループはローカル `newFrame` のみ。平面は `_get*` 初回の `new` をクロージャでメモ化する。破棄時に配列を外すフックは無い。
+
+例外: `delta._next = frame.getGray()` は成功 `accum`（既定 10 Hz）で gray をエイリアスする。Frame が LRU から落ちても `_next` が gray を掴む。
+
+`getXXX` が Frame に残すもの（1080p 目安）:
+
+| バッファ | 型 | 1 枚 | LRU 破棄で回収しうるか |
+| --- | --- | ---: | --- |
+| gray / Y / E / edge 出力 | `Uint8ClampedArray(num)` | 2.1 MB | しうる |
+| R, G, B | 同上 ×3 | 6.2 MB | しうる |
+| UV | `Array(num*2)`（packed double） | **約 33 MB** | しうる（本丸） |
+| ヒストグラム 256 | `Array` | 無視できる | 対象外 |
+| Laplacian `Int16Array`、`sobel.rgb` の eR/eG/eB | メソッド局所 | 4–6 MB | **しない。** `_getEdge` 終了時に参照が無い |
+| 入力 `ImageData` | `getImageData` が毎回新規 | 8.3 MB | **しない。** 現行 2D API では既存バッファへ書けない |
+
+表示用 `new ImageData(w,h)`（`buildImageFuncs`）も Frame に載らない。毎 vis の `new Frame` オブジェクトとクロージャ自体は、平面や `ImageData` に対して誤差（秒あたり数十オブジェクト）。
+
+### 現行 2D API では入力 `ImageData` をプールできない
+
+`render.getImage` は `drawImage` + `getImageData(0,0,w,h)`。WHATWG の `getImageData` は毎回新規 `ImageData` を作り bitmap をコピーする。`settings` は `colorSpace` / `pixelFormat` のみ。`createImageData` は空の新規。`putImageData` は逆方向。`getImageData` 結果を pooled へ `set` すると確保が残りコピーが足る。
+
+`willReadFrequently` は readback を CPU 側に寄せうるが、返すオブジェクトは新規のまま。Non-goal。
+
+### Non-goal API の予測（採用しない。比較用）
+
+WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし `texImage2D(video)` の直後に全フレーム readback するのは、デスクトップ GL の同期 `glReadPixels` と同じクラス（帯域より GPU/CPU 同期）。JS カーネルを残すなら抽出が数 ms 速くなっても 1080p Sobel に飲まれる。メモリ改善は入力 LRU の 80–170 MB と 250 MB/s の new が消える分に限る。
+
+`VideoFrame.copyTo(既存 buffer)` は全フレーム読み出し向けで、I420 なら 1080p 約 3.1 MB かつ gray/YUV の RGB 経由を省略できる。今のパイプラインを保ったまま入力をプールするなら WebGL より短い。COOP やデコーダ形式は別契約。
+
+画素を CPU に戻さない（シェーダ化）なら readback 問題は消える。それは Non-goal を外す判断であり、本メモのプール案ではない。
+
+### 検討中のプール方式
+
+安定時: LRU が捨てる getXXX 平面を型×長さのスタックへ。次の `_get*` が完全一致なら再利用。miss は `new`。
+
+切替時: 次のイベントで **プールを空** にする（参照を切って GC 待ち。OS へ即返還はしない）。
+
+- 入力解像度変化（`video.videoWidth/Height`。`layoutDisplay` / `render.resize` と同じ。0→実サイズも含む）
+- `#image-mode` 変更（`ui.js` onchange）
+- 推奨: `stopCamera`（停止後に YUV が 10 枚残らない）
+
+付帯契約:
+
+- **`delta._next` はコピー所有。** 成功 `accum` 時に persistent `Uint8ClampedArray` へ `set`（約 10 Hz）。Frame プールに入れない。モード変更では残す。解像度変更では `aBuffer` / `_next` / `_delta` を張り替える。
+- キー: `Uint8ClampedArray(num)` は gray/Y/R/G/B/E/edge で共有可。UV の `Array`（または将来の `Float32Array`）は別。256 ビンは入れない。
+- 上限: おおよそ `LOW` × そのモードの平面数。無制限 Salvage は UV でピークが GC より悪くなる。
+- 長さ不一致は切らない（長いバッファの先頭だけ使うと、縮まない `aBuffer` と同型）。
+
+`HIGH` 超過で一度に 10 枚落ち、その vis の `render.frame` が使う。コンストラクタは今フレームを `map` に入れてから古い id を `delete` する。Salvage してよいのは `shift` した id だけ。
+
+### 独自プール vs GC に任せる
+
+| | 独自プール（検討案） | GC（現行） |
+| --- | --- | --- |
+| 安定時の平面 `new` | ほぼ 0 | 毎 vis |
+| ピーク（平面） | LRU 分＋プール分。上限と開放を誤ると GC より悪い | LRU 分で頭打ち |
+| モード／解像度切替 | 自分で空にし、旧世代を Salvage しない契約が要る | 旧 Frame が押し出されれば自然に落ちる |
+| `_next` | コピー必須 | エイリアスでよい |
+| 画素バグ | エイリアス・0 埋め漏れ・長さ・開放穴 | 参照が切れていれば低い |
+| 入力 `ImageData` / scratch | どちらも毎 vis new | 同じ |
+
+得が出るのは **同一解像度・同一モードが続く区間** だけ。切替では手動キャッシュを捨てて GC モデルに戻す。GC の上位互換ではない。
+
+分岐:
+
+1. gray / delta が主 → プールは見合わない。GC のまま。`_next` はエイリアス。
+2. YUV を 1080p で長く見る → まず UV を `Float32Array`（GC のまま確保を安くする）。それでも鋸歯と FPS min が残れば U8＋UV だけ安定時プール。
+3. 入力 8.3 MB × 20 枚 → どちらの方式でも落ちない。LRU 枚数か Non-goal 読み出し。
+
+1080p・30 fps の流量目安（安定時、毎 vis new する場合）: 入力約 250 MB/s、gray 約 63 MB/s、UV の packed double 約 1 GB/s。Node/V8 での `_calc` 相当: packed `Array` の再利用 EMA は TypedArray より速いことがあり、`aBuffer` を `Float32Array` にするのは安定時プールとは別判断（メモリ半減、この V8 ではループが遅い）。UV の `new Array(num*2)` への書きは holey→packed で数十 ms になりうる。`Float32Array` 化はプールしなくてもここを削る。
+
+### 実装するなら閉じる穴
+
+1. **先に `_next` をコピー。** エイリアスのまま Salvage すると EMA が自己参照する。
+2. **プールだけ空にして LRU を残さない。** 旧モード／旧サイズの Frame が次の 10 vis で落ち、空にしたプールに UV や旧 `num` が戻る。同じイベントで LRU も空にするか、Salvage を今の `(num, モードが使う種類)` に限るか、Frame に generation を刻む。一番単純なのはプールと LRU を両方空（`Frame.map` は vis から未使用。決定 1 の「LRU 機構を残す」と、空にする瞬間だけ衝突する）。
+3. **drain。** 配列は `getGray = () => gray` 等のクロージャにしか無い。`delete Frame.map[id]` だけでは Salvage できない。破棄前に配列を外し、旧メソッドを空にする。
+4. **`get3Planars` は 3 本セット。** `getYUV` は Y（U8）と UV（`Array`）でキーを分ける。
+5. **再利用後の 0 埋め。** `new Uint8ClampedArray` は 0。再利用は中身が残る。gray / 平面 / UV は全画素書く。エッジは `_Sobel` / `_Laplacian` の `dst.fill(0)` を Salvage 後も前提にする。
+6. **delta の 3 バッファはプールに入れない。** 解像度で張り替え、モードでは残す（戻ったとき背景が黒フェードしない）。
+7. **pause 中リサイズ。** ビットマップは消さない（R2）。プールと generation は解像度イベントで空にする。再開後に旧サイズ Frame が Salvage されないこと。
+8. **`showImage === false`。** getXXX せず Frame だけ積む。drain は no-op。想定どおり。
+
+### GC 負荷の観測（未実装。プールより先）
+
+ブラウザはページに GC イベントを出さない（`PerformanceObserver({type:'gc'})` は Node の `perf_hooks`）。測るのは **画素 `new` の流量** と、ヒープ／ストールの代理。既存 `watch`（500 ms、`dispatch.time` リセット、`#fps-caption`）に載せる。rAF ホットパスに文字列連結や `console` を置かない。
+
+加算は vis あたり数回。画素 for の内側では足さない。`new` の直後に長さを足す。同じ Frame のメモ化 2 回目は 0。idle（suggestion 100）と pause では `dispatch.time` と同様に増やさない。
+
+| バケツ | 加算点 | 読む判断 |
+| --- | --- | --- |
+| `in` | `render.getImage` の `getImageData`（`num*4`） | アプリプールでは消えない |
+| `u8` | gray / Y / R,G,B / E / edge 出力 | 安定時に減れば平面プール |
+| `uv` | `_getYUV` の `Array(num*2)`（要素×8。F32 なら ×4） | 突出ならまず型、それでも痛ければプール |
+| `scratch` | Int16、eR/eG/eB | LRU プール対象外 |
+| `delta` | `aBuffer` / `_delta` / 将来 `_next` の **張り替え時だけ** | 安定時 0 が正常 |
+
+`watch` で 0.5 s あたり MB/s にしてゼロへ。caption 既定は `alloc X MB/s` 程度。内訳は Log か `#support-report` 型。`#fps-caption` は wrap、`max-width: 22rem`。
+
+補助（任意）:
+
+- `performance.memory`（Chrome/Edge）。500 ms の `used` と前回差。TypedArray backing を十分に含まない版がある。映像デコーダフレームは JS ヒープ外が多い。ヒープ単独を GC 負荷と呼ばない。
+- 既にある `frm` / `get` と FPS min–max。長いポーズの代理だが Sobel や `getImageData` と区別できない。alloc が高い vis でだけ読む。
+- `longtask`: gray モードで 50 ms 超が出るか。エッジではカーネル自身が longtask になる。
+
+載せない: 毎フレームのヒープ読み、COOP/COEP + `measureUserAgentSpecificMemory`（nginx / Pages 契約を変える）、`new Uint8ClampedArray` の全域フック（256 ビンが混ざる）。
+
+同一解像度で 10 秒以上置いた 500 ms 行の読み方:
+
+| 見え方 | 解釈 |
+| --- | --- |
+| `in` だけ大きい | 入力 `ImageData`。LRU 枚数か Non-goal |
+| `uv` が支配的 | まず `Float32Array`。鋸歯と FPS min が残ればプール |
+| `u8` が gray 1 枚分 | 平面プールは見合わない |
+| `scratch` が `u8` 並み | グローバル作業バッファ（LRU と別） |
+| alloc 大だが `frm` がカーネル相当で min が近い | ポーズは主因でない |
+| alloc 中程度なのに FPS min が時々落ち、ヒープが鋸歯 | GC ポーズ側。安定時プールの候補 |
+| 切替直後だけ跳ね、その後落ちない | 毎 vis new が続いている |
+
+確保カウンタはエンジン非依存。ヒープは欠番でよい。**プール実装より先にこの観測を入れる。** 先にプールするとベースラインが消える。
+
 ---
 
 ## Security & Privacy Considerations
@@ -860,7 +992,7 @@ PR 6 は既存のグローバル境界に沿った `<script src>` 順である�
 - **ステージ時間:** `dispatch.time` が `getImage` / `new Frame`+`buildImage`（`frame`） / histogram overlay / `show` を積算。idle `continue` では `n` を増やさない。
 - **カメラ状態:** `#camera-status` と `print` の二重。getUserMedia 失敗は `error.name` + `message`。API 欠如は固定英語 `This browser does not support the camera API.`。video 欠如は `video element not found`。insecure は `Camera is blocked at …` と "Advanced, then Proceed"。停止は `camera stopped`。
 - **nginx:** アクセスログ既定、error_log notice。`/healthz` は access_log off。**イメージ `HEALTHCHECK`** はコンテナ内 HTTP 8081 のみ（stream の 8080 / `ssl_preread` は見ない。Open Question 6）。Compose `healthcheck:` は無い。
-- **メトリクスバックエンド:** 無し。ブラウザ Performance パネルと HUD が観測手段。
+- **メトリクスバックエンド:** 無し。ブラウザ Performance パネルと HUD が観測手段。画素 `new` 流量とヒープ代理の HUD 載せ（`dispatch.alloc` 相当）は方式検討のみ。GC イベント API は Web に無い。
 - **アラート:** 無し。カメラ失敗は画面メッセージのみ。
 
 ---
@@ -981,6 +1113,7 @@ PR 6 は既存のグローバル境界に沿った `<script src>` 順である�
 3. **`dispatch.duration` と I/O pause の用語衝突。** UI は `Frame interval`、コードは `pause`。リネームは DOM 契約変更。
 6. **healthcheck を stream ポート 8080 経由にするか。** 現状 8081 直叩きなので `ssl_preread` の死を検知しない。
 7. **Laplacian のスケール。** 既定 abs 後 255 clamp で強いエッジが飽和する。符号付きプレビューは PR 8 で追加済み。`min(255, abs/k)` の k をスライダにするかは未決。
+8. **getXXX 平面を LRU 破棄時にプールするか、GC に任せるか。** 方式検討メモ参照。未実装。先に `watch` へ確保流量を載せてから決める。入力 `ImageData` は現行 `getImageData` ではプール不可。
 
 ---
 
@@ -996,6 +1129,7 @@ PR 6 は既存のグローバル境界に沿った `<script src>` 順である�
 - `/app/jscam/cam.js` — 修正前。バグ対照用
 - `/app/jscam/index.html` — DOM 契約と script 順
 - `/app/jscam/cam2.css` — overlay / contain / パネル / `#h-canvas` / caption wrap
+- 本ファイル「方式検討メモ（画素配列プールと GC 観測）」— 未実装。採用／棄却は Open Question 8
 - `/app/compose.yaml`, `/app/jscam/Dockerfile`, `/app/jscam/nginx.main.conf`, `/app/jscam/nginx.conf`, `/app/jscam/40-gen-tls.sh`
 - [getUserMedia secure contexts](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia)
 - [Canvas の width/height 代入はビットマップをリセットする](https://html.spec.whatwg.org/multipage/canvas.html#attr-canvas-width)
