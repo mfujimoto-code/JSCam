@@ -1,11 +1,10 @@
 'use strict';
 
 const delta = {
-	//aBuffer: new Uint8ClampedArray(10)
-	aBuffer: [0,0,0,0,0,0,0,0,0,0]
+	aBuffer: []
 	, factor: 0.5
 	, time:  100
-	, _delta:  [0,0,0,0,0,0,0,0,0,0]
+	, _delta: new Uint8ClampedArray(0)
 	, _last: performance.now()
 	, _next: []
 	, accum: (frame) => {
@@ -18,20 +17,9 @@ const delta = {
 		const now = performance.now();
 		if (now - delta._last < delta.time) return
 
-		const g = delta._next;
-		if (g.length > delta.aBuffer.length) {
-			//  delta.aBuffer = new Uint8ClampedArray(g.length)
-			delta.aBuffer = new Array(g.length)
-			delta.aBuffer.fill(0);
-		}
-
-		const a = delta.aBuffer;
-		//while (g.length > a.length)
-		//a.push(0);
-		delta._calc(a, a, g);
-
+		delta._calc(delta.aBuffer, delta.aBuffer, delta._next);
 		delta._last = now;
-		delta._next = frame.getGray();
+		delta._next = current;
 	}
 	, _calc: (dst, src1, src2) => {
 		const f = delta.factor
@@ -46,21 +34,17 @@ const delta = {
 		delta.accum(frame);
 
 		const a = delta.aBuffer
-		//, l = new Uint8ClampedArray(a.length)
-		, l = new Array(a.length)
+		, g = frame.getGray()
 		;
+		if (g.length > delta._delta.length)
+			delta._delta = new Uint8ClampedArray(g.length);
 
-		delta._calc(l, a, frame.getGray());
-
-		if (a.length > delta._delta.length)
-			delta._delta = new Uint8ClampedArray(a.length);
-		const out = delta._delta;
-		for (let i = 0; i < l.length; ++i) {
-			//const d = l[i] - a[i];
-			out[i] = Math.abs(l[i] - a[i]);
-			//out[i] = (Math.abs(d) < delta.threshold) ? 0 : d;
+		const out = delta._delta
+		, num = Math.min(a.length, g.length)
+		;
+		for (let i = 0; i < num; ++i) {
+			out[i] = Math.abs(g[i] - a[i]);
 		}
-
 		return out
 	}
 }

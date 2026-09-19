@@ -482,14 +482,14 @@ end   = src.length + O[0] = len - w - 1
 
 ```
 aBuffer[t] = (1-factor)*aBuffer[t-1] + factor * gray_from_previous_accum
-out[i]     = abs( blend(aBuffer, currentGray)[i] - aBuffer[i] )
+out[i]     = abs( currentGray[i] - aBuffer[i] )
 ```
 
-- `factor` 既定 0.5。`#afactor`（0–1, step 0.05）。大きいほど新フレームを強く反映（HTML の hint と一致）。スライダ UI は `GRAY-accum` / `BW-delta` / `Gray-delta` のときだけ見える。隠しても `delta.factor` は最後の値のまま。
+- `factor` 既定 0.5。`#afactor`（0–1, step 0.05）。大きいほど新フレームを強く反映（HTML の hint と一致）。スライダ UI は `GRAY-accum` / `BW-delta` / `Gray-delta` のときだけ見える。隠しても `delta.factor` は最後の値のまま。`get` の出力は `factor` でスケールしない（背景の追従速度にだけ効く）。
 - `time` 既定 100ms。この間隔未満なら `accum` は return（ただし先に `aBuffer` を `current.length` まで拡張する）。
 - `_next` は「次に成功する `accum` でブレンドする gray」。遅延は表示 1 フレームではなく **1 accum 周期（既定 ~100ms）**。表示 30 FPS ならおよそ 3 フレーム前の gray を混ぜる。
 - コールドスタート: 初回成功時 `_next` はまだ空で、`aBuffer` はゼロ埋め。黒からフェードインする。
-- `_delta` は必要なら `Uint8ClampedArray` に張り替える。`get` の中間 `l` は素の `Array`（クランプしないブレンド）。
+- `_delta` は必要なら `Uint8ClampedArray` に張り替える。`get` は現フレームの `getGray()` と `aBuffer` を直接比較する。中間ブレンド配列 `l` は持たない。
 - `GRAY-accum` は float の `aBuffer[i]` を `ImageData` のチャネルへ代入する。表示時に `ToUint8Clamp` される。
 - `delta.id` / `delta.threshold` は削除済み（PR 1）。`BW-delta` は `d[i]==0` かどうかで白黒。
 
@@ -657,7 +657,7 @@ delta.aBuffer;      // Array of number, 長さは初回以降 num
 delta.factor;       // 0..1
 delta.time;         // accum 最小間隔 ms, 既定 100
 delta.accum(frame); // EMA 更新。スロットルは delta.time（既定 100ms）。_next は 1 accum 周期遅れ
-delta.get(frame);   // accum + 絶対差分 Uint8ClampedArray。初回は aBuffer=0 からフェード
+delta.get(frame);   // accum + |currentGray - aBuffer| を Uint8ClampedArray で返す。初回は aBuffer=0 からフェード
 ```
 
 `delta.id` / `delta.threshold` は存在しない。
@@ -915,8 +915,8 @@ PR 6 は既存のグローバル境界に沿った `<script src>` 順である�
 11. **ヘッダーは専用行。Controls はヘッダー下の映像エリアに overlay。JS は `paddingRight` を書かない。CSS `cqw` の 4:3 ボックスはライブ後に `aspect-ratio:auto` で破棄。**  
     理由: トップバーと Close / Pause が重なると操作不能になる。chrome 非表示時はヘッダー行が潰れ映像が全画面。Controls 背景 50% 透過。`fitDisplaySize` は `#layers` から CSS padding だけ引く。
 
-12. **蓄積 `aBuffer` は `Array`（Clamped ではない）。差分出力だけ `Uint8ClampedArray`。遅延は 1 表示フレームではなく 1 accum 周期（`delta.time`）。**  
-    理由: EMA の小数を保持する。初回 `current.length` で拡張し、空 `_next` でもバッファ不足にならない。
+12. **蓄積 `aBuffer` は `Array`（Clamped ではない）。差分出力だけ `Uint8ClampedArray`。遅延は 1 表示フレームではなく 1 accum 周期（`delta.time`）。`get` は現フレームの gray 生値と `aBuffer` の差。**  
+    理由: EMA の小数を保持する。初回 `current.length` で拡張し、空 `_next` でもバッファ不足にならない。差分を intra-frame ブレンド（`factor * |gray-a|`）にしない。`factor` は背景の追従だけに効く。
 
 13. **`dispatch.showImage === false` は capture + Frame LRU のみ。カーネルも blit もしない。`showHistogram` は overlay 専用。**  
     理由: `buildImageFuncs` は `render.frame()` 経由だけで、それが `if (dispatch.showImage)` 内。チェックラベルは `Draw image` だが、負荷を落とすスイッチとしても機能する（R5）。ヒストグラム dict はカーネルが埋めるため、overlay 更新も同じ枝に置く。`Draw histogram` を外すと映像は動き overlay だけ消える。
