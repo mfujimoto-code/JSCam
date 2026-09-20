@@ -10,13 +10,13 @@ const delta = {
 		if (space === undefined) space = 'gray';
 		accum.update(frame, space);
 
-		const num = frame.getNum()
+		const num = frame.num()
 		, acc = accum.planes(space)
 		;
 		if (space === 'gray') {
 			if (num > delta._delta.length)
 				delta._delta = new Uint8ClampedArray(num);
-			const g = frame.getGray()
+			const g = frame.get('gray')
 			, out = delta._delta
 			, n = Math.min(acc[0].length, g.length, out.length)
 			;
@@ -25,7 +25,7 @@ const delta = {
 		}
 
 		if (space === 'rgb') {
-			const cur = frame.get3Planars()
+			const cur = frame.get('rgb')
 			, out = [
 				new Uint8ClampedArray(num)
 				, new Uint8ClampedArray(num)
@@ -38,7 +38,7 @@ const delta = {
 			return out
 		}
 
-		const yuv = frame.getYUV()
+		const yuv = frame.get('yuv')
 		, Y = yuv.Y
 		, UV = yuv.UV
 		, out = [

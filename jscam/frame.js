@@ -1,17 +1,11 @@
 'use strict';
 
 const Frame = function (image) {
-	this.getSize =
-	this.getGray =
-	this.getEdge =
-	this.getRGBA = function () {return []}
-	this.getImage = function () {}
-
 	if (image instanceof ImageData)
 		this.feed(image);
 
 	const id = ++Frame.serial;
-	this.getId = function () {return id}
+	this.id = function () {return id}
 	Frame.array.push(id);
 	Frame.map[id] = this;
 
@@ -108,28 +102,39 @@ Frame.calcThreshold = (histogram)=>{
 	}
 	return maxK
 }
+Frame.ids = Object.freeze([
+	'ImageData', 'rgba', 'gray', 'rgb', 'yuv', 'equalized'
+	, 'laplacian', 'laplacian.signed', 'sobel', 'sobel.rgb'
+]);
 Frame.prototype = {
 	feed: function (imageData) {
 		const width  = imageData.width;
 		const height = imageData.height;
 		const num    = width * height;
 
-		this.getSize = ()=>([width, height]);
-		this.getNum  = ()=>(num);
-		this.getRGBA = ()=>(imageData.data);
-		this.getImage = ()=>(imageData);
-		this.getYUV = this._getYUV;
-		//this.getGray = ()=>(this.getYUV().Y);
-		this.getGray = this._getGray;
-		this.getEdge = this._getEdge;
-		this.getEqualized = this._getEqualized;
-		this.get3Planars = this._get3Planars;
-		this.edgeFuncs = Object.create(null);
+		this.size = ()=>([width, height]);
+		this.num  = ()=>(num);
 		this.histogram = Object.create(null);
+		this.getter = Object.create(null);
+		this.getter['ImageData'] = ()=>(imageData);
+		this.getter['rgba'] = ()=>(imageData.data);
+		this.getter['gray'] = this._getGray;
+		this.getter['rgb'] = this._getRgb;
+		this.getter['yuv'] = this._getYUV;
+		this.getter['equalized'] = this._getEqualized;
+		this.getter['laplacian'] = function () {return this._getEdge('laplacian')}
+		this.getter['laplacian.signed'] = function () {return this._getEdge('laplacian.signed')}
+		this.getter['sobel'] = function () {return this._getEdge('sobel')}
+		this.getter['sobel.rgb'] = function () {return this._getEdge('sobel.rgb')}
 	}
-	, _get3Planars: function () {
-		const num  = this.getNum()
-		, data = this.getRGBA()
+	, get: function (id) {
+		const fn = this.getter && this.getter[id];
+		if (!fn) throw 'not supported ' + id
+		return fn.call(this)
+	}
+	, _getRgb: function () {
+		const num  = this.num()
+		, data = this.get('rgba')
 		, R = new Uint8ClampedArray(num)
 		, G = new Uint8ClampedArray(num)
 		, B = new Uint8ClampedArray(num)
@@ -150,15 +155,14 @@ Frame.prototype = {
 		this.histogram['R'] = hR;
 		this.histogram['G'] = hG;
 		this.histogram['B'] = hB;
-		this.get3Planars = ()=>[R,G,B];
+		this.getter['rgb'] = ()=>[R,G,B];
 
-		return this.get3Planars()
+		return this.get('rgb')
 	}
 	, _getEqualized: function () {
-		const g = this.getGray()
-		, num  = this.getNum()
+		const g = this.get('gray')
+		, num  = this.num()
 		, inv = 1 / num
-		, size = this.getSize()
 		, gh = this.histogram['gray']
 		;
 		const accum = new Array(gh.length);
@@ -178,13 +182,12 @@ Frame.prototype = {
 			histogram[E[i]] += 1;
 		}
 		this.histogram['equalization'] = histogram;
-		this.getEqualized = ()=>(E);
-		return this.getEqualized()
+		this.getter['equalized'] = ()=>(E);
+		return this.get('equalized')
 	}
 	, _getYUV: function () {
-		const data = this.getRGBA()
-		, num = this.getNum()
-		// , Y = new Array(num)
+		const data = this.get('rgba')
+		, num = this.num()
 		, Y = new Uint8ClampedArray(num)
 		, UV = new Array(num * 2)
 		, histogram = new Array(256)
@@ -209,13 +212,13 @@ Frame.prototype = {
 			UV[i*2+1] = v;
 			histogram[Y[i]] += 1;
 		}
-		this.getYUV = ()=>({'Y':Y, 'UV':UV});
+		this.getter['yuv'] = ()=>({'Y':Y, 'UV':UV});
 		this.histogram['gray'] = histogram;
-		return this.getYUV();
+		return this.get('yuv');
 	}
 	, _getGray: function () {
-		const data = this.getRGBA();
-		const num = this.getNum();
+		const data = this.get('rgba');
+		const num = this.num();
 		const gray = new Uint8ClampedArray(num);
 		const histogram = new Array(256);
 		histogram.fill(0);
@@ -227,15 +230,13 @@ Frame.prototype = {
 			);
 			histogram[gray[i]] += 1;
 		}
-		this.getGray = ()=>(gray);
+		this.getter['gray'] = ()=>(gray);
 		this.histogram['gray'] = histogram;
-		return this.getGray();
+		return this.get('gray');
 	}
 	, _getEdge: function (method) {
-		if (method in this.edgeFuncs) return this.edgeFuncs[method]()
-
-		const e = new Uint8ClampedArray(this.getNum())
-		, w = this.getSize()[0]
+		const e = new Uint8ClampedArray(this.num())
+		, w = this.size()[0]
 		, O = [
 			-w-1, -w, -w+1,
 			-1, 0, 1,
@@ -244,11 +245,11 @@ Frame.prototype = {
 		;
 
 		if (method == 'sobel.rgb') {
-			const plane = this.get3Planars()
+			const plane = this.get('rgb')
 			, R = plane[0]
 			, G = plane[1]
 			, B = plane[2]
-			, num = this.getNum()
+			, num = this.num()
 			, eR = new Uint8ClampedArray(num)
 			, eG = new Uint8ClampedArray(num)
 			, eB = new Uint8ClampedArray(num)
@@ -261,28 +262,20 @@ Frame.prototype = {
 		}
 		else if (method == 'laplacian') {
 			const raw = new Int16Array(e.length);
-			Frame._Laplacian(raw, this.getGray(), O);
+			Frame._Laplacian(raw, this.get('gray'), O);
 			for (let i = 0; i < e.length; ++i) e[i] = Math.abs(raw[i]);
 		}
 		else if (method == 'laplacian.signed') {
 			const raw = new Int16Array(e.length);
-			Frame._Laplacian(raw, this.getGray(), O);
+			Frame._Laplacian(raw, this.get('gray'), O);
 			for (let i = 0; i < e.length; ++i) e[i] = raw[i] + 128;
 		}
 		else if (method == 'sobel') {
-			Frame._Sobel(e, this.getGray(), O);
+			Frame._Sobel(e, this.get('gray'), O);
 		}
-		else throw `not supported ${method}`
+		else throw 'not supported ' + method
 
-/*
-	let g = this.getGray();
-	if (g.length < e.length) { // dummy
-		g = new Array(e.length);
-		g.fill(0);
-	}
-*/
-
-		this.edgeFuncs[method] = ()=>(e);
+		this.getter[method] = ()=>(e);
 
 		const histogram = new Array(256);
 		histogram.fill(0);
@@ -290,6 +283,6 @@ Frame.prototype = {
 			histogram[e[i]] += 1;
 		this.histogram[method] = histogram;
 
-		return this.edgeFuncs[method]();
+		return this.get(method);
 	}
 }

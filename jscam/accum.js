@@ -80,10 +80,8 @@ const accum = {
 		if (space === undefined) space = 'gray';
 		accum._check(space);
 
-		const num = frame.getNum();
-		if (space === 'gray') frame.getGray();
-		else if (space === 'rgb') frame.get3Planars();
-		else frame.getYUV();
+		const num = frame.num();
+		frame.get(space);
 
 		if (accum._delayNum !== num) {
 			accum._delay = new Uint8ClampedArray(num * 4);
@@ -96,7 +94,7 @@ const accum = {
 		if (now - accum._last < accum.time) return
 
 		if (accum._hasDelay) accum._mix(space, accum._delay, num);
-		accum._delay.set(frame.getRGBA());
+		accum._delay.set(frame.get('rgba'));
 		accum._hasDelay = true;
 		accum._last = now;
 	}

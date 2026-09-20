@@ -257,7 +257,7 @@ flowchart LR
   V --> GI --> FR
   FR -->|showImage true| BI
   BI --> PI --> SH
-  FR -->|getGray / getYUV / getEdge / get3Planars / getEqualized| BI
+  FR -->|get id| BI
   FR -->|histogram dict| HG
   BI -->|GRAY-accum| AccumObj["accum.update / planes"]
   BI -->|*delta*| DeltaObj["delta.get"]
@@ -428,18 +428,19 @@ pause / リサイズパスで `width = cssW * dpr` してはならない。ビ�
 
 #### `Frame` ライフサイクル
 
-コンストラクタはプレースホルダの `getSize` / `getGray` / `getEdge` / `getRGBA`（空配列）と no-op `getImage` を置き、`image instanceof ImageData` なら `feed` する。その後 `++Frame.serial` を ID にし、`Frame.array` / `Frame.map` に登録。長さが `HIGH`(20) を超えたら `LOW`(10) まで古い ID を `delete`。
+コンストラクタは `image instanceof ImageData` なら `feed` する。その後 `++Frame.serial` を閉じた `id()` にし、`Frame.array` / `Frame.map` に登録。長さが `HIGH`(20) を超えたら `LOW`(10) まで古い ID を `delete`。未 feed の `get` / `num` / `size` は無い（throw）。
 
-`feed` が実メソッドをバインドする（`frame.js` 112–129 行）:
+`feed` がメタと画素ディスパッチを付ける:
 
-- `getSize()` → `[width, height]`
-- `getNum()` → `width * height`
-- `getRGBA()` → `imageData.data`（参照。コピーしない）
-- `getImage()` → 元の `ImageData`
-- `getYUV` / `getGray` / `getEdge` / `getEqualized` / `get3Planars` → 初回計算用の `_get*`。成功後、同名プロパティをクロージャで上書きし、2 回目以降は再計算しない。
-- `edgeFuncs` / `histogram` は `Object.create(null)`（`for…in` がプロトタイプキーを見ない。`{}` に置き換えないこと）。
+- `size()` → `[width, height]`
+- `num()` → `width * height`
+- `get(id)` → インスタンス表 `getter[id]` を呼ぶ。未知 id は `not supported ${id}`
+- `getter['ImageData']` / `getter['rgba']` → 元の `ImageData` とその `.data`（参照。コピーしない）
+- `gray` / `rgb` / `yuv` / `equalized` / エッジ id → 初回は `_get*`。成功後 `getter[id] = () => 結果` でスロット差し替え（2 回目以降は再計算しない）
+- `histogram` は `Object.create(null)`（`for…in` がプロトタイプキーを見ない。`{}` に置き換えないこと）
+- 有効画素 id は `Frame.ids`（`ImageData`, `rgba`, `gray`, `rgb`, `yuv`, `equalized`, `laplacian`, `laplacian.signed`, `sobel`, `sobel.rgb`）。大文字小文字は厳密一致
 
-**注意:** パイプラインは `Frame.map` を ID で引かない。`getId()` の呼び出し元も無い。それでも LRU（`Frame.map` / `getId` / HIGH=20 / LOW=10）は残す（決定 1）。空の `new Frame`×4 など死ローカルは PR 1 で削除済み。
+**注意:** パイプラインは `Frame.map` を ID で引かない。`id()` の呼び出し元も無い。それでも LRU（`Frame.map` / `id` / HIGH=20 / LOW=10）は残す（決定 1）。空の `new Frame`×4 など死ローカルは PR 1 で削除済み。
 
 #### 色空間
 
@@ -449,8 +450,8 @@ pause / リサイズパスで `width = cssW * dpr` してはならない。ビ�
   - `U = -0.169R - 0.331G + 0.500B`、`V = 0.500R - 0.419G - 0.081B` を素の `Array` に符号付き float のまま。
   - インターリーブ `UV = [u0, v0, u1, v1, …]`（長さ `num*2`）。
   - `histogram['gray']` を **上書き**する。
-- **Y と Gray は一致しない。** `GRAY-frame` は `getYUV().Y` を使う。`.5` の丸めとクランプ経路が違うため、`getGray()` とは 1 階調ずれうる。先に gray を計算するとヒストグラムキーも衝突する。
-- **3 planes** (`_get3Planars`): R/G/B を別 `Uint8ClampedArray` + 各 256 bin。
+- **Y と Gray は一致しない。** `GRAY-frame` は `get('yuv').Y` を使う。`.5` の丸めとクランプ経路が違うため、`get('gray')` とは 1 階調ずれうる。先に gray を計算するとヒストグラムキーも衝突する。
+- **3 planes** (`get('rgb')` / `_getRgb`): R/G/B を別 `Uint8ClampedArray` + 各 256 bin。
 - **Equalize** (`_getEqualized`): gray の CDF `V[i]∈[0,1]`、`Vmin = min(V)`（初期値 `Infinity`）、`E = (V[g]-Vmin)*factor`。`factor = (1-Vmin)==0 ? 0 : 255/(1-Vmin)`（全画素ビン 0 で `Vmin===1`）。
 
 #### エッジ
@@ -494,9 +495,9 @@ out[c][i]           = abs( current[space][c][i] - planes[space][c][i] )
 - `accum.update(frame, space)` が指定 space（`'gray'` / `'rgb'` / `'yuv'`、省略時 `'gray'`）だけを進める。他 space は読まない・混ぜない・捨てない。未知の space は throw。
 - `factor` 既定 0.5。`#afactor`（0–1, step 0.05）。`ui.js` は `accum.factor` に書く。スライダ UI は `GRAY-accum` / `BW-delta` / `Gray-delta` のときだけ見える。隠しても値は残る。残差は `factor` でスケールしない。
 - `time` 既定 100ms。この間隔未満なら混ぜずに return（ただし指定 space の長さ確保と、ヒストグラム用の Frame getter は行う）。
-- 遅延入力は space ごとではなく **RGBA 1 本のコピー**（`getRGBA()` を `_delay.set`。エイリアス禁止）。遅延は 1 表示フレームではなく **1 accum 周期（既定 ~100ms）**。
+- 遅延入力は space ごとではなく **RGBA 1 本のコピー**（`get('rgba')` を `_delay.set`。エイリアス禁止）。遅延は 1 表示フレームではなく **1 accum 周期（既定 ~100ms）**。
 - コールドスタート: 遅延が空の成功 tick は混ぜず、今の RGBA を遅延へ。背景はゼロ埋め。遅延が既にある状態で未使用 space を初めて `update` すると、0 埋めの直後にその遅延から混ぜる。
-- `'gray'` と `'yuv'` の Y は同一視しない。gray 入力は `getGray()`（`Math.round`）、遅延からの抜き出しも同じ round。Y 入力は `getYUV()` 相当の `ToUint8Clamp`。
+- `'gray'` と `'yuv'` の Y は同一視しない。gray 入力は `get('gray')`（`Math.round`）、遅延からの抜き出しも同じ round。Y 入力は `get('yuv')` 相当の `ToUint8Clamp`。
 - `GRAY-accum` は `accum.update(frame, 'gray')` のあと float の `planes('gray')[0][i]` を `ImageData` へ代入。表示時に `ToUint8Clamp`。
 - `delta.get(frame, space)` は内部で `accum.update` し、今 vis の生平面と背景の絶対差を返す。`space` 省略時 `'gray'` は `Uint8ClampedArray` 1 本（現行互換）。`'rgb'` / `'yuv'` は平面配列。
 - `delta.factor` / `delta.time` / `delta.aBuffer` / `delta.accum` は `accum` への互換エイリアス。
@@ -612,20 +613,21 @@ CSS: `.field { display: grid }` が UA の `[hidden] { display: none }` を上�
 
 ```javascript
 const f = new Frame(imageData); // ImageData でなければ feed しないプレースホルダ
-f.getId();            // number, ++Frame.serial
-f.getSize();          // [width, height]
-f.getNum();           // width*height
-f.getRGBA();          // Uint8ClampedArray 長さ num*4（ImageData 共有）
-f.getImage();         // ImageData
-f.getGray();          // Uint8ClampedArray, Math.round(BT.601)
-f.getYUV();           // { Y: Uint8ClampedArray ToUint8Clamp, UV: Array }
-                      // UV = [u0,v0,...]; U=-0.169R-0.331G+0.500B; V=0.500R-0.419G-0.081B
-                      // Y と getGray() は丸めが違い、GRAY-frame は Y を使う
-f.getEqualized();     // Uint8ClampedArray
-f.get3Planars();      // [R,G,B] 各 Uint8ClampedArray
-f.getEdge(method);    // 'laplacian' | 'laplacian.signed' | 'sobel' | 'sobel.rgb'
-f.histogram;          // Object.create(null): gray?, equalization?, R?, G?, B?,
-                      // laplacian?, 'laplacian.signed'?, sobel?, 'sobel.rgb'?
+f.id();                 // number, ++Frame.serial
+f.size();               // [width, height]
+f.num();                // width*height
+f.get('rgba');          // Uint8ClampedArray 長さ num*4（ImageData 共有）
+f.get('ImageData');     // ImageData（canvas の render.getImage とは別）
+f.get('gray');          // Uint8ClampedArray, Math.round(BT.601)
+f.get('yuv');           // { Y: Uint8ClampedArray ToUint8Clamp, UV: Array }
+                        // UV = [u0,v0,...]; U=-0.169R-0.331G+0.500B; V=0.500R-0.419G-0.081B
+                        // Y と get('gray') は丸めが違い、GRAY-frame は Y を使う
+f.get('equalized');     // Uint8ClampedArray。histogram キーは 'equalization' のまま
+f.get('rgb');           // [R,G,B] 各 Uint8ClampedArray
+f.get('laplacian');     // ほか 'laplacian.signed' | 'sobel' | 'sobel.rgb'
+f.histogram;            // Object.create(null): gray?, equalization?, R?, G?, B?,
+                        // laplacian?, 'laplacian.signed'?, sobel?, 'sobel.rgb'?
+Frame.ids;              // 有効画素 id（freeze）
 Frame.calcThreshold(histogram256); // Otsu k
 Frame.HIGH === 20; Frame.LOW === 10;
 Frame.map[id]; Frame.array; Frame.serial;
@@ -706,20 +708,20 @@ dispatch();                // 開始/再開。loop を 1 回 rAF 予約
 
 | キー | 入力 | 出力 |
 | --- | --- | --- |
-| `GRAY-frame` | `getYUV().Y`（`getGray()` ではない） | Y を RGB に複製 |
-| `GRAY-Histogram equalization` | `getEqualized()` | 均等化グレー |
-| `G-edge(Laplacian)` | `getEdge('laplacian')` | 絶対 Laplacian（互換維持） |
-| `G-edge(Laplacian signed)` | `getEdge('laplacian.signed')` | 零 = 128 の符号付き |
-| `G-edge(Sobel)` | `getEdge('sobel')` | グレー Sobel |
-| `C-edge(Sobel)` | `getEdge('sobel')` | `COLOR8[floor(e/32)]` |
-| `YUV-frame` | `getYUV()` | Y+1.402V, Y-0.344U-0.714V, Y+1.772U（canvas がクランプ） |
-| `UV:RG-frame` | `getYUV().UV` | R=U+128, G=V+128, B=0 |
-| `RGB-frame` | `getImage()` | 入力をそのまま返す |
+| `GRAY-frame` | `get('yuv').Y`（`get('gray')` ではない） | Y を RGB に複製 |
+| `GRAY-Histogram equalization` | `get('equalized')` | 均等化グレー |
+| `G-edge(Laplacian)` | `get('laplacian')` | 絶対 Laplacian（互換維持） |
+| `G-edge(Laplacian signed)` | `get('laplacian.signed')` | 零 = 128 の符号付き |
+| `G-edge(Sobel)` | `get('sobel')` | グレー Sobel |
+| `C-edge(Sobel)` | `get('sobel')` | `COLOR8[floor(e/32)]` |
+| `YUV-frame` | `get('yuv')` | Y+1.402V, Y-0.344U-0.714V, Y+1.772U（canvas がクランプ） |
+| `UV:RG-frame` | `get('yuv').UV` | R=U+128, G=V+128, B=0 |
+| `RGB-frame` | `get('ImageData')` | 入力をそのまま返す |
 | `GRAY-accum` | `accum.update` + `planes('gray')[0]` | 蓄積グレー（代入時クランプ）。`#field-afactor` 表示 |
 | `BW-delta` | `delta.get` | 非零を 255。`#field-afactor` 表示 |
 | `Gray-delta` | `delta.get` | 絶対差分。`#field-afactor` 表示 |
 | `8colors` | 3 planes + Otsu | チャネルごと 0/255 |
-| `Bin-edge` | `getEdge('sobel.rgb')` + Otsu | 二値エッジ |
+| `Bin-edge` | `get('sobel.rgb')` + Otsu | 二値エッジ |
 
 キー文字列は UI ラベルそのもの。リネームはセレクトの表示とログ `image mode:` と、該当する `data-modes` 属性を変える。
 
@@ -798,7 +800,7 @@ Frame 1 個あたり:
 
 ### 蓄積バッファ
 
-`accum` の平面は `update` された space だけ持つ。`frame.getNum()` がその space の長さと違う vis ではその space と遅延 RGBA を張り替える（縮小も含む）。他 space は次の `update` まで旧長さのまま。モード切替では他 space を捨てない（凍結）。`#camera-select` で解像度が変わると、今 `update` している space は新しい `num` に合わせる。
+`accum` の平面は `update` された space だけ持つ。`frame.num()` がその space の長さと違う vis ではその space と遅延 RGBA を張り替える（縮小も含む）。他 space は次の `update` まで旧長さのまま。モード切替では他 space を捨てない（凍結）。`#camera-select` で解像度が変わると、今 `update` している space は新しい `num` に合わせる。
 
 ### ループ状態
 
@@ -905,7 +907,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 
 付帯契約:
 
-- **遅延 RGBA は `accum` 所有のコピー。** 成功 tick で `_delay.set(getRGBA())`（約 10 Hz）。Frame プールに入れない。モード変更では残す。`num` 変化では遅延と今の space を張り替える。
+- **遅延 RGBA は `accum` 所有のコピー。** 成功 tick で `_delay.set(get('rgba'))`（約 10 Hz）。Frame プールに入れない。モード変更では残す。`num` 変化では遅延と今の space を張り替える。
 - キー: `Uint8ClampedArray(num)` は gray/Y/R/G/B/E/edge で共有可。UV の `Array`（または将来の `Float32Array`）は別。256 ビンは入れない。
 - 上限: おおよそ `LOW` × そのモードの平面数。無制限 Salvage は UV でピークが GC より悪くなる。
 - 長さ不一致は切らない（長いバッファの先頭だけ使うと、縮まない `aBuffer` と同型）。
@@ -938,7 +940,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 1. **先に `_next` をコピー。** エイリアスのまま Salvage すると EMA が自己参照する。
 2. **プールだけ空にして LRU を残さない。** 旧モード／旧サイズの Frame が次の 10 vis で落ち、空にしたプールに UV や旧 `num` が戻る。同じイベントで LRU も空にするか、Salvage を今の `(num, モードが使う種類)` に限るか、Frame に generation を刻む。一番単純なのはプールと LRU を両方空（`Frame.map` は vis から未使用。決定 1 の「LRU 機構を残す」と、空にする瞬間だけ衝突する）。
 3. **drain。** 配列は `getGray = () => gray` 等のクロージャにしか無い。`delete Frame.map[id]` だけでは Salvage できない。破棄前に配列を外し、旧メソッドを空にする。
-4. **`get3Planars` は 3 本セット。** `getYUV` は Y（U8）と UV（`Array`）でキーを分ける。
+4. **`get('rgb')` は 3 本セット。** `get('yuv')` は Y（U8）と UV（`Array`）でキーを分ける。
 5. **再利用後の 0 埋め。** `new Uint8ClampedArray` は 0。再利用は中身が残る。gray / 平面 / UV は全画素書く。エッジは `_Sobel` / `_Laplacian` の `dst.fill(0)` を Salvage 後も前提にする。
 6. **delta の 3 バッファはプールに入れない。** 解像度で張り替え、モードでは残す（戻ったとき背景が黒フェードしない）。
 7. **pause 中リサイズ。** ビットマップは消さない（R2）。プールと generation は解像度イベントで空にする。再開後に旧サイズ Frame が Salvage されないこと。
@@ -1050,7 +1052,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 5. **既定 Laplacian は符号付き畳み込み → abs → 0–255 クランプ。符号付きプレビューは別キー。**  
    理由: `Uint8ClampedArray` へ負値を直接書くと 0 になりエッジが消える（`cam.js` のバグ）。abs 後も 255 超は飽和する。零交差の可視化は `G-edge(Laplacian signed)`（零 = 128）で opt-in（PR 8）。既存キーの画素は変えない。
 
-6. **Frame ID は `++Frame.serial`。キャッシュは 10–20 の LRU。`Frame.map` / `getId` は残す。**  
+6. **Frame ID は `++Frame.serial`。キャッシュは 10–20 の LRU。`Frame.map` / `id()` は残す。**  
    理由: `performance.now()` ベース ID は衝突する。現行ループは ID 参照しないが、LRU は削除しない（決定 1）。PR 1 でも触らなかった。
 
 7. **メインループは単一 rAF（`dispatch.loop`）。`dispatch()` は開始/再開だけ。**  
@@ -1062,8 +1064,8 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 9. **キャプチャ解像度は UA 既定のまま（`width`/`height` ideal は入れない）。切替時だけ `deviceId.exact`。入力プレビューの表示は最大 640×640 contain。ライブで待たない制約（zoom / focus / torch / 露出 / WB / 画質 / pan / tilt）だけ Controls に出す。**  
    理由: 処理は生 `videoWidth/Height`。`getCapabilities` は同期。`applyConstraints` はトラック再取得しない。frameRate と解像度はパイプライン再構成がありうるので出さない。PTZ のために `zoom: true` で GUM し直さない（追加許可ダイアログを避ける）。PR 4 は延期のまま。
 
-10. **派生画像は Frame メソッドの自己上書きでメモ化する。**  
-    理由: 同一フレームで gray と Laplacian と histogram が gray を共有。再計算しない。`feed` し直さない限り無効化も無い。
+10. **派生画像はインスタンス表 `getter[id]` のスロット差し替えでメモ化する。`get(id)` が表を呼ぶ。**  
+    理由: 同一フレームで gray と Laplacian と histogram が gray を共有。再計算しない。`feed` が表を作り直すまで無効化も無い。prototype の `get` にスロットを付けない（全 Frame で共有される）。未知 id は throw。`id` / `num` / `size` は画素 `get` に入れない。
 
 11. **ヘッダーは専用行。Controls はヘッダー下の映像エリアに overlay。JS は `paddingRight` を書かない。CSS `cqw` の 4:3 ボックスはライブ後に `aspect-ratio:auto` で破棄。**  
     理由: トップバーと Close / Pause が重なると操作不能になる。chrome 非表示時はヘッダー行が潰れ映像が全画面。Controls 背景 50% 透過。`fitDisplaySize` は `#layers` から CSS padding だけ引く。
@@ -1098,8 +1100,8 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 | R4 | ヒストグラム overlay は ic 座標。`hc.width < 266` だとバーが切れる | Low | overlay 分離済み（内部 ImageData はクリーン）。現状は生解像度前提。低解像度カメラでストリップが崩れる |
 | R5 | メインスレッド画素ループ。1080p + `sobel.rgb` で UI が固まりうる | High | モード切替、`Frame interval`、**`Draw image` オフ（カーネルごと停止）**。解像度 cap（PR 4）は延期。Worker は未実装 |
 | R6 | 自己署名証明書。警告無視が必要。SAN 不一致だとまた警告 | Medium | `TLS_SAN`。ドキュメントで手順を固定 |
-| R7 | `Frame.map` / `getId` は現行ループから未使用 | Low | LRU は残す（決定 1）。warmup `new Frame`×4 は削除済み |
-| R8 | `getGray` と `getYUV` が両方 `histogram['gray']` を書く | Low | 呼び出し順でヒストグラム重畳が変わる。`GRAY-frame` は YUV 経路 |
+| R7 | `Frame.map` / `id()` は現行ループから未使用 | Low | LRU は残す（決定 1）。warmup `new Frame`×4 は削除済み |
+| R8 | `get('gray')` と `get('yuv')` が両方 `histogram['gray']` を書く | Low | 呼び出し順でヒストグラム重畳が変わる。`GRAY-frame` は YUV 経路 |
 | R9 | `print` の `innerHTML` 非エスケープ | Low | 入力は内部文字列。外部入力を足すなら textContent へ |
 | R10 | pause してもカメラ占有（トラック live） | Low | 意図的。明示 `Stop camera` と `pagehide` / `beforeunload` で解放済み |
 | R11 | `accum.time=100` により蓄積は最大約 10 Hz。EMA 入力は 1 accum 周期遅れの RGBA。表示 30 FPS なら約 3 フレーム前 | Low | 仕様。スライダ未接続。コールドスタートはゼロ埋めからフェード |
@@ -1118,7 +1120,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 ### 決定済み（2026-09-12、これ以上議論しない）
 
 1. **`Frame` LRU を残すか。**  
-   **決定:** 残す。`Frame.map` / `getId` / `HIGH=20` / `LOW=10` は削除しない。現行ループは ID を引かないが、契約として保持する。
+   **決定:** 残す。`Frame.map` / `id()` / `HIGH=20` / `LOW=10` は削除しない。現行ループは ID を引かないが、契約として保持する。
 
 2. **ヒストグラムを映像から分離するか。**  
    **決定:** 分離する。**PR 3 で実装済み。** `#h-canvas` + `#show-histogram`。画素は内部（`hc` = `ic`）座標で描き CSS contain でスケールする。

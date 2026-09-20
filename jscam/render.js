@@ -2,9 +2,9 @@
 
 const buildImageFuncs = {
 	'GRAY-frame': function (ic, frame) {
-		const yuv = frame.getYUV();
-		const num  = frame.getNum();
-		const size = frame.getSize();
+		const yuv = frame.get('yuv');
+		const num  = frame.num();
+		const size = frame.size();
 		const imageData = new ImageData(size[0], size[1]);
 		const data = imageData.data;
 		for (let i = 0, o = 0; i < num; ++i, o += 4) {
@@ -16,9 +16,9 @@ const buildImageFuncs = {
 		return imageData;
 	}
 	, 'GRAY-Histogram equalization': function (ic, frame) {
-		const e = frame.getEqualized()
-		, num  = frame.getNum()
-		, size = frame.getSize()
+		const e = frame.get('equalized')
+		, num  = frame.num()
+		, size = frame.size()
 		, imageData = new ImageData(size[0], size[1])
 		, data = imageData.data
 		;
@@ -31,9 +31,9 @@ const buildImageFuncs = {
 		return imageData;
 	}
 	, 'G-edge(Laplacian)': function (ic, frame) {
-		const e = frame.getEdge('laplacian')
-		, num  = frame.getNum()
-		, size = frame.getSize()
+		const e = frame.get('laplacian')
+		, num  = frame.num()
+		, size = frame.size()
 		, imageData = new ImageData(size[0], size[1])
 		, data = imageData.data
 		;
@@ -48,9 +48,9 @@ const buildImageFuncs = {
 		return imageData
 	}
 	, 'G-edge(Laplacian signed)': function (ic, frame) {
-		const e = frame.getEdge('laplacian.signed')
-		, num  = frame.getNum()
-		, size = frame.getSize()
+		const e = frame.get('laplacian.signed')
+		, num  = frame.num()
+		, size = frame.size()
 		, imageData = new ImageData(size[0], size[1])
 		, data = imageData.data
 		;
@@ -65,9 +65,9 @@ const buildImageFuncs = {
 		return imageData
 	}
 	, 'G-edge(Sobel)': function (ic, frame) {
-		const e = frame.getEdge('sobel')
-		, num  = frame.getNum()
-		, size = frame.getSize()
+		const e = frame.get('sobel')
+		, num  = frame.num()
+		, size = frame.size()
 		, imageData = new ImageData(size[0], size[1])
 		, data = imageData.data
 		;
@@ -82,9 +82,9 @@ const buildImageFuncs = {
 		return imageData
 	}
 	, 'C-edge(Sobel)': function (ic, frame) {
-		const e = frame.getEdge('sobel')
-		, num  = frame.getNum()
-		, size = frame.getSize()
+		const e = frame.get('sobel')
+		, num  = frame.num()
+		, size = frame.size()
 		, imageData = new ImageData(size[0], size[1])
 		, data = imageData.data
 		;
@@ -102,9 +102,9 @@ const buildImageFuncs = {
 	// G = 1.000Y - 0.344U - 0.714V
 	// B = 1.000Y + 1.772U
 	, 'YUV-frame': function (ic, frame) {
-		const yuv = frame.getYUV()
-		, num  = frame.getNum()
-		, size = frame.getSize()
+		const yuv = frame.get('yuv')
+		, num  = frame.num()
+		, size = frame.size()
 		, imageData = new ImageData(size[0], size[1])
 		, data = imageData.data
 		;
@@ -121,9 +121,9 @@ const buildImageFuncs = {
 		return imageData;
 	}
 	, 'UV:RG-frame': function (ic, frame) {
-		const yuv = frame.getYUV()
-		, num  = frame.getNum() * 2
-		, size = frame.getSize()
+		const yuv = frame.get('yuv')
+		, num  = frame.num() * 2
+		, size = frame.size()
 		, imageData = new ImageData(size[0], size[1])
 		, data = imageData.data
 		;
@@ -139,13 +139,13 @@ const buildImageFuncs = {
 		return imageData;
 	}
 	, 'RGB-frame': function (ic, frame) {
-		return frame.getImage();
+		return frame.get('ImageData');
 	}
 	, 'GRAY-accum': function (ic, frame) {
 		accum.update(frame, 'gray');
 		const gray = accum.planes('gray')[0]
-		, num  = frame.getNum()
-		, size = frame.getSize()
+		, num  = frame.num()
+		, size = frame.size()
 		, imageData = new ImageData(size[0], size[1])
 		, data = imageData.data;
 
@@ -160,8 +160,8 @@ const buildImageFuncs = {
 	}
 	, 'BW-delta': function (ic, frame) {
 		const d = delta.get(frame)
-		, num  = frame.getNum()
-		, size = frame.getSize()
+		, num  = frame.num()
+		, size = frame.size()
 		, imageData = new ImageData(size[0], size[1])
 		, data = imageData.data;
 
@@ -177,8 +177,8 @@ const buildImageFuncs = {
 	}
 	, 'Gray-delta': function (ic, frame) {
 		const d = delta.get(frame)
-		, num  = frame.getNum()
-		, size = frame.getSize()
+		, num  = frame.num()
+		, size = frame.size()
 		, imageData = new ImageData(size[0], size[1])
 		, data = imageData.data;
 
@@ -192,11 +192,11 @@ const buildImageFuncs = {
 		return imageData
 	}
 	, '8colors': function (ic, frame) {
-		const num  = frame.getNum()
-		, size = frame.getSize()
+		const num  = frame.num()
+		, size = frame.size()
 		, imageData = new ImageData(size[0], size[1])
 		, data = imageData.data
-		, RGB = frame.get3Planars()
+		, RGB = frame.get('rgb')
 		, R = RGB[0]
 		, G = RGB[1]
 		, B = RGB[2]
@@ -214,11 +214,11 @@ const buildImageFuncs = {
 		return imageData
 	}
 	, 'Bin-edge': function (ic, frame) {
-		const num  = frame.getNum()
-		, size = frame.getSize()
+		const num  = frame.num()
+		, size = frame.size()
 		, imageData = new ImageData(size[0], size[1])
 		, data = imageData.data
-		, e = frame.getEdge('sobel.rgb')
+		, e = frame.get('sobel.rgb')
 		, t = Frame.calcThreshold(frame.histogram['sobel.rgb'])
 		;
 		for (let i = 0, o = 0; i < num; ++i, o += 4) {
@@ -247,7 +247,7 @@ const render = {
 	, histogram: function (frame, histogram) {
 		const hc = render.hc
 		, gc = hc.getContext('2d')
-		, num = frame.getNum()
+		, num = frame.num()
 		, max = histogram.reduce((a,b)=>(Math.max(a,b)), 0)
 		, barScale = (hc.height / 3) / max
 		, lineScale = (hc.height / 3) / num
