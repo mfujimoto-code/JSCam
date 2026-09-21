@@ -2,7 +2,7 @@
 
 const Frame = function (image) {
 	if (!(image instanceof ImageData))
-		throw new Error('Frame require a source ImageData');
+		throw new Error('Frame requires a source ImageData');
 
 	this.feed(image);
 
@@ -104,17 +104,16 @@ Frame.calcThreshold = (histogram)=>{
 	}
 	return maxK
 }
-Frame._getters = const obj = Object.assign(Object.create(null), {
-	'ImageData':          function() {}	// initialized at feed
-	, 'rgba':             function() {return this._getRgba()}
-	, 'gray':             function() {return this._getGray()}
-	, 'rgb':              function() {return this._getRgb()}
-	, 'yuv':              function() {return this._getYUV()}
-	, 'equalized':        function() {return this._getEqualized()}
-	, 'laplacian':        function() {return this._getEdge('laplacian')}
-	, 'laplacian.signed': function() {return this._getEdge('haplacian.signed')}
-	, 'sobel':            function() {return this._getEdge('sobel')}
-	, 'sobel.rgb':        function() {return this._getEdge('sobel.rgb')}
+Frame._getters = Object.assign(Object.create(null), {
+	'rgba':             function () {return this._getRgba()}
+	, 'gray':             function () {return this._getGray()}
+	, 'rgb':              function () {return this._getRgb()}
+	, 'yuv':              function () {return this._getYUV()}
+	, 'equalized':        function () {return this._getEqualized()}
+	, 'laplacian':        function () {return this._getEdge('laplacian')}
+	, 'laplacian.signed': function () {return this._getEdge('laplacian.signed')}
+	, 'sobel':            function () {return this._getEdge('sobel')}
+	, 'sobel.rgb':        function () {return this._getEdge('sobel.rgb')}
 });
 Frame.prototype = {
 	feed: function (imageData) {
@@ -137,7 +136,8 @@ Frame.prototype = {
 		return initfn.call(this)
 	}
 	, _getRgba: function () {
-		this.getter['rgba'] = ()=>(this.get('ImangeData').data);
+		const data = this.get('ImageData').data;
+		this.getter['rgba'] = ()=>(data);
 		return this.get('rgba')
 	}
 	, _getRgb: function () {

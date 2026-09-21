@@ -428,17 +428,16 @@ pause / リサイズパスで `width = cssW * dpr` してはならない。ビ�
 
 #### `Frame` ライフサイクル
 
-コンストラクタは `image instanceof ImageData` なら `feed` する。その後 `++Frame.serial` を閉じた `id()` にし、`Frame.array` / `Frame.map` に登録。長さが `HIGH`(20) を超えたら `LOW`(10) まで古い ID を `delete`。未 feed の `get` / `num` / `size` は無い（throw）。
+コンストラクタは `ImageData` 必須（それ以外は throw）。`feed` のあと `++Frame.serial` を閉じた `id()` にし、`Frame.array` / `Frame.map` に登録。長さが `HIGH`(20) を超えたら `LOW`(10) まで古い ID を `delete`。
 
 `feed` がメタと画素ディスパッチを付ける:
 
 - `size()` → `[width, height]`
 - `num()` → `width * height`
-- `get(id)` → インスタンス表 `getter[id]` を呼ぶ。未知 id は `not supported ${id}`
-- `getter['ImageData']` / `getter['rgba']` → 元の `ImageData` とその `.data`（参照。コピーしない）
-- `gray` / `rgb` / `yuv` / `equalized` / エッジ id → 初回は `_get*`。成功後 `getter[id] = () => 結果` でスロット差し替え（2 回目以降は再計算しない）
+- `get(id)` → まず `this.getter[id]`。無ければ `Frame._getters[id].call(this)`。どちらも無ければ throw
+- `feed` が載せるのは `getter['ImageData']` だけ（元の `ImageData` 参照）。`rgba` 以降は初回 `_get*` のあと `getter[id]` に差し替え
 - `histogram` は `Object.create(null)`（`for…in` がプロトタイプキーを見ない。`{}` に置き換えないこと）
-- 有効画素 id は `Frame.ids`（`ImageData`, `rgba`, `gray`, `rgb`, `yuv`, `equalized`, `laplacian`, `laplacian.signed`, `sobel`, `sobel.rgb`）。大文字小文字は厳密一致
+- 計算系の初回関数は `Frame._getters[id]`（null 原型）。`ImageData` は `feed` が `getter` に載せる。未知 id は throw。大文字小文字は厳密一致
 
 **注意:** パイプラインは `Frame.map` を ID で引かない。`id()` の呼び出し元も無い。それでも LRU（`Frame.map` / `id` / HIGH=20 / LOW=10）は残す（決定 1）。空の `new Frame`×4 など死ローカルは PR 1 で削除済み。
 
@@ -612,7 +611,7 @@ CSS: `.field { display: grid }` が UA の `[hidden] { display: none }` を上�
 ### `Frame`
 
 ```javascript
-const f = new Frame(imageData); // ImageData でなければ feed しないプレースホルダ
+const f = new Frame(imageData); // ImageData 以外は throw
 f.id();                 // number, ++Frame.serial
 f.size();               // [width, height]
 f.num();                // width*height
@@ -627,7 +626,7 @@ f.get('rgb');           // [R,G,B] 各 Uint8ClampedArray
 f.get('laplacian');     // ほか 'laplacian.signed' | 'sobel' | 'sobel.rgb'
 f.histogram;            // Object.create(null): gray?, equalization?, R?, G?, B?,
                         // laplacian?, 'laplacian.signed'?, sobel?, 'sobel.rgb'?
-Frame.ids;              // 有効画素 id（freeze）
+Frame._getters;         // 計算系 id → 初回関数（ImageData は feed が載せる）
 Frame.calcThreshold(histogram256); // Otsu k
 Frame.HIGH === 20; Frame.LOW === 10;
 Frame.map[id]; Frame.array; Frame.serial;
