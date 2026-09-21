@@ -1,8 +1,10 @@
 'use strict';
 
 const Frame = function (image) {
-	if (image instanceof ImageData)
-		this.feed(image);
+	if (!(image instanceof ImageData))
+		throw new Error('Frame require a source ImageData');
+
+	this.feed(image);
 
 	const id = ++Frame.serial;
 	this.id = function () {return id}
@@ -102,10 +104,18 @@ Frame.calcThreshold = (histogram)=>{
 	}
 	return maxK
 }
-Frame.ids = Object.freeze([
-	'ImageData', 'rgba', 'gray', 'rgb', 'yuv', 'equalized'
-	, 'laplacian', 'laplacian.signed', 'sobel', 'sobel.rgb'
-]);
+Frame._getters = const obj = Object.assign(Object.create(null), {
+	'ImageData':          function() {}	// initialized at feed
+	, 'rgba':             function() {return this._getRgba()}
+	, 'gray':             function() {return this._getGray()}
+	, 'rgb':              function() {return this._getRgb()}
+	, 'yuv':              function() {return this._getYUV()}
+	, 'equalized':        function() {return this._getEqualized()}
+	, 'laplacian':        function() {return this._getEdge('laplacian')}
+	, 'laplacian.signed': function() {return this._getEdge('haplacian.signed')}
+	, 'sobel':            function() {return this._getEdge('sobel')}
+	, 'sobel.rgb':        function() {return this._getEdge('sobel.rgb')}
+});
 Frame.prototype = {
 	feed: function (imageData) {
 		const width  = imageData.width;
@@ -117,20 +127,18 @@ Frame.prototype = {
 		this.histogram = Object.create(null);
 		this.getter = Object.create(null);
 		this.getter['ImageData'] = ()=>(imageData);
-		this.getter['rgba'] = ()=>(imageData.data);
-		this.getter['gray'] = this._getGray;
-		this.getter['rgb'] = this._getRgb;
-		this.getter['yuv'] = this._getYUV;
-		this.getter['equalized'] = this._getEqualized;
-		this.getter['laplacian'] = function () {return this._getEdge('laplacian')}
-		this.getter['laplacian.signed'] = function () {return this._getEdge('laplacian.signed')}
-		this.getter['sobel'] = function () {return this._getEdge('sobel')}
-		this.getter['sobel.rgb'] = function () {return this._getEdge('sobel.rgb')}
 	}
 	, get: function (id) {
-		const fn = this.getter && this.getter[id];
-		if (!fn) throw 'not supported ' + id
-		return fn.call(this)
+		const fn = this.getter[id];
+		if (fn) return fn.call(this);
+
+		const initfn = Frame._getters[id];
+		if (!initfn) throw 'not supported ' + id;
+		return initfn.call(this)
+	}
+	, _getRgba: function () {
+		this.getter['rgba'] = ()=>(this.get('ImangeData').data);
+		return this.get('rgba')
 	}
 	, _getRgb: function () {
 		const num  = this.num()
