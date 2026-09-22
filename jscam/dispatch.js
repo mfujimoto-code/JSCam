@@ -30,27 +30,30 @@ const displayResize = new ResizeObserver(()=>{
 });
 displayResize.observe(e('layers'));
 
-function dispatch () {
-	if (!dispatch.run) return;
-	requestAnimationFrame(dispatch.loop);
-}
-dispatch.loop = ()=>{
-	if (!dispatch.run) return;
-
-	if (!dispatch.paused) {
+const dispatch = ()=>{
+	doit: {
+		if (dispatch.paused)
+			break doit;
+		
 		const now = performance.now();
 		const minWait = Math.max(dispatch.duration, dispatch.lastSuggestion);
-		if (now - dispatch.lastProcessedEnd >= minWait) {
-			const r = dispatch.iDISP.next();
-			dispatch.lastSuggestion = r.value;
-			dispatch.lastProcessedEnd = performance.now();
-			// suggestion==100 is camera/layout idle, not a capture/processing frame
-			if (r.value != 100) dispatch.count.value++;
-		}
+		if (now - dispatch.lastProcessedEnd < minWait)
+			break doit;
+
+		const r = dispatch.iDISP.next();
+		dispatch.lastSuggestion = r.value;
+		dispatch.lastProcessedEnd = performance.now();
+		// suggestion==100 is camera/layout idle, not a capture/processing frame
+		if (r.value != 100) dispatch.count.value++;
 	}
 
-	if (dispatch.run) requestAnimationFrame(dispatch.loop);
+	dispatch.kick();
 }
+
+dispatch.kick = ()=>{
+	requestAnimationFrame(dispatch);
+}
+
 dispatch.iDISP = (function * () {
 	const video = e('video');
 
@@ -71,13 +74,13 @@ dispatch.iDISP = (function * () {
 		}
 
 		const t0 = performance.now();
-		const imageData = render.getImage(video);
+		const imageData = render.imageData(video);
 		const t1 = performance.now();
 
 		const newFrame = new Frame(imageData);
 		let t2 = performance.now()
-		, t3 = t2
-		, t4 = t2
+		,   t3 = t2
+		,   t4 = t2
 		;
 
 		if (dispatch.showImage) {
@@ -105,7 +108,6 @@ dispatch.iDISP = (function * () {
 	}
 })();
 dispatch.duration = 0;
-dispatch.run = false;
 dispatch.paused = false;
 dispatch.count = {'value':0};
 dispatch.showImage = true;
@@ -148,5 +150,4 @@ watch.iFPS = Graph(
 );
 watch();
 
-dispatch.run = true;
-dispatch();
+dispatch.kick();

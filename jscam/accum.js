@@ -12,7 +12,7 @@ const accum = {
 	, _y8: new Uint8ClampedArray(1)
 	, _check: (space) => {
 		if (space !== 'gray' && space !== 'rgb' && space !== 'yuv')
-			throw 'not supported ' + space
+			throw new Error('not supported ' + space)
 	}
 	, _plane: (num) => {
 		const a = new Array(num);

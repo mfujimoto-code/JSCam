@@ -544,15 +544,6 @@ select {
   border: 1px solid var(--line);
 }
 
-#i-canvas {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-
 @media (max-width: 720px) {
   .topbar {
     flex-wrap: nowrap;

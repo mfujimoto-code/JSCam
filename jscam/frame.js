@@ -2,7 +2,7 @@
 
 const Frame = function (image) {
 	if (!(image instanceof ImageData))
-		throw new Error('Frame requires a source ImageData');
+		throw new Error('Frame requires a source ImageData')
 
 	this.feed(image);
 
@@ -25,10 +25,9 @@ Frame.map = {};
 Frame.serial = 0;
 Frame._Laplacian = (dst, src, O)=>{ // 3x3 8direction
 	const K = [ // Laplacian kernel
-		1, 1, 1
+		  1,  1, 1
 		, 1, -8, 1
-		, 1, 1, 1
-	]
+		, 1,  1, 1]
 	, start = O[8]
 	, end = src.length + O[0]
 	;
@@ -44,17 +43,15 @@ Frame._Laplacian = (dst, src, O)=>{ // 3x3 8direction
 }
 Frame._Sobel = (dst, src, O)=>{ // 3x3
 	const Ky = [ // Sobel vertical kernel
-		-1, -2, -1
-		, 0, 0, 0
-		, 1, 2, 1
-	]
-	, Kx = [ // Sobel horizontal kernel
-		-1, 0, 1
+		 -1, -2, -1
+		, 0,  0,  0
+		, 1,  2,  1]
+	,     Kx = [ // Sobel horizontal kernel
+		  -1, 0, 1
 		, -2, 0, 2
-		, -1, 0, 1
-	]
-	, start = O[8]
-	, end = src.length + O[0]
+		, -1, 0, 1]
+	,     start = O[8]
+	,     end = src.length + O[0]
 	;
 
 	dst.fill(0);
@@ -72,7 +69,7 @@ Frame.calcThreshold = (histogram)=>{
 	let H = 0
 	;
 	const w = new Array(histogram.length)
-	, s = new Array(histogram.length)
+	,     s = new Array(histogram.length)
 	;
 	for (let k = 0; k < histogram.length; ++k) H += histogram[k];
 	w[0] = histogram[0];
@@ -89,14 +86,14 @@ Frame.calcThreshold = (histogram)=>{
 	;
 	for (let k = 1; k < histogram.length; ++k) {
 		const w1 = w[k]
-		, w2 = H - w[k]
+		,     w2 = H - w[k]
 		;
 		if (w1 == 0 || w2 == 0) continue
 		const s1 = s[k]
-		, s2 = S - s[k]
-		, m1 = s1 / w1
-		, m2 = s2 / w2
-		, r = w1*w2*(m1-m2)*(m1-m2)
+		,     s2 = S - s[k]
+		,     m1 = s1 / w1
+		,     m2 = s2 / w2
+		,     r = w1*w2*(m1-m2)*(m1-m2)
 		;
 		if (max > r) continue
 		maxK = k;
@@ -106,14 +103,14 @@ Frame.calcThreshold = (histogram)=>{
 }
 Frame._getters = Object.assign(Object.create(null), {
 	'rgba':             function () {return this._getRgba()}
-	, 'gray':             function () {return this._getGray()}
-	, 'rgb':              function () {return this._getRgb()}
-	, 'yuv':              function () {return this._getYUV()}
-	, 'equalized':        function () {return this._getEqualized()}
-	, 'laplacian':        function () {return this._getEdge('laplacian')}
-	, 'laplacian.signed': function () {return this._getEdge('laplacian.signed')}
-	, 'sobel':            function () {return this._getEdge('sobel')}
-	, 'sobel.rgb':        function () {return this._getEdge('sobel.rgb')}
+,	'gray':             function () {return this._getGray()}
+,	'rgb':              function () {return this._getRgb()}
+,	'yuv':              function () {return this._getYUV()}
+,	'equalized':        function () {return this._getEqualized()}
+,	'laplacian':        function () {return this._getEdge('laplacian')}
+,	'laplacian.signed': function () {return this._getEdge('laplacian.signed')}
+,	'sobel':            function () {return this._getEdge('sobel')}
+,	'sobel.rgb':        function () {return this._getEdge('sobel.rgb')}
 });
 Frame.prototype = {
 	feed: function (imageData) {
@@ -132,7 +129,7 @@ Frame.prototype = {
 		if (fn) return fn.call(this);
 
 		const initfn = Frame._getters[id];
-		if (!initfn) throw 'not supported ' + id;
+		if (!initfn) throw new Error('not supported ' + id)
 		return initfn.call(this)
 	}
 	, _getRgba: function () {
@@ -142,13 +139,13 @@ Frame.prototype = {
 	}
 	, _getRgb: function () {
 		const num  = this.num()
-		, data = this.get('rgba')
-		, R = new Uint8ClampedArray(num)
-		, G = new Uint8ClampedArray(num)
-		, B = new Uint8ClampedArray(num)
-		, hR = new Array(256)
-		, hG = new Array(256)
-		, hB = new Array(256)
+		,     data = this.get('rgba')
+		,     R = new Uint8ClampedArray(num)
+		,     G = new Uint8ClampedArray(num)
+		,     B = new Uint8ClampedArray(num)
+		,     hR = new Array(256)
+		,     hG = new Array(256)
+		,     hB = new Array(256)
 		;
 
 		hR.fill(0);
@@ -244,8 +241,8 @@ Frame.prototype = {
 	}
 	, _getEdge: function (method) {
 		const e = new Uint8ClampedArray(this.num())
-		, w = this.size()[0]
-		, O = [
+		,     w = this.size()[0]
+		,     O = [
 			-w-1, -w, -w+1,
 			-1, 0, 1,
 			w-1, w, w+1
@@ -254,13 +251,13 @@ Frame.prototype = {
 
 		if (method == 'sobel.rgb') {
 			const plane = this.get('rgb')
-			, R = plane[0]
-			, G = plane[1]
-			, B = plane[2]
-			, num = this.num()
-			, eR = new Uint8ClampedArray(num)
-			, eG = new Uint8ClampedArray(num)
-			, eB = new Uint8ClampedArray(num)
+			,     R = plane[0]
+			,     G = plane[1]
+			,     B = plane[2]
+			,     num = this.num()
+			,     eR = new Uint8ClampedArray(num)
+			,     eG = new Uint8ClampedArray(num)
+			,     eB = new Uint8ClampedArray(num)
 			;
 			Frame._Sobel(eR, R, O);
 			Frame._Sobel(eG, G, O);
@@ -281,7 +278,7 @@ Frame.prototype = {
 		else if (method == 'sobel') {
 			Frame._Sobel(e, this.get('gray'), O);
 		}
-		else throw 'not supported ' + method
+		else throw new Error('not supported ' + method)
 
 		this.getter[method] = ()=>(e);
 

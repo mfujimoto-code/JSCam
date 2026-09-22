@@ -1,12 +1,12 @@
 'use strict';
 
-const buildImageFuncs = {
+const buildImageFuncs = Object.assign(Object.create(null), {
 	'GRAY-frame': function (ic, frame) {
 		const yuv = frame.get('yuv');
-		const num  = frame.num();
-		const size = frame.size();
-		const imageData = new ImageData(size[0], size[1]);
-		const data = imageData.data;
+		const num  = frame.num()
+		,     imageData = render.image(frame)
+		,     data = imageData.data
+		;
 		for (let i = 0, o = 0; i < num; ++i, o += 4) {
 			data[o  ] =
 			data[o+1] =
@@ -17,10 +17,9 @@ const buildImageFuncs = {
 	}
 	, 'GRAY-Histogram equalization': function (ic, frame) {
 		const e = frame.get('equalized')
-		, num  = frame.num()
-		, size = frame.size()
-		, imageData = new ImageData(size[0], size[1])
-		, data = imageData.data
+		,     num  = frame.num()
+		,     imageData = render.image(frame)
+		,     data = imageData.data
 		;
 		for (let i = 0, o = 0; i < num; ++i, o += 4) {
 			data[o  ] =
@@ -30,88 +29,19 @@ const buildImageFuncs = {
 		}
 		return imageData;
 	}
-	, 'G-edge(Laplacian)': function (ic, frame) {
-		const e = frame.get('laplacian')
-		, num  = frame.num()
-		, size = frame.size()
-		, imageData = new ImageData(size[0], size[1])
-		, data = imageData.data
-		;
-		for (let i = 0, o = 0; i < num; ++i, o += 4) {
-			const C = e[i];
-			data[o  ] = C;
-			data[o+1] = C;
-			data[o+2] = C;
-			data[o+3] = 255;
-		}
-
-		return imageData
-	}
-	, 'G-edge(Laplacian signed)': function (ic, frame) {
-		const e = frame.get('laplacian.signed')
-		, num  = frame.num()
-		, size = frame.size()
-		, imageData = new ImageData(size[0], size[1])
-		, data = imageData.data
-		;
-		for (let i = 0, o = 0; i < num; ++i, o += 4) {
-			const C = e[i];
-			data[o  ] = C;
-			data[o+1] = C;
-			data[o+2] = C;
-			data[o+3] = 255;
-		}
-
-		return imageData
-	}
-	, 'G-edge(Sobel)': function (ic, frame) {
-		const e = frame.get('sobel')
-		, num  = frame.num()
-		, size = frame.size()
-		, imageData = new ImageData(size[0], size[1])
-		, data = imageData.data
-		;
-		for (let i = 0, o = 0; i < num; ++i, o += 4) {
-			const C = e[i];
-			data[o  ] = C;
-			data[o+1] = C;
-			data[o+2] = C;
-			data[o+3] = 255;
-		}
-
-		return imageData
-	}
-	, 'C-edge(Sobel)': function (ic, frame) {
-		const e = frame.get('sobel')
-		, num  = frame.num()
-		, size = frame.size()
-		, imageData = new ImageData(size[0], size[1])
-		, data = imageData.data
-		;
-		for (let i = 0, o = 0; i < num; ++i, o += 4) {
-			const C = render.COLOR8[Math.floor(e[i] / 32)];
-			data[o  ] = C[0];
-			data[o+1] = C[1];
-			data[o+2] = C[2];
-			data[o+3] = 255;
-		}
-
-		return imageData
-	}
 	// R = 1.000Y          + 1.402V
 	// G = 1.000Y - 0.344U - 0.714V
 	// B = 1.000Y + 1.772U
 	, 'YUV-frame': function (ic, frame) {
 		const yuv = frame.get('yuv')
-		, num  = frame.num()
-		, size = frame.size()
-		, imageData = new ImageData(size[0], size[1])
-		, data = imageData.data
+		,     num  = frame.num()
+		,     imageData = render.image(frame)
+		,     data = imageData.data
 		;
 		for (let i = 0, o = 0; i < num; ++i, o += 4) {
 			const Y = yuv.Y[i]
-			, U = yuv.UV[i * 2]
-			, V = yuv.UV[i * 2 + 1]
+			,     U = yuv.UV[i * 2]
+			,     V = yuv.UV[i * 2 + 1]
 			;
 			data[o  ] = Y + 1.402*V;
 			data[o+1] = Y - 0.344*U - 0.714*V;
@@ -122,10 +52,9 @@ const buildImageFuncs = {
 	}
 	, 'UV:RG-frame': function (ic, frame) {
 		const yuv = frame.get('yuv')
-		, num  = frame.num() * 2
-		, size = frame.size()
-		, imageData = new ImageData(size[0], size[1])
-		, data = imageData.data
+		,     num  = frame.num() * 2
+		,     imageData = render.image(frame)
+		,     data = imageData.data
 		;
 		for (let i = 0, o = 0; i < num; i += 2, o += 4) {
 			const U = yuv.UV[i]
@@ -144,10 +73,9 @@ const buildImageFuncs = {
 	, 'GRAY-accum': function (ic, frame) {
 		accum.update(frame, 'gray');
 		const gray = accum.planes('gray')[0]
-		, num  = frame.num()
-		, size = frame.size()
-		, imageData = new ImageData(size[0], size[1])
-		, data = imageData.data;
+		,     num  = frame.num()
+		,     imageData = render.image(frame)
+		,     data = imageData.data;
 
 		for (let i = 0, o = 0; i < num; ++i, o += 4) {
 			data[o  ] =
@@ -158,12 +86,27 @@ const buildImageFuncs = {
 
 		return imageData
 	}
+	, 'RGB-accum': function (ic, frame) {
+		accum.update(frame, 'rgb');
+		const rgb = accum.planes('rgb')
+		,     num  = frame.num()
+		,     imageData = render.image(frame)
+		,     data = imageData.data;
+
+		for (let i = 0, o = 0; i < num; ++i, o += 4) {
+			data[o  ] = rgb[0][i];
+			data[o+1] = rgb[1][i];
+			data[o+2] = rgb[2][i];
+			data[o+3] = 255;
+		}
+
+		return imageData
+	}
 	, 'BW-delta': function (ic, frame) {
 		const d = delta.get(frame)
-		, num  = frame.num()
-		, size = frame.size()
-		, imageData = new ImageData(size[0], size[1])
-		, data = imageData.data;
+		,     num  = frame.num()
+		,     imageData = render.image(frame)
+		,     data = imageData.data;
 
 		for (let i = 0, o = 0; i < num; ++i, o += 4) {
 			const bw = (d[i] == 0) ? 0 : 255;
@@ -177,10 +120,10 @@ const buildImageFuncs = {
 	}
 	, 'Gray-delta': function (ic, frame) {
 		const d = delta.get(frame)
-		, num  = frame.num()
-		, size = frame.size()
-		, imageData = new ImageData(size[0], size[1])
-		, data = imageData.data;
+		,     num  = frame.num()
+		,     imageData = render.image(frame)
+		,     data = imageData.data
+		;
 
 		for (let i = 0, o = 0; i < num; ++i, o += 4) {
 			data[o  ] =
@@ -193,16 +136,15 @@ const buildImageFuncs = {
 	}
 	, '8colors': function (ic, frame) {
 		const num  = frame.num()
-		, size = frame.size()
-		, imageData = new ImageData(size[0], size[1])
-		, data = imageData.data
-		, RGB = frame.get('rgb')
-		, R = RGB[0]
-		, G = RGB[1]
-		, B = RGB[2]
-		, tR = Frame.calcThreshold(frame.histogram['R'])
-		, tG = Frame.calcThreshold(frame.histogram['G'])
-		, tB = Frame.calcThreshold(frame.histogram['B'])
+		,     imageData = render.image(frame)
+		,     data = imageData.data
+		,     RGB = frame.get('rgb')
+		,     R = RGB[0]
+		,     G = RGB[1]
+		,     B = RGB[2]
+		,     tR = Frame.calcThreshold(frame.histogram['R'])
+		,     tG = Frame.calcThreshold(frame.histogram['G'])
+		,     tB = Frame.calcThreshold(frame.histogram['B'])
 		;
 		for (let i = 0, o = 0; i < num; ++i, o += 4) {
 			data[o+0] = R[i] > tR ? 255 : 0;
@@ -213,13 +155,92 @@ const buildImageFuncs = {
 
 		return imageData
 	}
-	, 'Bin-edge': function (ic, frame) {
+	, 'Edge(Laplacian)': function (ic, frame) {
+		const e = frame.get('laplacian')
+		,     num  = frame.num()
+		,     imageData = render.image(frame)
+		,     data = imageData.data
+		;
+		for (let i = 0, o = 0; i < num; ++i, o += 4) {
+			const C = e[i];
+			data[o  ] = C;
+			data[o+1] = C;
+			data[o+2] = C;
+			data[o+3] = 255;
+		}
+
+		return imageData
+	}
+	, 'Edge(Laplacian signed)': function (ic, frame) {
+		const e = frame.get('laplacian.signed')
+		,     num  = frame.num()
+		,     imageData = render.image(frame)
+		,     data = imageData.data
+		;
+		for (let i = 0, o = 0; i < num; ++i, o += 4) {
+			const C = e[i];
+			data[o  ] = C;
+			data[o+1] = C;
+			data[o+2] = C;
+			data[o+3] = 255;
+		}
+
+		return imageData
+	}
+	, 'Edge(Sobel)': function (ic, frame) {
+		const e = frame.get('sobel')
+		,     num  = frame.num()
+		,     imageData = render.image(frame)
+		,     data = imageData.data
+		;
+		for (let i = 0, o = 0; i < num; ++i, o += 4) {
+			const C = e[i];
+			data[o  ] = C;
+			data[o+1] = C;
+			data[o+2] = C;
+			data[o+3] = 255;
+		}
+
+		return imageData
+	}
+	, 'Edge4(Sobel)': function (ic, frame) {
+		const e = frame.get('sobel')
+		,     num  = frame.num()
+		,     imageData = render.image(frame)
+		,     data = imageData.data
+		;
+		for (let i = 0, o = 0; i < num; ++i, o += 4) {
+			const C = render.L4[Math.floor(e[i] / 64)];
+			data[o  ] = 
+			data[o+1] = 
+			data[o+2] = C;
+			data[o+3] = 255;
+		}
+
+		return imageData
+	}
+	, 'Edge2(Sobel)': function (ic, frame) {
+		const e = frame.get('sobel')
+		,     num  = frame.num()
+		,     imageData = render.image(frame)
+		,     data = imageData.data
+		;
+		for (let i = 0, o = 0; i < num; ++i, o += 4) {
+			const C = e[i] > 127 ? 255 : 0;
+			data[o  ] = 
+			data[o+1] = 
+			data[o+2] = C;
+			data[o+3] = 255;
+		}
+
+		return imageData
+	}
+	, 'Edge(Bin)': function (ic, frame) {
 		const num  = frame.num()
-		, size = frame.size()
-		, imageData = new ImageData(size[0], size[1])
-		, data = imageData.data
-		, e = frame.get('sobel.rgb')
-		, t = Frame.calcThreshold(frame.histogram['sobel.rgb'])
+		,     imageData = render.image(frame)
+		,     data = imageData.data
+		,     e = frame.get('sobel.rgb')
+		,     t = Frame.calcThreshold(frame.histogram['sobel.rgb'])
 		;
 		for (let i = 0, o = 0; i < num; ++i, o += 4) {
 			data[o+0] =
@@ -230,27 +251,40 @@ const buildImageFuncs = {
 
 		return imageData
 	}
-};
+})
 
-const render = {
+const render = Object.assign(Object.create(null), {
 	buildImage: buildImageFuncs['RGB-frame']
-	, COLOR8:[
-		[0, 0, 0]
-		, [255, 0, 0]
-		, [0, 255, 0]
-		, [255, 255, 0]
-		, [0, 0, 255]
-		, [255, 0, 255]
-		, [0, 255, 255]
+	, canvas: function(width, height) {
+		const c = document.createElement('canvas');
+		c.width = width;
+		c.height = height;
+		return c
+	}
+	, image: function(frame) {
+		const size = frame.size();
+		return new ImageData(size[0], size[1])
+	}
+	, L4: [ 0
+	      , 255/3
+	      , 255/3*2
+	      , 255]
+	, COLOR8:[[127, 127, 127]
+		, [255,   0,   0]
+		, [  0, 255,   0]
+		, [  0,   0, 255]
+		, [255, 255,   0]
+		, [255,   0, 255]
+		, [  0, 255, 255]
 		, [255, 255, 255]
-	]
+		]
 	, histogram: function (frame, histogram) {
 		const hc = render.hc
-		, gc = hc.getContext('2d')
-		, num = frame.num()
-		, max = histogram.reduce((a,b)=>(Math.max(a,b)), 0)
-		, barScale = (hc.height / 3) / max
-		, lineScale = (hc.height / 3) / num
+		,     gc = hc.getContext('2d')
+		,     num = frame.num()
+		,     max = histogram.reduce((a,b)=>(Math.max(a,b)), 0)
+		,     barScale = (hc.height / 3) / max
+		,     lineScale = (hc.height / 3) / num
 		;
 
 		const rgba = ()=>{
@@ -268,6 +302,7 @@ const render = {
 		let y = histogram[0];
 		const yStart = hc.height - 1;
 		gc.strokeStyle = rgba();
+		gc.lineWidth = 2;
 		gc.beginPath();
 		gc.moveTo(10, yStart - y * lineScale);
 		for (let x = 11, i = 1; i < histogram.length; ++i, ++x) {
@@ -282,15 +317,38 @@ const render = {
 	}
 	, frame: function (frame) {
 		const ic = render.ic
-		, imageData = render.buildImage(ic, frame)
+		,     imageData = render.buildImage(ic, frame)
 		;
 		ic.getContext('2d').putImageData(imageData, 0, 0);
 	}
-	, getImage: function (src) {
+	, imageData: function (src, scale) {
 		const ic = render.ic;
 		const ictx = ic.getContext('2d');
-		ictx.drawImage(src, 0, 0, ic.width, ic.height);
-		return ictx.getImageData(0, 0, ic.width, ic.height);
+		if (scale === undefined
+		||  typeof(scale) != 'number'
+		||  scale === 1) {
+			ictx.drawImage(src, 0, 0, ic.width, ic.height);
+			return ictx.getImageData(0, 0, ic.width, ic.height)
+		}
+		if (scale < 0) throw new Error('not supported ' + scale.toString())
+		if (scale > 1) {
+			// up scale - narrow src to normal dst
+			const sw = ic.width * scale
+			,     sh = ic.height * scale
+			,     sx = ic.width * 0.5 - sw * 0.5
+			,     sy = ic.height * 0.5 - sh * 0.5
+			;
+			ictx.drawImage(src
+			,              sx, sy, sw, sh			               
+			,              0, 0, ic.width, ic.height);
+			return ictx.getImageData(0, 0, ic.width, ic.height)
+		}
+		// down scale - normal src to narrow dst
+		const dw = ic.width * scale
+		,     dh = ic.height * scale
+		;
+		ictx.drawImage(src, 0, 0, ic.width, ic.height, 0, 0, dw, dh);
+		return ictx.getImageData(0, 0, dw, dh)
 	}
 	, show: function () {
 		const dc = render.dc;
@@ -298,25 +356,28 @@ const render = {
 		dctx.drawImage(render.ic, 0, 0, dc.width, dc.height);
 	}
 	, resize: function (disp, internal) {
-		if (disp instanceof Array) {
-			if (render.dc.width != disp[0] || render.dc.height != disp[1]) {
-				print ('size = ' + disp[0] + 'x' + disp[1]);
-				render.dc.width  = disp[0];
-				render.dc.height = disp[1];
-			}
+		if (!(disp instanceof Array)
+		||  !(internal instanceof Array))
+			throw new Error('invalid param');
+
+		if (render.dc.width != disp[0] || render.dc.height != disp[1]) {
+			print ('size = ' + disp[0] + 'x' + disp[1]);
+			render.dc.width  = disp[0];
+			render.dc.height = disp[1];
 		}
-		if (internal instanceof Array) {
-			if (render.ic.width != internal[0] || render.ic.height != internal[1]) {
-				render.ic.width  = internal[0];
-				render.ic.height = internal[1];
-			}
-			if (render.hc.width != internal[0] || render.hc.height != internal[1]) {
-				render.hc.width  = internal[0];
-				render.hc.height = internal[1];
-			}
+
+		if (render.ic.width != internal[0] || render.ic.height != internal[1]) {
+			render.ic.width  = internal[0];
+			render.ic.height = internal[1];
+		}
+
+		if (render.hc.width != internal[0] || render.hc.height != internal[1]) {
+			render.hc.width  = internal[0];
+			render.hc.height = internal[1];
 		}
 	}
-}
-render.ic = e('i-canvas'); // for internal use
-render.dc = e('d-canvas'); // for display
-render.hc = e('h-canvas'); // histogram overlay (ic bitmap, contain-scaled)
+})
+
+render.ic = render.canvas(640, 480);	// back-buffer surface
+render.dc = e('d-canvas');		// display surface (image)
+render.hc = e('h-canvas');		// histogram overlay surface (ic bitmap, contain-scaled)

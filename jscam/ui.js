@@ -1,7 +1,8 @@
 'use strict';
 
 const slide = {
-	IN: (ele, time)=>{
+	FADE_DURATION: 500
+	, IN: (ele, time)=>{
 		const begin = performance.now();
 		const _slide = () => {
 			const now = performance.now();
@@ -41,13 +42,13 @@ const slide = {
 e('panel-open-button').onclick = function() {
 	e('panel-close-button').style.display = 'block';
 	e('panel-open-button').style.display = 'none';
-	slide.IN(e('side-panel'), 250);
+	slide.IN(e('side-panel'), slide.FADE_DURATION);
 };
 
 e('panel-close-button').onclick = function() {
 	e('panel-close-button').style.display = 'none';
 	e('panel-open-button').style.display = 'block';
-	slide.OUT(e('side-panel'), 250);
+	slide.OUT(e('side-panel'), slide.FADE_DURATION);
 };
 
 const appRoot = document.querySelector('.app');
