@@ -1,19 +1,19 @@
 'use strict';
 
 // Bump on every change (UTC YYYY.MM.DD-HHMMSSZ-<git short HEAD at edit>).
-const JSCAM_VERSION = '2026.09.21-055913Z-1cd9e9e';
+const JSCAM_VERSION = '2026.09.21-055913Z-1cd9e9f';
 
 const e = function(tag) {return document.getElementById(tag);}
 
 const Graph = function * (data, label, canvasName, captionName, color) {
 	const AFACTOR = 0.2
-	, STEP = 2
-	, canvas = e(canvasName)
-	, caption = e(captionName)
-	, low = Math.round(canvas.width / STEP)
-	, high = Math.round(low * 1.5)
-	, c = canvas.getContext('2d')
-	, values = []
+	,     STEP = 2
+	,     canvas = e(canvasName)
+	,     caption = e(captionName)
+	,     low = Math.round(canvas.width / STEP)
+	,     high = Math.round(low * 1.5)
+	,     c = canvas.getContext('2d')
+	,     values = []
 	;
 
 	let last = performance.now();

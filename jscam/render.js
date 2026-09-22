@@ -317,9 +317,20 @@ const render = Object.assign(Object.create(null), {
 	}
 	, frame: function (frame) {
 		const ic = render.ic
-		,     imageData = render.buildImage(ic, frame)
+		,     ictx = ic.getContext('2d')
+		,     id = render.buildImage(ic, frame)
 		;
-		ic.getContext('2d').putImageData(imageData, 0, 0);
+
+		if (id.width == ic.width && id.height == ic.height) {
+			ictx.putImageData(id, 0, 0);
+			return
+		}
+
+		const zc = render.zc
+		,     zctx = zc.getContext('2d')
+		;
+		zctx.putImageData(id, 0, 0);
+		ictx.drawImage(zc, 0, 0, id.width, id.height, 0, 0, ic.width, ic.height);
 	}
 	, imageData: function (src, scale) {
 		const ic = render.ic;
@@ -330,25 +341,20 @@ const render = Object.assign(Object.create(null), {
 			ictx.drawImage(src, 0, 0, ic.width, ic.height);
 			return ictx.getImageData(0, 0, ic.width, ic.height)
 		}
-		if (scale < 0) throw new Error('not supported ' + scale.toString())
-		if (scale > 1) {
-			// up scale - narrow src to normal dst
-			const sw = ic.width * scale
-			,     sh = ic.height * scale
-			,     sx = ic.width * 0.5 - sw * 0.5
-			,     sy = ic.height * 0.5 - sh * 0.5
-			;
-			ictx.drawImage(src
-			,              sx, sy, sw, sh			               
-			,              0, 0, ic.width, ic.height);
-			return ictx.getImageData(0, 0, ic.width, ic.height)
-		}
-		// down scale - normal src to narrow dst
-		const dw = ic.width * scale
-		,     dh = ic.height * scale
+
+		if (scale < 0 ||  scale > 1)
+			throw new Error('not supported ' + scale.toString())
+
+		const sw = ic.width * scale
+		,     sh = ic.height * scale
+		,     sx = ic.width * 0.5 - sw * 0.5
+		,     sy = ic.height * 0.5 - sh * 0.5
 		;
-		ictx.drawImage(src, 0, 0, ic.width, ic.height, 0, 0, dw, dh);
-		return ictx.getImageData(0, 0, dw, dh)
+		ictx.drawImage(src
+		,              sx, sy, sw, sh			               
+		,              0, 0, ic.width, ic.height);
+
+		return ictx.getImageData(0, 0, sw, sh)
 	}
 	, show: function () {
 		const dc = render.dc;
@@ -361,7 +367,7 @@ const render = Object.assign(Object.create(null), {
 			throw new Error('invalid param');
 
 		if (render.dc.width != disp[0] || render.dc.height != disp[1]) {
-			print ('size = ' + disp[0] + 'x' + disp[1]);
+			cUI.print('size = ' + disp[0] + 'x' + disp[1]);
 			render.dc.width  = disp[0];
 			render.dc.height = disp[1];
 		}
@@ -369,6 +375,11 @@ const render = Object.assign(Object.create(null), {
 		if (render.ic.width != internal[0] || render.ic.height != internal[1]) {
 			render.ic.width  = internal[0];
 			render.ic.height = internal[1];
+		}
+
+		if (render.zc.width != internal[0] || render.zc.height != internal[1]) {
+			render.zc.width  = internal[0];
+			render.zc.height = internal[1];
 		}
 
 		if (render.hc.width != internal[0] || render.hc.height != internal[1]) {
@@ -379,5 +390,6 @@ const render = Object.assign(Object.create(null), {
 })
 
 render.ic = render.canvas(640, 480);	// back-buffer surface
+render.zc = render.canvas(640, 480);	// off screen surface for zooming
 render.dc = e('d-canvas');		// display surface (image)
 render.hc = e('h-canvas');		// histogram overlay surface (ic bitmap, contain-scaled)

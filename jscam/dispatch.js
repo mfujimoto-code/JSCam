@@ -1,6 +1,32 @@
 'use strict';
 
-const fitDisplaySize = (videoW, videoH)=>{
+const dispatch = ()=>{
+	if (dispatch.paused)	// don't kick, it will re-kicked at resume.
+		return
+
+	const now = performance.now();
+
+	if (now - dispatch.watch.last >= 500) {
+		dispatch.watch.last = now;
+		dispatch.watch();
+	}
+
+	const minWait = Math.max(dispatch.duration, dispatch.lastSuggestion);
+	if (now - dispatch.lastProcessedEnd < minWait) {
+		dispatch.kick();
+		return
+	}
+
+	const r = dispatch.iDISP.next();
+	dispatch.lastSuggestion = r.value;
+	dispatch.lastProcessedEnd = performance.now();
+	// suggestion==100 is camera/layout idle, not a capture/processing frame
+	if (r.value != 100) dispatch.count.value++;
+
+	dispatch.kick();
+}
+
+dispatch.fitDisplaySize = (videoW, videoH)=>{
 	const stage = e('layers');
 	const cs = getComputedStyle(stage);
 	const maxW = Math.max(1,
@@ -14,9 +40,9 @@ const fitDisplaySize = (videoW, videoH)=>{
 	];
 }
 
-const layoutDisplay = (video, resizeBitmap)=>{
+dispatch.layoutDisplay = (video, resizeBitmap)=>{
 	if (!video || video.videoWidth == 0 || video.videoHeight == 0) return null;
-	const disp = fitDisplaySize(video.videoWidth, video.videoHeight);
+	const disp = dispatch.fitDisplaySize(video.videoWidth, video.videoHeight);
 	const layer = e('dcanvas-layer');
 	layer.style.width = disp[0] + 'px';
 	layer.style.height = disp[1] + 'px';
@@ -25,29 +51,27 @@ const layoutDisplay = (video, resizeBitmap)=>{
 	return disp;
 }
 
-const displayResize = new ResizeObserver(()=>{
-	layoutDisplay(e('video'), false);
+dispatch.displayResize = new ResizeObserver(()=>{
+	dispatch.layoutDisplay(e('video'), false);
 });
-displayResize.observe(e('layers'));
 
-const dispatch = ()=>{
-	doit: {
-		if (dispatch.paused)
-			break doit;
-		
-		const now = performance.now();
-		const minWait = Math.max(dispatch.duration, dispatch.lastSuggestion);
-		if (now - dispatch.lastProcessedEnd < minWait)
-			break doit;
+dispatch.displayResize.observe(e('layers'));
 
-		const r = dispatch.iDISP.next();
-		dispatch.lastSuggestion = r.value;
-		dispatch.lastProcessedEnd = performance.now();
-		// suggestion==100 is camera/layout idle, not a capture/processing frame
-		if (r.value != 100) dispatch.count.value++;
+dispatch._scale = 1;
+dispatch.zoom = (dir)=>{
+	const SCALE_MAX = 1
+	,     SCALE_MIN = 1/32
+	,     SCALE_FACTOR = 1.1
+	;
+
+	const prev = dispatch._scale;
+	if (dir > 0) {
+		dispatch._scale = Math.min(SCALE_MAX, prev * SCALE_FACTOR);
+	} else {
+		dispatch._scale = Math.max(SCALE_MIN, prev / SCALE_FACTOR);
 	}
-
-	dispatch.kick();
+	
+	return dispatch._scale
 }
 
 dispatch.kick = ()=>{
@@ -67,14 +91,14 @@ dispatch.iDISP = (function * () {
 			continue;
 		}
 
-		const dispSize = layoutDisplay(video, true);
+		const dispSize = dispatch.layoutDisplay(video, true);
 		if (!dispSize) {
 			suggestion = 100;
 			continue;
 		}
 
 		const t0 = performance.now();
-		const imageData = render.imageData(video);
+		const imageData = render.imageData(video, dispatch._scale);
 		const t1 = performance.now();
 
 		const newFrame = new Frame(imageData);
@@ -123,8 +147,8 @@ dispatch.time = {
 };
 
 
-const watch = ()=>{
-	watch.iFPS.next();
+dispatch.watch = ()=>{
+	dispatch.watch.iFPS.next();
 	const n = dispatch.time.n;
 	if (n > 0) {
 		const avg = (k)=>(dispatch.time[k] / n).toFixed(1);
@@ -139,15 +163,16 @@ const watch = ()=>{
 	dispatch.time.histogram = 0;
 	dispatch.time.show = 0;
 	dispatch.time.n = 0;
-	setTimeout(watch, 500);
+	// setTimeout(watch, 500);
 }
-watch.iFPS = Graph(
+dispatch.watch.iFPS = Graph(
 	dispatch.count
 	, 'FPS'
 	, 'fps-chart'
 	, 'fps-caption'
 	, 'rgba(255,0,255,0.5)'
 );
-watch();
+dispatch.watch.last = performance.now();
+// watch();
 
 dispatch.kick();

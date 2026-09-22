@@ -37,21 +37,22 @@ const setIoPaused = (paused)=>{
 		} else {
 			const playing = video.play();
 			if (playing && playing.catch) {
-				playing.catch((err)=>print('playback failed: ' + err));
+				playing.catch((err)=>cUI.print('playback failed: ' + err));
 			}
 		}
 	}
 	syncIoPauseButtons();
+	dispatch.kick();
 }
 
 const toggleIoPause = ()=>{
 	const video = e('video');
 	if (!video || !video.srcObject) {
-		print('camera not started');
+		cUI.print('camera not started');
 		return;
 	}
 	setIoPaused(!dispatch.paused);
-	print(dispatch.paused ? 'io paused' : 'io resumed');
+	cUI.print(dispatch.paused ? 'io paused' : 'io resumed');
 }
 
 const gumConstraints = (deviceId)=>{
@@ -73,7 +74,7 @@ const setStartCameraEnabled = (enabled)=>{
 }
 
 const setCameraStatus = (msg)=>{
-	print(msg);
+	cUI.print(msg);
 	const status = e('camera-status');
 	if (status) status.textContent = msg;
 }
@@ -169,7 +170,7 @@ const attachLiveStream = (video, stream, paused)=>{
 	if (sel) sel.disabled = false;
 	setIoPaused(!!paused);
 	try { syncPreviewSize(); } catch (err) {}
-	try { syncCameraParams(); } catch (err) { print('camera params failed: ' + err); }
+	try { syncCameraParams(); } catch (err) { cUI.print('camera params failed: ' + err); }
 }
 
 const gumFail = (error)=>{
@@ -391,7 +392,7 @@ const cameraModeIs = (settings, key, mode)=>{
 const applyCameraConstraint = (key, value)=>{
 	const track = supportLiveTrack();
 	if (!track || !track.applyConstraints) {
-		print(key + ' failed: no track');
+		cUI.print(key + ' failed: no track');
 		return Promise.resolve();
 	}
 	const advanced = {};
@@ -401,7 +402,7 @@ const applyCameraConstraint = (key, value)=>{
 	return track.applyConstraints({ advanced: [advanced] })
 		.catch(()=>track.applyConstraints(plain))
 		.then(()=>{
-			print(key + ':' + value);
+			cUI.print(key + ':' + value);
 			let settings = null;
 			try { settings = track.getSettings(); } catch (err) {}
 			if (key === 'focusMode' || key === 'exposureMode' || key === 'whiteBalanceMode') {
@@ -417,7 +418,7 @@ const applyCameraConstraint = (key, value)=>{
 		})
 		.catch((err)=>{
 			const name = (err && err.name) ? err.name : err;
-			print(key + ' failed: ' + name);
+			cUI.print(key + ' failed: ' + name);
 		});
 }
 
@@ -780,7 +781,7 @@ const scanCameraSupport = ()=>{
 			report.textContent = text;
 		}
 		if (btn) btn.disabled = false;
-		print('support scan done');
+		cUI.print('support scan done');
 	};
 
 	if (!window.isSecureContext) {
