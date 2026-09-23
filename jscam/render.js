@@ -342,7 +342,7 @@ const render = Object.assign(Object.create(null), {
 			return ictx.getImageData(0, 0, ic.width, ic.height)
 		}
 
-		if (scale < 0 ||  scale > 1)
+		if (scale <= 0 ||  scale > 1)
 			throw new Error('not supported ' + scale.toString())
 
 		const sw = ic.width * scale
@@ -352,7 +352,7 @@ const render = Object.assign(Object.create(null), {
 		;
 		ictx.drawImage(src
 		,              sx, sy, sw, sh			               
-		,              0, 0, ic.width, ic.height);
+		,              0,  0,  sw, sh);
 
 		return ictx.getImageData(0, 0, sw, sh)
 	}

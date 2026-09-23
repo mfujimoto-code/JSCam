@@ -21,11 +21,12 @@ const accum = {
 	}
 	, _ensure: (space, num) => {
 		const cur = accum._buf[space];
-		if (cur && cur[0].length === num) return
+		if (cur && cur[0].length === num) return false
 		if (space === 'gray')
 			accum._buf[space] = [accum._plane(num)];
 		else
 			accum._buf[space] = [accum._plane(num), accum._plane(num), accum._plane(num)];
+		return true
 	}
 	, _mixGray: (dst, rgba, num, f) => {
 		const o = 1 - f;
@@ -88,7 +89,14 @@ const accum = {
 			accum._delayNum = num;
 			accum._hasDelay = false;
 		}
-		accum._ensure(space, num);
+
+		if (accum._ensure(space, num)) {
+			accum._delay.set(frame.get('rgba'));
+			const _factor = accum.factor;
+			accum.factor = 1;
+			accum._mix(space, accum._delay, num);
+			accum.factor = _factor;
+		}
 
 		const now = performance.now();
 		if (now - accum._last < accum.time) return

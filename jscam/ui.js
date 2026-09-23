@@ -1,46 +1,7 @@
 'use strict';
 
 const cUI = Object.assign(Object.create(null), {
-	slide: {
-		FADE_DURATION: 500
-	,	IN: (ele, time)=>{
-			const begin = performance.now();
-			const _slide = () => {
-				const now = performance.now();
-				const t = now - begin;
-				if (t > time) {
-					ele.style.opacity = 1;
-					return;
-				}
-
-				ele.style.opacity = t / time;
-				setTimeout(_slide, 1);
-			}
-
-			ele.style.opacity = 0;
-			ele.style.display = 'block';
-			_slide();
-		}
-	,	OUT: (ele, time)=>{
-			const begin = performance.now();
-			const _slide = () => {
-				const now = performance.now();
-				const t = now - begin;
-				if (t > time) {
-					ele.style.display = 'none';
-					ele.style.opacity = 1;
-					return;
-				}
-
-				ele.style.opacity = 1 - t / time;
-				setTimeout(_slide, 1);
-			}
-
-			_slide();
-		}
-	}
-
-,	print_messages: ['','','','','','','']
+	print_messages: ['','','','','','','']
 ,	print: function (msg) {
 		cUI.print_messages.push(msg);
 		cUI.print_messages.shift();
@@ -56,17 +17,66 @@ const cUI = Object.assign(Object.create(null), {
 });
 
 (() => {
+	const fade = {
+		FADE_DURATION: 300
+	,	IN: (ele)=>{
+			const begin = performance.now();
+			const _fade = () => {
+				const now = performance.now();
+				const t = now - begin;
+				if (t < side.FADE_DURATION) {
+					ele.style.opacity = t / side.FADE_DURATION;
+					setTimeout(_fade, 1);
+					return
+				}
+				ele.style.opacity = 1;
+			}
+
+			ele.style.opacity = 0;
+			ele.style.display = 'block';
+			_fade();
+		}
+	,	OUT: (ele)=>{
+			const begin = performance.now();
+			const _fade = () => {
+				const now = performance.now();
+				const t = now - begin;
+				if (t < side.FADE_DURATION) {
+					ele.style.opacity = 1 - t / side.FADE_DURATION;
+					setTimeout(_fade, 1);
+					return
+				}
+
+				ele.style.display = 'none';
+				ele.style.opacity = 1;
+			}
+			_fade();
+		}
+	};
+
 	e('panel-open-button').onclick = function() {
 		e('panel-close-button').style.display = 'block';
 		e('panel-open-button').style.display = 'none';
-		cUI.slide.IN(e('side-panel'), cUI.slide.FADE_DURATION);
+		fade.IN(e('side-panel'))
 	};
 
 	e('panel-close-button').onclick = function() {
 		e('panel-close-button').style.display = 'none';
 		e('panel-open-button').style.display = 'block';
-		cUI.slide.OUT(e('side-panel'), cUI.slide.FADE_DURATION);
+		fade.OUT(e('side-panel'))
 	};
+
+	// disable double tap on the panel
+	(()=>{
+		let lastTouch = 0;
+		e('side-panel').addEventListener('touchend', (ev)=>{
+				const now = performance.now();
+				if (now - lastTouch < 350) ev.preventDefault();
+				lastTouch = now;
+			}
+			, {passive: false}
+		);
+	})()
 
 	const layers = e('layers');
 
