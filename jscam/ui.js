@@ -117,14 +117,14 @@ const cUI = Object.assign(Object.create(null), {
 		}
 	,	pstart = (ev)=>{	// pinch start
 			const k = Object.keys(pointers);
-			if (k.length < 2) return;
+			if (k.length != 2) return;
 
 			pcdist = pdist(pointers, k);
 			plastmove = performance.now();
 		}
 	,	pdetect = (ev)=>{	// pinch detection
 			const k = Object.keys(pointers);
-			if (k.length < 2) return
+			if (k.length != 2) return
 
 			const now = performance.now();
 			if (now - plastmove < P_DURATION) return
