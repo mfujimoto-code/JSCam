@@ -117,22 +117,45 @@ const cUI = Object.assign(Object.create(null), {
 		}
 	,	pstart = (ev)=>{
 			const k = Object.keys(pointers);
-			if (k.length != 2) return;
 
-			pcdist = pdist(pointers, k);
-			plastmove = performance.now();
+			if (k.length == 2) {
+				// start pinch detection
+				pcdist = pdist(pointers, k);
+				plastmove = performance.now();
+				return
+			}
+
+			if (k.length == 1) {
+				// start drag detection
+				plastmove = performance.now();
+				return
+			}
 		}
 	,	pdetect = (ev)=>{
 			const k = Object.keys(pointers);
-			if (k.length != 2) return
-
 			const now = performance.now();
-			if (now - plastmove < P_DURATION) return
-			plastmove = now;
 
-			const d = pcdist;
-			pcdist = pdist(pointers, k);
-			dispatch.zoom(d - pcdist);
+			if (k.length == 2) {
+				// pinch detection
+				if (now - plastmove < P_DURATION) return
+				plastmove = now;
+
+				const d = pcdist;
+				pcdist = pdist(pointers, k);
+				cUI.print(pcdist.toString());
+				dispatch.zoom(d - pcdist);
+				return
+			}
+
+			if (k.length == 1) {
+				// drag detection
+				if (now - plastmove < P_DURATION) return
+
+				// don't update plastmove.
+				// all move events should be captured after P_DURATION
+				dispatch.move(ev.movementX, ev.movementY);
+				return
+			}
 		}
 	,	pdown = (ev)=>{
 			pointers[ev.pointerId] = ev;
@@ -167,10 +190,10 @@ const cUI = Object.assign(Object.create(null), {
 		if (!this.checked) render.clearHistogram();
 	}
 
-	for (let k in buildImageFuncs) {
+	for (let k in render.buildImageFuncs) {
 		e('image-mode').add(new Option(k, k));
 	}
-	render.buildImage = buildImageFuncs[e('image-mode').options[0].value];
+	render.buildImage = render.buildImageFuncs[e('image-mode').options[0].value];
 
 	const currentImageMode = ()=>{
 		const sel = e('image-mode');
@@ -195,7 +218,7 @@ const cUI = Object.assign(Object.create(null), {
 	e('image-mode').onchange = function () {
 		const mode = this.options[this.selectedIndex].value;
 		cUI.print('image mode:' + mode);
-		render.buildImage = buildImageFuncs[mode];
+		render.buildImage = render.buildImageFuncs[mode];
 		syncModeSettings();
 	}
 	syncModeSettings();

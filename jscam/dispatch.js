@@ -59,6 +59,14 @@ dispatch.displayResize.observe(e('layers'));
 
 dispatch._scale = 1;
 dispatch._scaleStep = 0;
+
+dispatch._offset = [0, 0]
+
+dispatch.move = (x, y)=>{
+	dispatch._offset[0] -= x;
+	dispatch._offset[1] -= y;
+}
+
 dispatch.zoom = (dir)=>{
 	const	SCALE_MIN = 1/32
 	,	SCALE_FACTOR = 1.1
@@ -107,7 +115,13 @@ dispatch.iDISP = (function * () {
 		}
 
 		const t0 = performance.now();
-		const imageData = render.imageData(video, dispatch._scale);
+		const imageData = render.imageData(
+			video
+		,	dispatch._scale
+		,	dispatch._offset
+		);
+		dispatch._offset = render.lastOffset();
+
 		const t1 = performance.now();
 
 		const newFrame = new Frame(imageData);
