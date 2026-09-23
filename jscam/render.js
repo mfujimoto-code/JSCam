@@ -345,10 +345,10 @@ const render = Object.assign(Object.create(null), {
 		if (scale <= 0 ||  scale > 1)
 			throw new Error('not supported ' + scale.toString())
 
-		const sw = ic.width * scale
-		,     sh = ic.height * scale
-		,     sx = ic.width * 0.5 - sw * 0.5
-		,     sy = ic.height * 0.5 - sh * 0.5
+		const sw = (ic.width * scale) | 0
+		,     sh = (ic.height * scale) | 0
+		,     sx = (ic.width * 0.5 - sw * 0.5) | 0
+		,     sy = (ic.height * 0.5 - sh * 0.5) | 0
 		;
 		ictx.drawImage(src
 		,              sx, sy, sw, sh			               
