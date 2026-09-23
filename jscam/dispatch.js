@@ -64,13 +64,15 @@ dispatch.zoom = (dir)=>{
 	,     SCALE_FACTOR = 1.1
 	;
 
+	if (dir === 0) return dispatch._scale;
+
 	const prev = dispatch._scale;
 	if (dir > 0) {
 		dispatch._scale = Math.min(SCALE_MAX, prev * SCALE_FACTOR);
-	} else {
-		dispatch._scale = Math.max(SCALE_MIN, prev / SCALE_FACTOR);
+		return dispatch._scale
 	}
 	
+	dispatch._scale = Math.max(SCALE_MIN, prev / SCALE_FACTOR);
 	return dispatch._scale
 }
 
