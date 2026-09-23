@@ -172,7 +172,6 @@ dispatch.watch = ()=>{
 	dispatch.time.histogram = 0;
 	dispatch.time.show = 0;
 	dispatch.time.n = 0;
-	// setTimeout(watch, 500);
 }
 dispatch.watch.iFPS = Graph(
 	dispatch.count
@@ -182,6 +181,5 @@ dispatch.watch.iFPS = Graph(
 	, 'rgba(255,0,255,0.5)'
 );
 dispatch.watch.last = performance.now();
-// watch();
 
 dispatch.kick();

@@ -82,7 +82,7 @@ const cUI = Object.assign(Object.create(null), {
 
 	const appRoot = document.querySelector('.app');
 	const chromeClickIgnore = 'button, select, input, textarea, a, label, .panel, .topbar, .io-hud, .panel-fab';
-	const fireDC = (ev)=>{	// fire the double click/tap event
+	const fireDC = (ev)=>{
 		if (!appRoot) return;
 		if (ev.target.closest(chromeClickIgnore)) return;
 		appRoot.classList.toggle('chrome-hidden');
@@ -99,7 +99,7 @@ const cUI = Object.assign(Object.create(null), {
 	const	pointers = Object.create(null)
 	,	DC_DURATION = 300
 	,	P_DURATION = 50
-	,	dclick = (ev)=>{	// double click/tap detection
+	,	dclick = (ev)=>{
 			const k = Object.keys(pointers);
 			if (k.length > 0) return
 
@@ -115,14 +115,14 @@ const cUI = Object.assign(Object.create(null), {
 			// it's enough to identify larger or smaller
 			return dx*dx + dy*dy
 		}
-	,	pstart = (ev)=>{	// pinch start
+	,	pstart = (ev)=>{
 			const k = Object.keys(pointers);
 			if (k.length != 2) return;
 
 			pcdist = pdist(pointers, k);
 			plastmove = performance.now();
 		}
-	,	pdetect = (ev)=>{	// pinch detection
+	,	pdetect = (ev)=>{
 			const k = Object.keys(pointers);
 			if (k.length != 2) return
 
@@ -131,7 +131,6 @@ const cUI = Object.assign(Object.create(null), {
 			plastmove = now;
 
 			const d = pcdist;
-			// even if num of pointers >2, calc only top 2
 			pcdist = pdist(pointers, k);
 			dispatch.zoom(d - pcdist);
 		}
