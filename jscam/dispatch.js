@@ -58,21 +58,28 @@ dispatch.displayResize = new ResizeObserver(()=>{
 dispatch.displayResize.observe(e('layers'));
 
 dispatch._scale = 1;
+dispatch._scaleStep = 0;
 dispatch.zoom = (dir)=>{
-	const SCALE_MAX = 1
-	,     SCALE_MIN = 1/32
-	,     SCALE_FACTOR = 1.1
+	const	SCALE_MIN = 1/32
+	,	SCALE_FACTOR = 1.1
 	;
 
 	if (dir === 0) return dispatch._scale;
 
-	const prev = dispatch._scale;
+	let step = dispatch._scaleStep;
 	if (dir > 0) {
-		dispatch._scale = Math.min(SCALE_MAX, prev * SCALE_FACTOR);
+		if (step <= 0) return dispatch._scale
+
+		dispatch._scale = 1 / Math.pow(SCALE_FACTOR, --step);
+		dispatch._scaleStep = step;
 		return dispatch._scale
 	}
-	
-	dispatch._scale = Math.max(SCALE_MIN, prev / SCALE_FACTOR);
+
+	const scale = 1 / Math.pow(SCALE_FACTOR, ++step);
+	if (scale <= SCALE_MIN) return dispatch._scale
+
+	dispatch._scale = scale;
+	dispatch._scaleStep = step;
 	return dispatch._scale
 }
 
