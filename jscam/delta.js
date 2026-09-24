@@ -2,17 +2,17 @@
 
 const delta = {
 	_delta: new Uint8ClampedArray(0)
-	, acc: new Accum()
+	, accum: new Accum()
 	, _absPlane: (out, src, acc, num) => {
 		for (let i = 0; i < num; ++i)
 			out[i] = Math.abs(src[i] - acc[i]);
 	}
 	, get: (frame, space) => {
 		if (space === undefined) space = 'gray';
-		acc.update(frame, space);
+		delta.accum.update(frame, space);
 
 		const	num = frame.num()
-		,	acc = acc.planes(space)
+		,	acc = delta.accum.planes(space)
 		;
 		if (space === 'gray') {
 			if (num > delta._delta.length)
