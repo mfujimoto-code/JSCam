@@ -198,6 +198,14 @@ cUI.print = function (msg) {
 		if (!this.checked) render.clearHistogram();
 	}
 
+	e('show-preview').onchange = function () {
+		if (!this.checked) {
+			e('video').style.display = 'none'
+			return;
+		}
+		e('video').style.display = 'block'
+	}
+
 	for (let k in render.buildImageFuncs) {
 		e('image-mode').add(new Option(k, k));
 	}
