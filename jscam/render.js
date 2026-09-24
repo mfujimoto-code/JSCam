@@ -73,8 +73,8 @@ render.buildImageFuncs = Object.assign(Object.create(null), {
 		return frame.get('ImageData');
 	}
 ,	'GRAY-accum': function (ic, frame) {
-		accum.update(frame, 'gray');
-		const gray = accum.planes('gray')[0]
+		render.acc.update(frame, 'gray');
+		const gray = render.acc.planes('gray')[0]
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
 		,     data = imageData.data;
@@ -89,8 +89,8 @@ render.buildImageFuncs = Object.assign(Object.create(null), {
 		return imageData
 	}
 ,	'RGB-accum': function (ic, frame) {
-		accum.update(frame, 'rgb');
-		const rgb = accum.planes('rgb')
+		render.acc.update(frame, 'rgb');
+		const rgb = render.acc.planes('rgb')
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
 		,     data = imageData.data;
@@ -289,7 +289,7 @@ render.COLOR8 = [
 
 render.histogram = function (frame, histogram) {
 	const hc = render.hc
-	,     gc = hc.getContext('2d')
+	,     gc = render.hGC
 	,     num = frame.num()
 	,     max = histogram.reduce((a,b)=>(Math.max(a,b)), 0)
 	,     barScale = (hc.height / 3) / max
@@ -322,37 +322,47 @@ render.histogram = function (frame, histogram) {
 }
 
 render.clearHistogram = function () {
-	const hc = render.hc;
-	hc.getContext('2d').clearRect(0, 0, hc.width, hc.height);
+	render.hGC.clearRect(
+		0
+	,	0
+	,	render.hc.width
+	,	render.hc.height);
 }
+
+render.getGC = (canvas) => (
+	canvas.getContext(
+		'2d'
+	,	{willReadFrequently: true}
+	)
+)
 
 render.frame = function (frame) {
 	const ic = render.ic
-	,     ictx = ic.getContext('2d')
+	,     iGC = render.iGC
 	,     id = render.buildImage(ic, frame)
 	;
 
 	if (id.width == ic.width && id.height == ic.height) {
-		ictx.putImageData(id, 0, 0);
+		iGC.putImageData(id, 0, 0);
 		return
 	}
 
 	const zc = render.zc
-	,     zctx = zc.getContext('2d')
+	,     zGC = render.zGC
 	;
-	zctx.putImageData(id, 0, 0);
-	ictx.drawImage(zc, 0, 0, id.width, id.height, 0, 0, ic.width, ic.height);
+	zGC.putImageData(id, 0, 0);
+	iGC.drawImage(zc, 0, 0, id.width, id.height, 0, 0, ic.width, ic.height);
 }
 
 render.lastOffset = ()=>([0,0])
 
 render.imageData = function (src, scale, offset) {
 	const ic = render.ic;
-	const ictx = ic.getContext('2d');
+	const iGC = render.iGC;
 	if (scale === undefined
 	||  scale === 1) {
-		ictx.drawImage(src, 0, 0, ic.width, ic.height);
-		return ictx.getImageData(0, 0, ic.width, ic.height)
+		iGC.drawImage(src, 0, 0, ic.width, ic.height);
+		return iGC.getImageData(0, 0, ic.width, ic.height)
 	}
 
 	if (scale <= 0 ||  scale > 1)
@@ -388,17 +398,16 @@ render.imageData = function (src, scale, offset) {
 		render.lastOffset = ()=>[ox, oy]
 	}
 
-	ictx.drawImage(src
+	iGC.drawImage(src
 	,              sx, sy, sw, sh			               
 	,              0,  0,   sw, sh);
 
-	return ictx.getImageData(0, 0, sw, sh)
+	return iGC.getImageData(0, 0, sw, sh)
 }
 
 render.show = function () {
-	const dc = render.dc;
-	const dctx = dc.getContext('2d');
-	dctx.drawImage(render.ic, 0, 0, dc.width, dc.height);
+	const	dc = render.dc;
+	render.dGC.drawImage(render.ic, 0, 0, dc.width, dc.height);
 }
 
 render.resize = function (disp, internal) {
@@ -428,7 +437,14 @@ render.resize = function (disp, internal) {
 	}
 }
 
+render.acc = new Accum();
+
 render.ic = render.canvas(640, 480);	// back-buffer surface
 render.zc = render.canvas(640, 480);	// off screen surface for zooming
 render.dc = e('d-canvas');		// display surface (image)
 render.hc = e('h-canvas');		// histogram overlay surface (ic bitmap, contain-scaled)
+
+render.iGC = render.getGC(render.ic);
+render.zGC = render.getGC(render.zc);
+render.dGC = render.dc.getContext('2d');
+render.hGC = render.hc.getContext('2d');

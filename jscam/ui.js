@@ -1,22 +1,22 @@
 'use strict';
 
-const cUI = Object.assign(Object.create(null), {
-	print_messages: ['','','','','','','']
-,	print: function (msg) {
-		cUI.print_messages.push(msg);
-		cUI.print_messages.shift();
+const cUI = Object.create(null);
+cUI.print_messages = ['','','','','','',''];
+cUI.print = function (msg) {
+	cUI.print_messages.push(msg);
+	cUI.print_messages.shift();
 
-		let html = '<span>';
-		for (let i = 0; i < cUI.print_messages.length; ++i) {
-			html += '<br />' + cUI.print_messages[i];
-		}
-		html += '</span>';
-
-		e('message').innerHTML = html;
+	let html = '<span>';
+	for (let i = 0; i < cUI.print_messages.length; ++i) {
+		html += '<br />' + cUI.print_messages[i];
 	}
-});
+	html += '</span>';
+
+	e('message').innerHTML = html;
+};
 
 (() => {
+	// fade-in/out the panel
 	const fade = {
 		FADE_DURATION: 300
 	,	IN: (ele)=>{
@@ -24,8 +24,8 @@ const cUI = Object.assign(Object.create(null), {
 			const _fade = () => {
 				const now = performance.now();
 				const t = now - begin;
-				if (t < side.FADE_DURATION) {
-					ele.style.opacity = t / side.FADE_DURATION;
+				if (t < fade.FADE_DURATION) {
+					ele.style.opacity = t / fade.FADE_DURATION;
 					setTimeout(_fade, 1);
 					return
 				}
@@ -41,8 +41,8 @@ const cUI = Object.assign(Object.create(null), {
 			const _fade = () => {
 				const now = performance.now();
 				const t = now - begin;
-				if (t < side.FADE_DURATION) {
-					ele.style.opacity = 1 - t / side.FADE_DURATION;
+				if (t < fade.FADE_DURATION) {
+					ele.style.opacity = 1 - t / fade.FADE_DURATION;
 					setTimeout(_fade, 1);
 					return
 				}
@@ -67,19 +67,20 @@ const cUI = Object.assign(Object.create(null), {
 	};
 
 	// disable double tap on the panel
-	(()=>{
-		let lastTouch = 0;
-		e('side-panel').addEventListener('touchend', (ev)=>{
-				const now = performance.now();
-				if (now - lastTouch < 350) ev.preventDefault();
-				lastTouch = now;
-			}
-			, {passive: false}
-		);
-	})()
+	let lastTouch = 0;
+	e('side-panel').addEventListener('touchend', (ev)=>{
+			const now = performance.now();
+			if (now - lastTouch < 350) ev.preventDefault();
+			lastTouch = now;
+		}
+		, {passive: false}
+	);
+})();
 
-	const layers = e('layers');
+(() => {
+	// operation on the image surface
 
+	// toggle UI parts display.
 	const appRoot = document.querySelector('.app');
 	const chromeClickIgnore = 'button, select, input, textarea, a, label, .panel, .topbar, .io-hud, .panel-fab';
 	const fireDC = (ev)=>{
@@ -88,6 +89,9 @@ const cUI = Object.assign(Object.create(null), {
 		appRoot.classList.toggle('chrome-hidden');
 	}
 
+	const layers = e('layers');
+
+	// zoom using wheel
 	layers.addEventListener('wheel', (ev) => {
 			if (ev.target.closest('.io-hud, button, a')) return;
 			ev.preventDefault();
@@ -96,6 +100,7 @@ const cUI = Object.assign(Object.create(null), {
 		, { passive: false }
 	);
 
+	// drag(pan), double-tap/click(UI on/off), pinch(zoom)
 	const	pointers = Object.create(null)
 	,	DC_DURATION = 300
 	,	P_DURATION = 50
@@ -135,10 +140,12 @@ const cUI = Object.assign(Object.create(null), {
 			const k = Object.keys(pointers);
 			const now = performance.now();
 
-			if (k.length == 2) {
+			if (k.length == 2 && ev.pointerId in pointers) {
 				// pinch detection
 				if (now - plastmove < P_DURATION) return
 				plastmove = now;
+
+				pointers[ev.pointerId] = ev;
 
 				const d = pcdist;
 				pcdist = pdist(pointers, k);
@@ -166,7 +173,6 @@ const cUI = Object.assign(Object.create(null), {
 			dclick(ev);
 		}
 	,	pmove = (ev)=>{
-			pointers[ev.pointerId] = ev;
 			pdetect(ev);
 		}
 	;
@@ -180,7 +186,9 @@ const cUI = Object.assign(Object.create(null), {
 	layers.addEventListener('pointerup',     pup);
 	layers.addEventListener('pointermove',   pmove);
 	layers.addEventListener('pointercancel', pup);
+})();
 
+(() => {
 	e('show-image').onchange = function () {
 		dispatch.showImage = this.checked;
 	}
@@ -224,13 +232,14 @@ const cUI = Object.assign(Object.create(null), {
 	syncModeSettings();
 
 	const setupRange = (name, label, cb) => {
-		const range = e(name)
-		, pbutton = e(name + '-increase')
-		, mbutton = e(name + '-decrease')
-		, output = e(name + '-output')
-		, max = Number(range.max)
-		, min = Number(range.min)
-		, step = Number(range.step);
+		const	range = e(name)
+		,	pbutton = e(name + '-increase')
+		,	mbutton = e(name + '-decrease')
+		,	output = e(name + '-output')
+		,	max = Number(range.max)
+		,	min = Number(range.min)
+		,	step = Number(range.step)
+		;
 
 		range.onchange =  () => {
 			output.value = range.value;
@@ -254,7 +263,7 @@ const cUI = Object.assign(Object.create(null), {
 		}
 	} 
 
-	setupRange('afactor', 'accumulation factor', (v)=>(accum.factor = Number(v)));
+	setupRange('afactor', 'accumulation factor', (v)=>(accum.set('factor', Number(v))));
 	setupRange('pause', 'pause@frame', (v)=>(dispatch.duration = Number(v)));
 
 	const appVersion = e('app-version');
