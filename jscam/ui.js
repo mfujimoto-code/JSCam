@@ -192,6 +192,11 @@ cUI.print = function (msg) {
 		dispatch.showImage = this.checked;
 	}
 
+	e('flip-horizontal').onchange = function () {
+		render.dt.flip(this.checked);
+		dispatch.move.flip(this.checked);
+	}
+
 	e('show-histogram').onchange = function () {
 		dispatch.showHistogram = this.checked;
 		if (!this.checked) render.clearHistogram();

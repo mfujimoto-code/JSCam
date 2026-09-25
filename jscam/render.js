@@ -403,7 +403,43 @@ render.imageData = function (src, scale, offset) {
 	,              0,  0,   sw, sh);
 
 	return iGC.getImageData(0, 0, sw, sh)
-}
+};
+
+(() => {
+	// setup matrix operation for drawing display surface
+	const reset = (gc) => {
+		// reset to identity 
+		// (a, b, c, d, e, f) means
+		// a  c  e
+		// b  d  f
+		// 0  0  1
+		// 
+		// So, this call will set matrix as follows
+		// 1  0  0
+		// 0  1  0
+		// 0  0  1
+		gc.setTransform(1, 0, 0, 1, 0, 0);
+	}
+	const setHFlip = (gc) => {
+		gc.translate(render.dc.width, 0);
+		gc.scale(-1, 1)
+	}
+
+	const mop = {};
+	mop.flip = (yes) => {
+		const gc = render.dGC;
+
+		if (!yes) {
+			reset(gc);
+			return
+		}
+
+		setHFlip(gc);
+		return
+	}
+
+	render.dt = mop;
+})();
 
 render.show = function () {
 	const	dc = render.dc;

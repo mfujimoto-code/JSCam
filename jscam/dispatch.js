@@ -69,10 +69,19 @@ dispatch._stat = {
 	}
 };
 
-dispatch.move = (x, y)=>{
-	dispatch._offset[0] -= x;
-	dispatch._offset[1] -= y;
+dispatch.move = (x, y) => {
+	dispatch._offset[0] -= x * dispatch.move._vx;
+	dispatch._offset[1] -= y * dispatch.move._vy;
 }
+dispatch.move._vx = 1;
+dispatch.move._vy = 1;
+dispatch.move.flip = (yes) => {
+	if (!yes) {
+		dispatch.move._vx = 1;
+		return
+	}
+	dispatch.move._vx = -1;
+};
 
 dispatch.zoom = (dir)=>{
 	const	SCALE_MIN = 1/32
