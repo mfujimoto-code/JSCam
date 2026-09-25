@@ -193,7 +193,7 @@ cUI.print = function (msg) {
 	}
 
 	e('flip-horizontal').onchange = function () {
-		render.dt.flip(this.checked);
+		render.dop.flip(this.checked);
 		dispatch.move.flip(this.checked);
 	}
 

@@ -134,8 +134,11 @@ dispatch.iDISP = (function * () {
 			continue;
 		}
 
-		const	imageData = render.imageData(video, dispatch._scale, dispatch._offset);
-		dispatch._offset = render.lastOffset();
+		const	imageData = render.iop.imageData(
+			video
+		,	dispatch._scale
+		,	dispatch._offset);
+		dispatch._offset = render.iop.lastOffset();
 
 		const	doit = dispatch.showImage
 			&&     (  dispatch.watcher.video.changed()
@@ -147,17 +150,16 @@ dispatch.iDISP = (function * () {
 		if (doit) {
 			const	newFrame = new Frame(imageData, video.currentTime);
 
-			render.frame(newFrame);
+			render.iop.frame(newFrame);
+
+			render.hop.clear();
 			if (dispatch.showHistogram) {
-				render.clearHistogram();
-				render.histogram.color = 0;
 				for (let k in newFrame.histogram) {
-					render.histogram(newFrame, newFrame.histogram[k]);
+					render.hop.draw(newFrame, newFrame.histogram[k]);
 				}
-			} else {
-				render.clearHistogram();
 			}
-			render.show();
+
+			render.dop.show();
 
 			++dispatch._stat.frame;
 		}
