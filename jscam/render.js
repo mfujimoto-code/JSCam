@@ -395,7 +395,7 @@ render.imageData = function (src, scale, offset) {
 			oy = (ic.height - sh) - sy
 			sy = ic.height - sh;
 		} else	sy = ny;
-		render.lastOffset = ()=>[ox, oy]
+		render.lastOffset = ()=>([ox, oy])
 	}
 
 	iGC.drawImage(src

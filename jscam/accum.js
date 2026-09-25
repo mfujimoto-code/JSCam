@@ -1,11 +1,7 @@
 'use strict';
 
-// duration: minimum time(ms) since last update
-const Accum = function (duration) {
-	if (typeof(duration) !== undefined) duration = 1/60*1000;
-
-	this._duration = duration;
-	this._last = performance.now();		// last update
+const Accum = function () {
+	this._last = 0;				// last update
 	this._delay = new Uint8ClampedArray(0);	// image pixels for next update
 	this._delayNum = 0;
 	this._hasDelay = false;
@@ -27,12 +23,15 @@ const Accum = function (duration) {
 		a.fill(0);
 		return a
 	}
+
 	Accum.prototype.set = function (tag, value) {
 		this._getter[tag] = ()=>(value);
 	}
+
 	Accum.prototype.get = function (tag) {
 		return this._getter[tag]()
 	}
+
 	Accum.prototype._ensure = function (space, num) {
 		const cur = this._buf[space];
 		if (cur && cur[0].length === num) return false
@@ -82,6 +81,7 @@ const Accum = function (duration) {
 			V[i] = o * V[i] + f * ( r * 0.500 - g * 0.419 - b * 0.081);
 		}
 	}
+
 	Accum.prototype._mix = function (space, rgba, num) {
 		const	f = this.get('factor')
 		,	planes = this._buf[space]
@@ -96,8 +96,10 @@ const Accum = function (duration) {
 		}
 		_mixYuv(planes, rgba, num, f);
 	}
+
 	Accum.prototype.update = function (frame, space) {
 		if (space === undefined) space = 'gray';
+
 		_check(space);
 
 		const num = frame.num();
@@ -119,16 +121,13 @@ const Accum = function (duration) {
 			this.set('factor', _factor);
 		}
 
-		const now = performance.now();
-		if (now - this._last < this._duration) return
-
 		// to avoid using the same source as other processes,
 		// use image from the recent past here.
 		if (this._hasDelay) this._mix(space, this._delay, num);
 		this._delay.set(frame.get('rgba'));
 		this._hasDelay = true;
-		this._last = now;
 	}
+
 	Accum.prototype.planes = function (space) {
 		if (space === undefined) space = 'gray';
 		_check(space);

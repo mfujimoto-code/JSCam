@@ -149,7 +149,6 @@ cUI.print = function (msg) {
 
 				const d = pcdist;
 				pcdist = pdist(pointers, k);
-				cUI.print(pcdist.toString());
 				dispatch.zoom(d - pcdist);
 				return
 			}

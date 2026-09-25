@@ -6,9 +6,9 @@ const dispatch = ()=>{
 
 	const now = performance.now();
 
-	if (now - dispatch.watch.last >= 500) {
-		dispatch.watch.last = now;
-		dispatch.watch();
+	if (now - dispatch.watcher.fps.last >= 500) {
+		dispatch.watcher.fps.last = now;
+		dispatch.watcher.fps();
 	}
 
 	const minWait = Math.max(dispatch.duration, dispatch.lastSuggestion);
@@ -20,8 +20,6 @@ const dispatch = ()=>{
 	const r = dispatch.iDISP.next();
 	dispatch.lastSuggestion = r.value;
 	dispatch.lastProcessedEnd = performance.now();
-	// suggestion==100 is camera/layout idle, not a capture/processing frame
-	if (r.value != 100) dispatch.count.value++;
 
 	dispatch.kick();
 }
@@ -60,7 +58,16 @@ dispatch.displayResize.observe(e('layers'));
 dispatch._scale = 1;
 dispatch._scaleStep = 0;
 
-dispatch._offset = [0, 0]
+dispatch._offset = [0, 0];
+dispatch._stat = {
+	rAF:0
+,	frame:0
+,	reset: ()=>{
+		const s = dispatch._stat;
+		s.rAF = 0;
+		s.frame = 0;
+	}
+};
 
 dispatch.move = (x, y)=>{
 	dispatch._offset[0] -= x;
@@ -93,12 +100,16 @@ dispatch.zoom = (dir)=>{
 
 dispatch.kick = ()=>{
 	requestAnimationFrame(dispatch);
+	++dispatch._stat.rAF;
 }
 
 dispatch.iDISP = (function * () {
 	const video = e('video');
 
-	let  suggestion = 0;
+	let	suggestion = 0
+	,	scale = 0
+	,	offset = [0, 0];
+
 	while (true) {
 		yield suggestion;
 		suggestion = 0;
@@ -114,25 +125,20 @@ dispatch.iDISP = (function * () {
 			continue;
 		}
 
-		const t0 = performance.now();
-		const imageData = render.imageData(
-			video
-		,	dispatch._scale
-		,	dispatch._offset
-		);
+		const	imageData = render.imageData(video, dispatch._scale, dispatch._offset);
 		dispatch._offset = render.lastOffset();
 
-		const t1 = performance.now();
-
-		const newFrame = new Frame(imageData);
-		let t2 = performance.now()
-		,   t3 = t2
-		,   t4 = t2
+		const	doit = dispatch.showImage
+			&&     (  dispatch.watcher.video.changed()
+			       || scale != dispatch._scale
+			       || offset[0] != dispatch._offset[0]
+			       || offset[1] != dispatch._offset[1])
 		;
 
-		if (dispatch.showImage) {
+		if (doit) {
+			const	newFrame = new Frame(imageData, video.currentTime);
+
 			render.frame(newFrame);
-			t2 = performance.now();
 			if (dispatch.showHistogram) {
 				render.clearHistogram();
 				render.histogram.color = 0;
@@ -142,122 +148,142 @@ dispatch.iDISP = (function * () {
 			} else {
 				render.clearHistogram();
 			}
-			t3 = performance.now();
 			render.show();
-			t4 = performance.now();
+
+			++dispatch._stat.frame;
 		}
 
-		dispatch.time.getImage += t1 - t0;
-		dispatch.time.frame += t2 - t1;
-		dispatch.time.histogram += t3 - t2;
-		dispatch.time.show += t4 - t3;
-		dispatch.time.n++;
+		scale = dispatch._scale;
+		offset[0] = dispatch._offset[0];
+		offset[1] = dispatch._offset[1];
 	}
 })();
 
 dispatch.duration = 0;
 dispatch.paused = false;
-dispatch.count = {'value':0};
 dispatch.showImage = true;
 dispatch.showHistogram = true;
 dispatch.lastProcessedEnd = 0;
 dispatch.lastSuggestion = 0;
-dispatch.time = {
-	getImage: 0
-	, frame: 0
-	, histogram: 0
-	, show: 0
-	, n: 0
-};
 
+dispatch.watcher = {}
 
-dispatch.watch = ()=>{
-	dispatch.watch.iFPS.next();
-	const n = dispatch.time.n;
-	if (n > 0) {
-		const avg = (k)=>(dispatch.time[k] / n).toFixed(1);
-		e('fps-caption').innerText +=
-			'  get ' + avg('getImage')
-			+ ' frm ' + avg('frame')
-			+ ' hist ' + avg('histogram')
-			+ ' show ' + avg('show');
+dispatch.watcher.video = {};
+
+(()=>{
+	const	v = e('video')
+	,	wv = dispatch.watcher.video
+	,	AFACTOR = 0.2
+	;
+
+	if (!v.requestVideoFrameCallback) {
+		wv.kick = ()=>{};
+		wv.changed = ()=>(true);
+		wv.duration = ()=>(1/30);
+		return;
 	}
-	dispatch.time.getImage = 0;
-	dispatch.time.frame = 0;
-	dispatch.time.histogram = 0;
-	dispatch.time.show = 0;
-	dispatch.time.n = 0;
+
+	let	counter = 0
+	,	lastCounter = 0
+	,	lastTime = performance.now()
+	,	kicked = false
+	,	duration = 1
+	;
+
+	const rVFC = () => {
+		const now = performance.now();
+		kicked = false;
+		++counter;
+		duration = (1 - AFACTOR) * duration + AFACTOR * (now - lastTime) * 0.001;
+		lastTime = now;
+		wv.kick();
+	};
+
+	wv.duration = ()=>(duration);
+
+	wv.kick = () => {
+		if (wv._kicked) return;
+		kicked = true;
+		v.requestVideoFrameCallback(rVFC);
+	};
+
+	wv.changed = () => {
+		const l = lastCounter;
+		lastCounter = counter;
+		return counter > l
+	};
+})();
+
+dispatch.watcher.fps = ()=>{
+	dispatch.watcher.fps.iFPS.next();
 }
-dispatch.watch.iFPS = (function * (data, label, canvasName, captionName, color) {
-	const AFACTOR = 0.2
-	,     STEP = 2
-	,     canvas = e(canvasName)
-	,     caption = e(captionName)
-	,     low = Math.round(canvas.width / STEP)
-	,     high = Math.round(low * 1.5)
-	,     c = canvas.getContext('2d')
-	,     values = []
+dispatch.watcher.fps.iFPS = (function * () {
+	const	AFACTOR = 0.2
+	,	STEP = 2
+	,	COLOR = 'rgba(255,0,255,0.5)'
+	,	canvas = e('fps-chart')
+	,	caption = e('fps-caption')
+	,	low = Math.round(canvas.width / STEP)
+	,	high = Math.round(low * 1.5)
+	,	gc = canvas.getContext('2d')
+	,	values = []
+	,	stat = dispatch._stat
+	,	ema = {rAF:0, frame:0}
 	;
 
 	let last = performance.now();
 
-	(color == undefined) && (color = 'black');
-	c.fillStyle = color;
+	gc.fillStyle = COLOR;
 
-	let min = Infinity, max = -Infinity, sum = 0;
+	let max = -Infinity;
 	while (true) {
 		yield;
 		const now = performance.now();
 
-		if (now == last) continue;
-
 		const duration = now - last;
 		last = now;
 
-		const fpc = data.value * 1000 / duration;
-		data.value = 0;
+		if (duration <= 0) continue;
 
-		const smoothed = (values.length == 0)
-			? fpc
-			: (1 - AFACTOR) * values[values.length - 1] + AFACTOR * fpc;
-		values.push(smoothed);
-		sum += smoothed;
-		(max < smoothed) && (max = smoothed);
-		(min > smoothed) && (min = smoothed);
+		const 	iDuration = 1 / duration;
+
+		ema.rAF = (1 - AFACTOR) * ema.rAF + AFACTOR * (stat.rAF * 1000 * iDuration);
+		ema.frame = (1 - AFACTOR) * ema.frame + AFACTOR * (stat.frame * 1000 * iDuration);
+		values.push(ema.rAF);
+		(max < ema.rAF) && (max = ema.rAF);
 		if (values.length > high) {
 			while (values.length > low) {
 				values.shift();
 			}
 			max = values.reduce((a,b)=>(Math.max(a,b)));
-			min = values.reduce((a,b)=>(Math.min(a,b)));
-			sum = values.reduce((a,b)=>(a+b));
 		}
+
+		caption.textContent =
+			'out-fps:'
+		+	Math.round(ema.rAF)
+		+	' in-fps:'
+		+	Math.round(1 / dispatch.watcher.video.duration())
+		+	' view:'
+		+	((ema.rAF > 0) ? Math.round(ema.frame / ema.rAF * 100) : 0)
+		+	'%'
+		;
 
 		const scale = (max == 0) ? 0 : canvas.height / Math.abs(max);
-
-		caption.innerText =
-			label + ' ' + Math.round(sum / values.length)
-			+ '  (' + Math.round(min) + '–' + Math.round(max) + ')';
-
-		c.clearRect(0, 0, canvas.width, canvas.height);
-		c.fillRect(0, canvas.height - 1, canvas.width, 1);
+		gc.clearRect(0, 0, canvas.width, canvas.height);
+		gc.fillRect(0, canvas.height - 1, canvas.width, 1);
 		for (let x = canvas.width - STEP
-			, i = values.length - 1;
-			x >= 0 && i >= 0;
-			--i, x -= STEP) {
+		     ,   i = values.length - 1;
+		     x >= 0 && i >= 0;
+		     --i, x -= STEP) {
 			const h = Math.floor(Math.abs(values[i]) * scale);
-			c.fillRect(x, canvas.height - h, STEP, h);
+			gc.fillRect(x, canvas.height - h, STEP, h);
 		}
+
+		stat.reset();
 	}
-})(
-	dispatch.count
-	, 'FPS'
-	, 'fps-chart'
-	, 'fps-caption'
-	, 'rgba(255,0,255,0.5)'
-);
+})();
 
-
-dispatch.watch.last = performance.now();
+dispatch.watcher.fps.last = performance.now();
 
 dispatch.kick();
+dispatch.watcher.video.kick();
