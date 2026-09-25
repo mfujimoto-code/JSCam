@@ -73,8 +73,8 @@ render.buildImageFuncs = Object.assign(Object.create(null), {
 		return frame.get('ImageData');
 	}
 ,	'GRAY-accum': function (ic, frame) {
-		render.acc.update(frame, 'gray');
-		const gray = render.acc.planes('gray')[0]
+		render.accum.update(frame, 'gray');
+		const gray = render.accum.planes('gray')[0]
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
 		,     data = imageData.data;
@@ -89,8 +89,8 @@ render.buildImageFuncs = Object.assign(Object.create(null), {
 		return imageData
 	}
 ,	'RGB-accum': function (ic, frame) {
-		render.acc.update(frame, 'rgb');
-		const rgb = render.acc.planes('rgb')
+		render.accum.update(frame, 'rgb');
+		const rgb = render.accum.planes('rgb')
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
 		,     data = imageData.data;
@@ -473,7 +473,7 @@ render.resize = function (disp, internal) {
 	}
 }
 
-render.acc = new Accum();
+render.accum = new Accum();
 
 render.ic = render.canvas(640, 480);	// back-buffer surface
 render.zc = render.canvas(640, 480);	// off screen surface for zooming

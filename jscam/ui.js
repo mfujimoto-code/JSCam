@@ -275,7 +275,11 @@ cUI.print = function (msg) {
 		}
 	} 
 
-	setupRange('afactor', 'accumulation factor', (v)=>(accum.set('factor', Number(v))));
+	setupRange('afactor', 'accumulation factor', (v)=>{
+		const	f = Number(v);
+		render.accum.set('factor', f);
+		delta.accum.set('factor', f);
+	});
 	setupRange('pause', 'pause@frame', (v)=>(dispatch.duration = Number(v)));
 
 	const appVersion = e('app-version');
