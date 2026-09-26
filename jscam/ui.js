@@ -199,7 +199,8 @@ cUI.print = function (msg) {
 
 	e('show-histogram').onchange = function () {
 		dispatch.showHistogram = this.checked;
-		if (!this.checked) render.clearHistogram();
+		e('h-canvas').style.display = this.checked ? 'block' : 'none';
+		render.hop.clear();
 	}
 
 	e('show-preview').onchange = function () {

@@ -137,7 +137,8 @@ dispatch.iDISP = (function * () {
 		const	imageData = render.iop.imageData(
 			video
 		,	dispatch._scale
-		,	dispatch._offset);
+		,	dispatch._offset
+		);
 		dispatch._offset = render.iop.lastOffset();
 
 		const	doit = dispatch.showImage
@@ -152,8 +153,8 @@ dispatch.iDISP = (function * () {
 
 			render.iop.frame(newFrame);
 
-			render.hop.clear();
 			if (dispatch.showHistogram) {
+				render.hop.clear();
 				for (let k in newFrame.histogram) {
 					render.hop.draw(newFrame, newFrame.histogram[k]);
 				}
