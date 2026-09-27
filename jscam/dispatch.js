@@ -9,11 +9,14 @@ const dispatch = ()=>{
 	}
 
 	const minWait = Math.max(dispatch.duration, dispatch.lastSuggestion);
-	if (now - dispatch.lastProcessedEnd >= minWait) {
-		const r = dispatch.iDISP.next();
-		dispatch.lastSuggestion = r.value;
-		dispatch.lastProcessedEnd = performance.now();
+	if (now - dispatch.lastProcessedEnd < minWait) {
+		dispatch.kick();
+		return
 	}
+
+	const r = dispatch.iDISP.next();
+	dispatch.lastSuggestion = r.value;
+	dispatch.lastProcessedEnd = performance.now();
 
 	if (dispatch.paused)	// don't kick, it will re-kicked at resume.
 		return
