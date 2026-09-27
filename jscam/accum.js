@@ -1,7 +1,6 @@
 'use strict';
 
 const Accum = function () {
-	this._last = 0;				// last update
 	this._delay = new Uint8ClampedArray(0);	// image pixels for next update
 	this._delayNum = 0;
 	this._hasDelay = false;
