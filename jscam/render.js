@@ -347,7 +347,7 @@ render.COLOR8 = [
 	};
 })();
 
-// setup iop - operations for rendering histogram 
+// setup iop - operations for rendering internal surface
 (() => {
 	const	_canvas = ()=>(document.createElement('canvas'))
 	,	_ic = _canvas()	// back-buffer surface
@@ -453,6 +453,12 @@ render.COLOR8 = [
 	,	_state = Object.create(null);
 	;
 
+	const _show = () => {
+		_dGC.drawImage(
+			render.iop.canvas()
+		,	0, 0, _dc.width, _dc.height);
+	}
+
 	// matrix operation for drawing display surface
 	const	_loadIdentity = () => {
 			_dGC.setTransform(1, 0, 0, 1, 0, 0);
@@ -476,15 +482,11 @@ render.COLOR8 = [
 			_loadIdentity();
 			if (_state.flip) _flip(true);
 
+			_show();
+
 			return true
 		}
 	;
-
-	const _show = () => {
-		_dGC.drawImage(
-			render.iop.canvas()
-		,	0, 0, _dc.width, _dc.height);
-	}
 
 	render.dop = {
 		show:       _show
