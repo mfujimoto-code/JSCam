@@ -290,7 +290,7 @@ render.COLOR8 = [
 
 // setup hop - operations for rendering histgram 
 (() => {
-	const	_hc = e('h-canvas')		// histogram overlay surface (ic bitmap, contain-scaled)
+	const	_hc = e('h-canvas')		// histogram overlay surface
 	,	_hGC = _hc.getContext('2d')
 	;
 
@@ -333,10 +333,11 @@ render.COLOR8 = [
 
 	const	_fit = (size) => {
 		if (_hc.width == size[0] && _hc.height == size[1]) 
-			return
+			return false
 
 		_hc.width  = size[0];
 		_hc.height = size[1];
+		return true
 	};
 
 	render.hop = {
@@ -361,23 +362,15 @@ render.COLOR8 = [
 	,	_iGC = _getGC(_ic)
 	,	_zGC = _getGC(_zc)
 	;
-	const	_fitIC = (size) => {
-			if (_ic.width == size[0] && _ic.height == size[1]) 
-				return
+	const	_fit = (size) => {
+		if (_ic.width == size[0] && _ic.height == size[1]) 
+			return false
 
-			_ic.width  = size[0];
-			_ic.height = size[1];
-		}
-	,	_fitZC = (size) => {
-			if (_zc.width == size[0] && _zc.height == size[1]) 
-				return
-
-			_zc.width  = size[0];
-			_zc.height = size[1];
-		}
-	,	_fit = (size) => {
-		_fitIC(size);
-		_fitZC(size);
+		_ic.width  = size[0];
+		_ic.height = size[1];
+		_zc.width  = size[0];
+		_zc.height = size[1];
+		return true
 	};
 
 	const _frame = (frame) => {
@@ -449,6 +442,7 @@ render.COLOR8 = [
 	,	imageData:  _imageData
 	,	lastOffset: ()=>(_lastOffset)
 	,	canvas:     ()=>(_ic)
+	,	size:       ()=>([_ic.width, _ic.height])
 	};
 })();
 
@@ -482,8 +476,8 @@ render.COLOR8 = [
 			_dGC.scale(-1, 1);
 		}
 	,	 _fit = (size) => {
-			if (_dc.width != size[0] && _dc.height != size[1])
-				return
+			if (_dc.width == size[0] && _dc.height == size[1])
+				return false
 
 			cUI.print('image size:' + size[0] + 'x' + size[1]);
 			_dc.width  = size[0];
@@ -491,6 +485,8 @@ render.COLOR8 = [
 
 			_loadIdentity();
 			if (_state.flip) _flip(true);
+
+			return true
 		}
 	;
 
@@ -501,9 +497,11 @@ render.COLOR8 = [
 	}
 
 	render.dop = {
-		show:	_show
-	,	flip:	_flip
-	,	fit:	_fit
+		show:       _show
+	,	flip:       _flip
+	,	fit:        _fit
+	,	size:       ()=>([_dc.width, _dc.height])
+	,	clientRect: ()=>(_dc.getBoundingClientRect())
 	};
 
 	const	_reset = () => {
@@ -520,9 +518,12 @@ render.resize = function (disp, internal) {
 	||  !(internal instanceof Array))
 		throw new Error('invalid param');
 
-	render.dop.fit(disp);
-	render.iop.fit(internal);
+	const dchanged = render.dop.fit(disp)
+	,     ichanged = render.iop.fit(internal)
+	;
 	render.hop.fit(internal);
+
+	return dchanged || ichanged
 }
 
 render.accum = new Accum();
