@@ -288,7 +288,7 @@ render.COLOR8 = [
 ];
 
 
-// setup hop - operations for rendering histgram 
+// setup hop - operations for rendering histogram 
 (() => {
 	const	_hc = e('h-canvas')		// histogram overlay surface
 	,	_hGC = _hc.getContext('2d')
@@ -347,7 +347,7 @@ render.COLOR8 = [
 	};
 })();
 
-// setup iop - operations for rendering histgram 
+// setup iop - operations for rendering histogram 
 (() => {
 	const	_canvas = ()=>(document.createElement('canvas'))
 	,	_ic = _canvas()	// back-buffer surface
@@ -455,16 +455,6 @@ render.COLOR8 = [
 
 	// matrix operation for drawing display surface
 	const	_loadIdentity = () => {
-			// reset to identity 
-			// (a, b, c, d, e, f) means
-			// a  c  e
-			// b  d  f
-			// 0  0  1
-			// 
-			// So, this will set matrix as follows
-			// 1  0  0
-			// 0  1  0
-			// 0  0  1
 			_dGC.setTransform(1, 0, 0, 1, 0, 0);
 		}
 	,	_flip = (yes) => {
