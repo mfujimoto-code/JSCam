@@ -2,7 +2,7 @@
 
 const cUI = Object.create(null);
 cUI.print_messages = ['','','','','','',''];
-cUI.print = function (msg) {
+cUI.print = (msg) => {
 	cUI.print_messages.push(msg);
 	cUI.print_messages.shift();
 
@@ -192,20 +192,22 @@ cUI.print = function (msg) {
 	e('flip-horizontal').onchange = function () {
 		render.dop.flip(this.checked);
 		dispatch.move.flip(this.checked);
+		dispatch.kick(true);
 	}
 
 	e('show-histogram').onchange = function () {
 		dispatch.showHistogram = this.checked;
 		e('h-canvas').style.display = this.checked ? 'block' : 'none';
 		render.hop.clear();
+		dispatch.kick(true);
 	}
 
 	e('show-preview').onchange = function () {
 		if (!this.checked) {
-			e('video').style.display = 'none'
-			return;
+			e('video').style.display = 'none';
+			return
 		}
-		e('video').style.display = 'block'
+		e('video').style.display = 'block';
 	}
 
 	for (let k in render.buildImageFuncs) {
@@ -238,6 +240,7 @@ cUI.print = function (msg) {
 		cUI.print('image mode:' + mode);
 		render.buildImage = render.buildImageFuncs[mode];
 		syncModeSettings();
+		dispatch.kick(true);
 	}
 	syncModeSettings();
 

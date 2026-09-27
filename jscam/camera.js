@@ -846,6 +846,7 @@
 	if (cameraSelect) {
 		cameraSelect.onchange = function () {
 			switchCamera(this.value);
+			dispatch.kick(true);
 		};
 	}
 

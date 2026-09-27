@@ -1,9 +1,6 @@
 'use strict';
 
 const dispatch = ()=>{
-	if (dispatch.paused)	// don't kick, it will re-kicked at resume.
-		return
-
 	const now = performance.now();
 
 	if (now - dispatch.watcher.fps.last >= 500) {
@@ -12,14 +9,14 @@ const dispatch = ()=>{
 	}
 
 	const minWait = Math.max(dispatch.duration, dispatch.lastSuggestion);
-	if (now - dispatch.lastProcessedEnd < minWait) {
-		dispatch.kick();
-		return
+	if (now - dispatch.lastProcessedEnd >= minWait) {
+		const r = dispatch.iDISP.next();
+		dispatch.lastSuggestion = r.value;
+		dispatch.lastProcessedEnd = performance.now();
 	}
 
-	const r = dispatch.iDISP.next();
-	dispatch.lastSuggestion = r.value;
-	dispatch.lastProcessedEnd = performance.now();
+	if (dispatch.paused)	// don't kick, it will re-kicked at resume.
+		return
 
 	dispatch.kick();
 }
@@ -89,7 +86,7 @@ const dispatch = ()=>{
 	let	_scale = 1
 	,	_scaleStep = 0
 	,	_offset = [0.0, 0.0]
-	,	_moved = false
+	,	_changed = false
 	,	_vx = 1.0
 	,	_vy = 1.0
 	;
@@ -110,7 +107,7 @@ const dispatch = ()=>{
 		;
 		_offset[0] -= x * _vx * xscale;
 		_offset[1] -= y * _vy * yscale;
-		_moved = true;
+		_changed = true;
 	}
 	dispatch.move.flip = (yes) => {
 		_vx = yes ? -1.0 : 1.0;
@@ -121,29 +118,35 @@ const dispatch = ()=>{
 		,	SCALE_FACTOR = 1.1
 		;
 
-		if (dir === 0) return _scale;
+		if (dir === 0) return
 
 		let step = _scaleStep;
 		if (dir > 0) {
-			if (step <= 0) return _scale
+			if (step <= 0) return
 
 			_scale = 1 / Math.pow(SCALE_FACTOR, --step);
 			_scaleStep = step;
-			return _scale
+			_changed = true;
+			return
 		}
 
 		const scale = 1 / Math.pow(SCALE_FACTOR, ++step);
-		if (scale <= SCALE_MIN) return _scale
+		if (scale <= SCALE_MIN) return
 
 		_scale = scale;
 		_scaleStep = step;
-		return _scale
+		_changed = true;
+		return
 	}
 
 	let _AFkicked = false;
 
-	dispatch.kick = ()=>{
-		if (_AFkicked) return;
+	dispatch.kick = (noskip)=>{
+		if (noskip !== undefined && noskip)
+			_changed = true;
+
+		if (_AFkicked) return
+
 		_AFkicked = true;
 		requestAnimationFrame(()=>{
 			_AFkicked = false;
@@ -154,7 +157,6 @@ const dispatch = ()=>{
 
 	dispatch.iDISP = (function * () {
 		let	suggestion = 0
-		,	lastScale = 0
 		;
 
 		while (true) {
@@ -172,13 +174,10 @@ const dispatch = ()=>{
 				continue
 			}
 
-			if (!dispatch.watcher.video.changed()
-			 && lastScale == _scale
-			 && !_moved)
+			if (!dispatch.watcher.video.changed() && !_changed)
 				continue
 
-			lastScale = _scale;
-			_moved = false;
+			_changed = false;
 			_stat.inc('viewed');
 
 			const	imageData = render.iop.imageData(_video, _scale, _offset);
