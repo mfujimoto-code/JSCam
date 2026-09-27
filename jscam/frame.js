@@ -1,13 +1,18 @@
 'use strict';
 
-const Frame = function (image) {
+const Frame = function (image, timestamp) {
 	if (!(image instanceof ImageData))
 		throw new Error('Frame requires a source ImageData')
+
+	if (timestamp === undefined)
+		timestamp = performance.now();
+
+	this.timestamp = ()=>(timestamp);
 
 	this.feed(image);
 
 	const id = ++Frame.serial;
-	this.id = function () {return id}
+	this.id = ()=>(id);
 	Frame.array.push(id);
 	Frame.map[id] = this;
 

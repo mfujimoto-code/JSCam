@@ -537,7 +537,7 @@ select {
 }
 
 #video {
-  display: block;
+  display: none;
   width: auto;
   height: auto;
   max-width: min(100%, 640px);

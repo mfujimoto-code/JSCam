@@ -2,23 +2,24 @@
 
 const delta = {
 	_delta: new Uint8ClampedArray(0)
+	, accum: new Accum()
 	, _absPlane: (out, src, acc, num) => {
 		for (let i = 0; i < num; ++i)
 			out[i] = Math.abs(src[i] - acc[i]);
 	}
 	, get: (frame, space) => {
 		if (space === undefined) space = 'gray';
-		accum.update(frame, space);
+		delta.accum.update(frame, space);
 
-		const num = frame.num()
-		, acc = accum.planes(space)
+		const	num = frame.num()
+		,	acc = delta.accum.planes(space)
 		;
 		if (space === 'gray') {
 			if (num > delta._delta.length)
 				delta._delta = new Uint8ClampedArray(num);
-			const g = frame.get('gray')
-			, out = delta._delta
-			, n = Math.min(acc[0].length, g.length, out.length)
+			const	g = frame.get('gray')
+			,	out = delta._delta
+			,	n = Math.min(acc[0].length, g.length, out.length)
 			;
 			delta._absPlane(out, g, acc[0], n);
 			return out
@@ -38,18 +39,18 @@ const delta = {
 			return out
 		}
 
-		const yuv = frame.get('yuv')
-		, Y = yuv.Y
-		, UV = yuv.UV
-		, out = [
-			new Uint8ClampedArray(num)
-			, new Uint8ClampedArray(num)
-			, new Uint8ClampedArray(num)
-		]
-		, n = Math.min(acc[0].length, num)
-		, aY = acc[0]
-		, aU = acc[1]
-		, aV = acc[2]
+		const	yuv = frame.get('yuv')
+		,	Y = yuv.Y
+		,	UV = yuv.UV
+		,	out = [
+				new Uint8ClampedArray(num)
+			,	new Uint8ClampedArray(num)
+			,	new Uint8ClampedArray(num)
+			]
+		,	n = Math.min(acc[0].length, num)
+		,	aY = acc[0]
+		,	aU = acc[1]
+		,	aV = acc[2]
 		;
 		for (let i = 0; i < n; ++i) {
 			out[0][i] = Math.abs(Y[i] - aY[i]);
@@ -59,19 +60,3 @@ const delta = {
 		return out
 	}
 }
-
-Object.defineProperty(delta, 'factor', {
-	get: () => accum.factor
-	, set: (v) => { accum.factor = v }
-});
-Object.defineProperty(delta, 'time', {
-	get: () => accum.time
-	, set: (v) => { accum.time = v }
-});
-Object.defineProperty(delta, 'aBuffer', {
-	get: () => {
-		const g = accum.planes('gray')[0];
-		return g || []
-	}
-});
-delta.accum = (frame) => accum.update(frame, 'gray');

@@ -1,6 +1,8 @@
 'use strict';
 
-const buildImageFuncs = Object.assign(Object.create(null), {
+const render = Object.create(null);
+
+render.buildImageFuncs = Object.assign(Object.create(null), {
 	'GRAY-frame': function (ic, frame) {
 		const yuv = frame.get('yuv');
 		const num  = frame.num()
@@ -15,7 +17,7 @@ const buildImageFuncs = Object.assign(Object.create(null), {
 		}
 		return imageData;
 	}
-	, 'GRAY-Histogram equalization': function (ic, frame) {
+,	'GRAY-Histogram equalization': function (ic, frame) {
 		const e = frame.get('equalized')
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
@@ -32,7 +34,7 @@ const buildImageFuncs = Object.assign(Object.create(null), {
 	// R = 1.000Y          + 1.402V
 	// G = 1.000Y - 0.344U - 0.714V
 	// B = 1.000Y + 1.772U
-	, 'YUV-frame': function (ic, frame) {
+,	'YUV-frame': function (ic, frame) {
 		const yuv = frame.get('yuv')
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
@@ -50,7 +52,7 @@ const buildImageFuncs = Object.assign(Object.create(null), {
 		}
 		return imageData;
 	}
-	, 'UV:RG-frame': function (ic, frame) {
+,	'UV:RG-frame': function (ic, frame) {
 		const yuv = frame.get('yuv')
 		,     num  = frame.num() * 2
 		,     imageData = render.image(frame)
@@ -67,12 +69,12 @@ const buildImageFuncs = Object.assign(Object.create(null), {
 		}
 		return imageData;
 	}
-	, 'RGB-frame': function (ic, frame) {
+,	'RGB-frame': function (ic, frame) {
 		return frame.get('ImageData');
 	}
-	, 'GRAY-accum': function (ic, frame) {
-		accum.update(frame, 'gray');
-		const gray = accum.planes('gray')[0]
+,	'GRAY-accum': function (ic, frame) {
+		render.accum.update(frame, 'gray');
+		const gray = render.accum.planes('gray')[0]
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
 		,     data = imageData.data;
@@ -86,9 +88,9 @@ const buildImageFuncs = Object.assign(Object.create(null), {
 
 		return imageData
 	}
-	, 'RGB-accum': function (ic, frame) {
-		accum.update(frame, 'rgb');
-		const rgb = accum.planes('rgb')
+,	'RGB-accum': function (ic, frame) {
+		render.accum.update(frame, 'rgb');
+		const rgb = render.accum.planes('rgb')
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
 		,     data = imageData.data;
@@ -102,7 +104,7 @@ const buildImageFuncs = Object.assign(Object.create(null), {
 
 		return imageData
 	}
-	, 'BW-delta': function (ic, frame) {
+,	'BW-delta': function (ic, frame) {
 		const d = delta.get(frame)
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
@@ -118,7 +120,7 @@ const buildImageFuncs = Object.assign(Object.create(null), {
 
 		return imageData
 	}
-	, 'Gray-delta': function (ic, frame) {
+,	'Gray-delta': function (ic, frame) {
 		const d = delta.get(frame)
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
@@ -134,7 +136,7 @@ const buildImageFuncs = Object.assign(Object.create(null), {
 
 		return imageData
 	}
-	, '8colors': function (ic, frame) {
+,	'8colors': function (ic, frame) {
 		const num  = frame.num()
 		,     imageData = render.image(frame)
 		,     data = imageData.data
@@ -155,7 +157,7 @@ const buildImageFuncs = Object.assign(Object.create(null), {
 
 		return imageData
 	}
-	, 'Edge(Laplacian)': function (ic, frame) {
+,	'Edge(Laplacian)': function (ic, frame) {
 		const e = frame.get('laplacian')
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
@@ -171,7 +173,7 @@ const buildImageFuncs = Object.assign(Object.create(null), {
 
 		return imageData
 	}
-	, 'Edge(Laplacian signed)': function (ic, frame) {
+,	'Edge(Laplacian signed)': function (ic, frame) {
 		const e = frame.get('laplacian.signed')
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
@@ -187,7 +189,7 @@ const buildImageFuncs = Object.assign(Object.create(null), {
 
 		return imageData
 	}
-	, 'Edge(Sobel)': function (ic, frame) {
+,	'Edge(Sobel)': function (ic, frame) {
 		const e = frame.get('sobel')
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
@@ -203,7 +205,7 @@ const buildImageFuncs = Object.assign(Object.create(null), {
 
 		return imageData
 	}
-	, 'Edge4(Sobel)': function (ic, frame) {
+,	'Edge4(Sobel)': function (ic, frame) {
 		const e = frame.get('sobel')
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
@@ -219,7 +221,7 @@ const buildImageFuncs = Object.assign(Object.create(null), {
 
 		return imageData
 	}
-	, 'Edge2(Sobel)': function (ic, frame) {
+,	'Edge2(Sobel)': function (ic, frame) {
 		const e = frame.get('sobel')
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
@@ -235,7 +237,7 @@ const buildImageFuncs = Object.assign(Object.create(null), {
 
 		return imageData
 	}
-	, 'Edge(Bin)': function (ic, frame) {
+,	'Edge(Bin)': function (ic, frame) {
 		const num  = frame.num()
 		,     imageData = render.image(frame)
 		,     data = imageData.data
@@ -251,145 +253,269 @@ const buildImageFuncs = Object.assign(Object.create(null), {
 
 		return imageData
 	}
-})
+});
 
-const render = Object.assign(Object.create(null), {
-	buildImage: buildImageFuncs['RGB-frame']
-	, canvas: function(width, height) {
-		const c = document.createElement('canvas');
-		c.width = width;
-		c.height = height;
-		return c
-	}
-	, image: function(frame) {
-		const size = frame.size();
-		return new ImageData(size[0], size[1])
-	}
-	, L4: [ 0
-	      , 255/3
-	      , 255/3*2
-	      , 255]
-	, COLOR8:[[127, 127, 127]
-		, [255,   0,   0]
-		, [  0, 255,   0]
-		, [  0,   0, 255]
-		, [255, 255,   0]
-		, [255,   0, 255]
-		, [  0, 255, 255]
-		, [255, 255, 255]
-		]
-	, histogram: function (frame, histogram) {
-		const hc = render.hc
-		,     gc = hc.getContext('2d')
-		,     num = frame.num()
-		,     max = histogram.reduce((a,b)=>(Math.max(a,b)), 0)
-		,     barScale = (hc.height / 3) / max
-		,     lineScale = (hc.height / 3) / num
+render.buildImage = render.buildImageFuncs['RGB-frame'];
+
+render.canvas = function(width, height) {
+	const c = document.createElement('canvas');
+	c.width = width;
+	c.height = height;
+	return c
+}
+
+render.image = function(frame) {
+	const size = frame.size();
+	return new ImageData(size[0], size[1])
+}
+
+render.L4 = [
+	0
+, 	255/3
+, 	255/3*2
+,	255
+];
+
+render.COLOR8 = [
+	[127, 127, 127]
+,	[255,   0,   0]
+,	[  0, 255,   0]
+,	[  0,   0, 255]
+,	[255, 255,   0]
+,	[255,   0, 255]
+,	[  0, 255, 255]
+,	[255, 255, 255]
+];
+
+
+// setup hop - operations for rendering histogram 
+(() => {
+	const	_hc = e('h-canvas')		// histogram overlay surface
+	,	_hGC = _hc.getContext('2d')
+	;
+
+	let	_color = 0;
+	const	_rgba = ()=>{
+		_color = (_color + 1) % render.COLOR8.length;
+		const C = render.COLOR8[_color];
+		return 'rgba(' + C[0] + ',' + C[1] + ',' + C[2] + ',0.5)'
+	};
+
+	const	_drawHistogram = (frame, histogram) => {
+		const	num = frame.num()
+		,	max = histogram.reduce((a,b)=>(Math.max(a,b)), 0)
+		,	barScale = (_hc.height / 3) / max
+		,	lineScale = (_hc.height / 3) / num
 		;
 
-		const rgba = ()=>{
-			!('color' in render.histogram) && (render.histogram.color = 0);
-			render.histogram.color = (render.histogram.color + 1) % render.COLOR8.length;
-			const C = render.COLOR8[render.histogram.color];
-			return 'rgba(' + C[0] + ',' + C[1] + ',' + C[2] + ',0.5)'
-		}
-
-		gc.fillStyle = rgba();
+		_hGC.fillStyle = _rgba();
 		for (let x = 10, i = 0; i < histogram.length; ++i, ++x) {
 			const h = histogram[i] * barScale;
-			gc.fillRect(x, hc.height - 1 - h, 1, h);
+			_hGC.fillRect(x, _hc.height - 1 - h, 1, h);
 		}
 		let y = histogram[0];
-		const yStart = hc.height - 1;
-		gc.strokeStyle = rgba();
-		gc.lineWidth = 2;
-		gc.beginPath();
-		gc.moveTo(10, yStart - y * lineScale);
+		const yStart = _hc.height - 1;
+		_hGC.strokeStyle = _rgba();
+		_hGC.lineWidth = 2;
+		_hGC.beginPath();
+		_hGC.moveTo(10, yStart - y * lineScale);
 		for (let x = 11, i = 1; i < histogram.length; ++i, ++x) {
 			y += histogram[i];
-			gc.lineTo(x, yStart - y * lineScale);
+			_hGC.lineTo(x, yStart - y * lineScale);
 		}
-		gc.stroke();
-	}
-	, clearHistogram: function () {
-		const hc = render.hc;
-		hc.getContext('2d').clearRect(0, 0, hc.width, hc.height);
-	}
-	, frame: function (frame) {
-		const ic = render.ic
-		,     ictx = ic.getContext('2d')
-		,     id = render.buildImage(ic, frame)
-		;
+		_hGC.stroke();
+	};
 
-		if (id.width == ic.width && id.height == ic.height) {
-			ictx.putImageData(id, 0, 0);
+	const	_clearHistogram = () => {
+		_hGC.clearRect(0, 0, _hc.width, _hc.height);
+		_color = 0;
+	};
+
+	const	_fit = (size) => {
+		if (_hc.width == size[0] && _hc.height == size[1]) 
+			return false
+
+		_hc.width  = size[0];
+		_hc.height = size[1];
+		return true
+	};
+
+	render.hop = {
+		draw:	_drawHistogram
+	,	clear:	_clearHistogram
+	,	fit:	_fit
+	};
+})();
+
+// setup iop - operations for rendering internal surface
+(() => {
+	const	_canvas = ()=>(document.createElement('canvas'))
+	,	_ic = _canvas()	// back-buffer surface
+	,	_zc = _canvas()	// off screen surface for zooming
+	;
+	const	_getGC = (canvas) => (
+			canvas.getContext(
+				'2d'
+			,	{willReadFrequently: true}
+			)
+		)
+	,	_iGC = _getGC(_ic)
+	,	_zGC = _getGC(_zc)
+	;
+	const	_fit = (size) => {
+		if (_ic.width == size[0] && _ic.height == size[1]) 
+			return false
+
+		_ic.width  = size[0];
+		_ic.height = size[1];
+		_zc.width  = size[0];
+		_zc.height = size[1];
+		return true
+	};
+
+	const _frame = (frame) => {
+		const	id = render.buildImage(_ic, frame);
+
+		if (id.width == _ic.width && id.height == _ic.height) {
+			_iGC.putImageData(id, 0, 0);
 			return
 		}
 
-		const zc = render.zc
-		,     zctx = zc.getContext('2d')
-		;
-		zctx.putImageData(id, 0, 0);
-		ictx.drawImage(zc, 0, 0, id.width, id.height, 0, 0, ic.width, ic.height);
-	}
-	, imageData: function (src, scale) {
-		const ic = render.ic;
-		const ictx = ic.getContext('2d');
+		_zGC.putImageData(id, 0, 0);
+		_iGC.drawImage(_zc
+		,              0, 0, id.width, id.height
+		,              0, 0, _ic.width, _ic.height
+		);
+	};
+
+	let _lastOffset = [0, 0];
+	const _imageData = (src, scale, offset) => {
 		if (scale === undefined
-		||  typeof(scale) != 'number'
 		||  scale === 1) {
-			ictx.drawImage(src, 0, 0, ic.width, ic.height);
-			return ictx.getImageData(0, 0, ic.width, ic.height)
+			_iGC.drawImage(src, 0, 0, _ic.width, _ic.height);
+			return _iGC.getImageData(0, 0, _ic.width, _ic.height)
 		}
 
 		if (scale <= 0 ||  scale > 1)
 			throw new Error('not supported ' + scale.toString())
-
-		const sw = (ic.width * scale) | 0
-		,     sh = (ic.height * scale) | 0
-		,     sx = (ic.width * 0.5 - sw * 0.5) | 0
-		,     sy = (ic.height * 0.5 - sh * 0.5) | 0
+		
+		const	sw = (_ic.width * scale) | 0
+		,	sh = (_ic.height * scale) | 0
 		;
-		ictx.drawImage(src
+		let	sx = (_ic.width * 0.5 - sw * 0.5) | 0
+		,	sy = (_ic.height * 0.5 - sh * 0.5) | 0
+		;
+
+		if (offset !== undefined) {
+			let	ox = offset[0]
+			,	oy = offset[1]
+			,	nx = sx + ox
+			,	ny = sy + oy
+			;
+			if (nx < 0) {
+				ox = -sx
+				sx = 0;
+			} else if (nx + sw > _ic.width) {
+				ox = (_ic.width - sw) - sx
+				sx = _ic.width - sw;
+			} else	sx = nx;
+			if (ny < 0) {
+				oy = -sy
+				sy = 0;
+			} else if (ny + sh > _ic.height) {
+				oy = (_ic.height - sh) - sy
+				sy = _ic.height - sh;
+			} else	sy = ny;
+			_lastOffset = [ox, oy];
+		}
+
+		_iGC.drawImage(src
 		,              sx, sy, sw, sh			               
-		,              0,  0,  sw, sh);
+		,              0,  0,   sw, sh);
 
-		return ictx.getImageData(0, 0, sw, sh)
+		return _iGC.getImageData(0, 0, sw, sh)
+	};
+
+	render.iop = {
+		fit:        _fit
+	,	frame:      _frame
+	,	imageData:  _imageData
+	,	lastOffset: ()=>(_lastOffset)
+	,	canvas:     ()=>(_ic)
+	,	size:       ()=>([_ic.width, _ic.height])
+	};
+})();
+
+// setup render.dop - operators for rendering image surface
+(() => {
+	const	_dc = e('d-canvas')		// display surface (image)
+	,	_dGC = _dc.getContext('2d')
+	,	_state = Object.create(null);
+	;
+
+	const _show = () => {
+		_dGC.drawImage(
+			render.iop.canvas()
+		,	0, 0, _dc.width, _dc.height);
 	}
-	, show: function () {
-		const dc = render.dc;
-		const dctx = dc.getContext('2d');
-		dctx.drawImage(render.ic, 0, 0, dc.width, dc.height);
+
+	// matrix operation for drawing display surface
+	const	_loadIdentity = () => {
+			_dGC.setTransform(1, 0, 0, 1, 0, 0);
+		}
+	,	_flip = (yes) => {
+			_loadIdentity();
+
+			_state.flip = yes;
+			if (!yes) return
+			_dGC.translate(_dc.width, 0);
+			_dGC.scale(-1, 1);
+		}
+	,	 _fit = (size) => {
+			if (_dc.width == size[0] && _dc.height == size[1])
+				return false
+
+			cUI.print('image size:' + size[0] + 'x' + size[1]);
+			_dc.width  = size[0];
+			_dc.height = size[1];
+
+			_loadIdentity();
+			if (_state.flip) _flip(true);
+
+			_show();
+
+			return true
+		}
+	;
+
+	render.dop = {
+		show:       _show
+	,	flip:       _flip
+	,	fit:        _fit
+	,	size:       ()=>([_dc.width, _dc.height])
+	,	clientRect: ()=>(_dc.getBoundingClientRect())
+	};
+
+	const	_reset = () => {
+		_loadIdentity();
+		_state.flip = false;
 	}
-	, resize: function (disp, internal) {
-		if (!(disp instanceof Array)
-		||  !(internal instanceof Array))
-			throw new Error('invalid param');
 
-		if (render.dc.width != disp[0] || render.dc.height != disp[1]) {
-			cUI.print('size = ' + disp[0] + 'x' + disp[1]);
-			render.dc.width  = disp[0];
-			render.dc.height = disp[1];
-		}
+	_reset();
+})();
 
-		if (render.ic.width != internal[0] || render.ic.height != internal[1]) {
-			render.ic.width  = internal[0];
-			render.ic.height = internal[1];
-		}
 
-		if (render.zc.width != internal[0] || render.zc.height != internal[1]) {
-			render.zc.width  = internal[0];
-			render.zc.height = internal[1];
-		}
+render.resize = function (disp, internal) {
+	if (!(disp instanceof Array)
+	||  !(internal instanceof Array))
+		throw new Error('invalid param');
 
-		if (render.hc.width != internal[0] || render.hc.height != internal[1]) {
-			render.hc.width  = internal[0];
-			render.hc.height = internal[1];
-		}
-	}
-})
+	const dchanged = render.dop.fit(disp)
+	,     ichanged = render.iop.fit(internal)
+	;
+	render.hop.fit(internal);
 
-render.ic = render.canvas(640, 480);	// back-buffer surface
-render.zc = render.canvas(640, 480);	// off screen surface for zooming
-render.dc = e('d-canvas');		// display surface (image)
-render.hc = e('h-canvas');		// histogram overlay surface (ic bitmap, contain-scaled)
+	return dchanged || ichanged
+}
+
+render.accum = new Accum();
