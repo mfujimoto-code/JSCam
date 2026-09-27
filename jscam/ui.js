@@ -89,10 +89,10 @@ cUI.print = function (msg) {
 		appRoot.classList.toggle('chrome-hidden');
 	}
 
-	const layers = e('layers');
+	const imageView = e('d-canvas');
 
 	// zoom using wheel
-	layers.addEventListener('wheel', (ev) => {
+	imageView.addEventListener('wheel', (ev) => {
 			if (ev.target.closest('.io-hud, button, a')) return;
 			ev.preventDefault();
 			dispatch.zoom(ev.deltaY);
@@ -104,7 +104,7 @@ cUI.print = function (msg) {
 	const	pointers = Object.create(null)
 	,	DC_DURATION = 300
 	,	P_DURATION = 50
-	,	dclick = (ev)=>{
+	,	dclick = function (ev) {
 			const k = Object.keys(pointers);
 			if (k.length > 0) return
 
@@ -112,7 +112,7 @@ cUI.print = function (msg) {
 			if (now - plastup < DC_DURATION) fireDC(ev);
 			plastup = now;
 		}
-	,	pdist = (p, k)=>{
+	,	pdist = function (p, k) {
 			const	dx = p[k[0]].clientX - p[k[1]].clientX 
 			,	dy = p[k[0]].clientY - p[k[1]].clientY 
 			;
@@ -120,7 +120,7 @@ cUI.print = function (msg) {
 			// it's enough to identify larger or smaller
 			return dx*dx + dy*dy
 		}
-	,	pstart = (ev)=>{
+	,	pstart = function (ev) {
 			const k = Object.keys(pointers);
 
 			if (k.length == 2) {
@@ -136,7 +136,7 @@ cUI.print = function (msg) {
 				return
 			}
 		}
-	,	pdetect = (ev)=>{
+	,	pdetect = function (ev) {
 			const k = Object.keys(pointers);
 			const now = performance.now();
 
@@ -163,15 +163,16 @@ cUI.print = function (msg) {
 				return
 			}
 		}
-	,	pdown = (ev)=>{
+	,	pdown = function (ev) {
 			pointers[ev.pointerId] = ev;
+			this.setPointerCapture(ev.pointerId);
 			pstart(ev);
 		}
-	,	pup = (ev)=>{
+	,	pup = function (ev) {
 			delete pointers[ev.pointerId];
 			dclick(ev);
 		}
-	,	pmove = (ev)=>{
+	,	pmove = function (ev) {
 			pdetect(ev);
 		}
 	;
@@ -181,10 +182,10 @@ cUI.print = function (msg) {
 	,	plastmove = 0
 	;
 
-	layers.addEventListener('pointerdown',   pdown);
-	layers.addEventListener('pointerup',     pup);
-	layers.addEventListener('pointermove',   pmove);
-	layers.addEventListener('pointercancel', pup);
+	imageView.addEventListener('pointerdown',   pdown);
+	imageView.addEventListener('pointerup',     pup);
+	imageView.addEventListener('pointermove',   pmove);
+	imageView.addEventListener('pointercancel', pup);
 })();
 
 (() => {
