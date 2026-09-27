@@ -32,11 +32,14 @@ const dispatch = ()=>{
 
 	const	_stat = {
 			rAF: 0
+		,	viewed: 0
 		,	rVFC: 0
-		,	frame: 0
 		,	reset: ()=>{
 				_stat.rAF = 0;
-				_stat.frame = 0;
+				_stat.viewed = 0;
+			}
+		,	inc: (prop)=>{
+				_stat[prop] = (_stat[prop] + 1) >>> 0
 			}
 		}
 	;
@@ -86,20 +89,19 @@ const dispatch = ()=>{
 	let	_scale = 1
 	,	_scaleStep = 0
 	,	_offset = [0.0, 0.0]
+	,	_moved = false
+	,	_vx = 1.0
+	,	_vy = 1.0
 	;
 
 	const	_xscale = (r, is)=>{
-			if (r.width <= 0) return 1.0
-			return is[0] * _scale / r.width
-		}
-	,	_yscale = (r, is)=>{
-			if (r.height <= 0) return 1.0
-			return is[1] * _scale / r.height
-		}
-	;
-	let	_vx = 1.0
-	,	_vy = 1.0
-	;
+		if (r.width <= 0) return 1.0
+		return is[0] * _scale / r.width
+	};
+	const	_yscale = (r, is)=>{
+		if (r.height <= 0) return 1.0
+		return is[1] * _scale / r.height
+	};
 	dispatch.move = (x, y) => {
 		const	r = render.dop.clientRect()
 		,	is = render.iop.size()
@@ -108,13 +110,10 @@ const dispatch = ()=>{
 		;
 		_offset[0] -= x * _vx * xscale;
 		_offset[1] -= y * _vy * yscale;
+		_moved = true;
 	}
 	dispatch.move.flip = (yes) => {
-		if (!yes) {
-			_vx = 1.0;
-			return
-		}
-		_vx = -1.0;
+		_vx = yes ? -1.0 : 1.0;
 	};
 
 	dispatch.zoom = (dir)=>{
@@ -141,15 +140,22 @@ const dispatch = ()=>{
 		return _scale
 	}
 
+	let _AFkicked = false;
+
 	dispatch.kick = ()=>{
-		requestAnimationFrame(dispatch);
-		++_stat.rAF;
+		if (_AFkicked) return;
+		_AFkicked = true;
+		requestAnimationFrame(()=>{
+			_AFkicked = false;
+			_stat.inc('rAF');
+			dispatch();
+		});
 	}
 
 	dispatch.iDISP = (function * () {
 		let	suggestion = 0
 		,	lastScale = 0
-		,	offset = [0, 0];
+		;
 
 		while (true) {
 			yield suggestion;
@@ -157,51 +163,43 @@ const dispatch = ()=>{
 
 			if (_video.videoWidth == 0 || _video.videoHeight == 0) {
 				suggestion = 100;
-				continue;
+				continue
 			}
 
 			const dispSize = _layoutDisplay(true);
 			if (!dispSize) {
 				suggestion = 100;
-				continue;
+				continue
 			}
+
+			if (!dispatch.watcher.video.changed()
+			 && lastScale == _scale
+			 && !_moved)
+				continue
+
+			lastScale = _scale;
+			_moved = false;
+			_stat.inc('viewed');
 
 			const	imageData = render.iop.imageData(_video, _scale, _offset);
 			_offset = render.iop.lastOffset();
 
-			const	doit = dispatch.showImage
-				&&     (  dispatch.watcher.video.changed()
-				       || lastScale != _scale
-				       || offset[0] != _offset[0]
-				       || offset[1] != _offset[1])
-			;
+			const	newFrame = new Frame(imageData, _video.currentTime);
 
-			if (doit) {
-				const	newFrame = new Frame(imageData, _video.currentTime);
+			render.iop.frame(newFrame);
+			render.dop.show();
 
-				render.iop.frame(newFrame);
-
-				if (dispatch.showHistogram) {
-					render.hop.clear();
-					for (let k in newFrame.histogram) {
-						render.hop.draw(newFrame, newFrame.histogram[k]);
-					}
-				}
-
-				render.dop.show();
-
-				++_stat.frame;
+			if (!dispatch.showHistogram)
+				continue
+			render.hop.clear();
+			for (let k in newFrame.histogram) {
+				render.hop.draw(newFrame, newFrame.histogram[k]);
 			}
-
-			lastScale = _scale;
-			offset[0] = _offset[0];
-			offset[1] = _offset[1];
 		}
 	})();	// end dispatch.iDISP
 
 	dispatch.duration = 0;
 	dispatch.paused = false;
-	dispatch.showImage = true;
 	dispatch.showHistogram = true;
 	dispatch.lastProcessedEnd = 0;
 	dispatch.lastSuggestion = 0;
@@ -221,7 +219,6 @@ const dispatch = ()=>{
 
 		let	_lastVFCCount = 0
 		,	_lastVFC = performance.now()
-		,	_kicked = false
 		,	_emaVFC = 1
 		;
 
@@ -229,8 +226,6 @@ const dispatch = ()=>{
 			const	now = performance.now()
 			,	d = now - _lastVFC
 			;
-			_kicked = false;
-			_stat.rVFC = (_stat.rVFC + 1) | 0;
 			_emaVFC = (1 - _AFACTOR) * _emaVFC + _AFACTOR * d * 0.001;
 			_lastVFC = now;
 			_wv.kick();
@@ -238,10 +233,15 @@ const dispatch = ()=>{
 
 		_wv.duration = ()=>(_emaVFC);
 
+		let	_VFCkicked = false;
 		_wv.kick = () => {
-			if (_kicked) return
-			_kicked = true;
-			_video.requestVideoFrameCallback(_rVFC);
+			if (_VFCkicked) return
+			_VFCkicked = true;
+			_video.requestVideoFrameCallback(()=>{
+				_VFCkicked = false;
+				_stat.inc('rVFC');
+				_rVFC();
+			});
 		};
 
 		_wv.changed = () => {
@@ -259,7 +259,7 @@ const dispatch = ()=>{
 		const	_fc = e('fps-chart')
 		,	_gc = _fc.getContext('2d')
 		,	_caption = e('fps-caption')
-		,	_ema = {rAF:0, frame:0}
+		,	_ema = {rAF:0, viewed:0}
 		,	_AFACTOR = 0.2
 		,	_STEP = 2
 		,	_COLOR = 'rgba(255,0,255,0.5)'
@@ -274,11 +274,11 @@ const dispatch = ()=>{
 		const _update = (duration)=>{
 			const 	factor = 1 / duration * 1000
 			,	frAF = _stat.rAF * factor
-			,	fframe = _stat.frame * factor
+			,	fframe = _stat.viewed * factor
 			;
 
 			_ema.rAF = (1 - _AFACTOR) * _ema.rAF + _AFACTOR * frAF;
-			_ema.frame = (1 - _AFACTOR) * _ema.frame + _AFACTOR * fframe;
+			_ema.viewed = (1 - _AFACTOR) * _ema.viewed + _AFACTOR * fframe;
 			_values.push(_ema.rAF);
 			(_max < _ema.rAF) && (_max = _ema.rAF);
 			if (_values.length > _high) {
@@ -296,7 +296,7 @@ const dispatch = ()=>{
 			+	' in-fps:'
 			+	Math.round(1 / dispatch.watcher.video.duration())
 			+	' view:'
-			+	((_ema.rAF > 0) ? Math.round(_ema.frame / _ema.rAF * 100) : 0)
+			+	((_ema.rAF > 0) ? Math.round(_ema.viewed / _ema.rAF * 100) : 0)
 			+	'%'
 			;
 		};

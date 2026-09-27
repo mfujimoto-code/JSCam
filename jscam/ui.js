@@ -188,10 +188,6 @@ cUI.print = function (msg) {
 })();
 
 (() => {
-	e('show-image').onchange = function () {
-		dispatch.showImage = this.checked;
-	}
-
 	e('flip-horizontal').onchange = function () {
 		render.dop.flip(this.checked);
 		dispatch.move.flip(this.checked);
