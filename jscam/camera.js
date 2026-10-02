@@ -862,4 +862,6 @@
 	if (!window.isSecureContext) {
 		showInsecureHelp();
 	}
+
+	startCamera();
 })();
