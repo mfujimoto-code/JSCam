@@ -3,17 +3,17 @@
 | 項目 | 内容 |
 | --- | --- |
 | 文書タイトル | JSCam live-camera bench 現行アーキテクチャ設計書 |
-| 対象 | `/app/jscam/` の分割グローバルスクリプト（`cam2.js` / `frame.js` / `accum.js` / `delta.js` / `render.js` / `dispatch.js` / `ui.js` / `camera.js`）および付随する HTML / CSS / Docker / nginx |
+| 対象 | `/app/jscam/` の分割グローバルスクリプト（`cam2.js` / `frame.js` / `accum.js` / `delta.js` / `render.js` / `surface.js` / `dispatch.js` / `ui.js` / `camera.js`）および付随する HTML / CSS / Docker / nginx |
 | 著者 | JSCam maintainers |
-| 日付 | 2026-09-27 |
-| ステータス | Draft（PR 1–3, 5–8 実装済み。PR 4 延期。画素プール／GC 観測は方式検討のみ。RGBaccum を master に再マージ：Accum コンストラクタ、パン／フリップ、rVFC 間引き） |
+| 日付 | 2026-10-04 |
+| ステータス | Draft（PR 1–3, 5–8 実装済み。PR 4 延期。画素プール／GC 観測は方式検討のみ。RGBaccum 再マージ：Surface、先頭カメラ自動起動、fit 後 show、extract の video クロップ） |
 | 種別 | 現行システムの記述（greenfield 再設計ではない） |
 
 ---
 
 ## Overview
 
-JSCam はブラウザ上で動作するライブカメラ画像処理ベンチである。`getUserMedia` の映像を未接続内部 canvas（`render.iop`）に取り込み、`Frame` 上でグレー／YUV／エッジ／ヒストグラム／Otsu／蓄積差分などを計算し、`#d-canvas`（`render.dop`）に描く。ホイール／ピンチは中央切り出しで処理画素数を変える。パンは切り出しオフセット。フリップは表示コンテキストの水平反転。ヒストグラムは `#h-canvas`（`render.hop`）。モードは `render.buildImageFuncs`。蓄積は `Accum` インスタンスが `render.accum` と `delta.accum` の 2 本（factor スライダは両方へ書く）。キャプチャ vis は `requestVideoFrameCallback` があるとき新しいビデオフレーム（または zoom/pan/kick）だけで走る。FPS は `dispatch.watcher.fps`（out-fps / in-fps / view%）。
+JSCam はブラウザ上で動作するライブカメラ画像処理ベンチである。`getUserMedia` の映像を `Surface.extract` で取り込み、`Frame` 上でグレー／YUV／エッジ／ヒストグラム／Otsu／蓄積差分などを計算し、内部面 `_is` へ `inject` して `#d-canvas`（`_ds`）に `show` する。ホイール／ピンチは中央切り出しで処理画素数を変える。パンは切り出しオフセット。フリップは表示 Surface の水平 CTM。ヒストグラムは `#h-canvas`（`_hs`、表示サイズのビットマップ）。モードは `render.buildImageFuncs`。蓄積は `Accum` インスタンスが `render.accum` と `delta.accum` の 2 本（factor スライダは両方へ書く）。キャプチャ vis は `requestVideoFrameCallback` があるとき新しいビデオフレーム（または zoom/pan/kick、あるいは fit が真）だけで走る。FPS は `dispatch.watcher.fps`（out / in / view% / cpu%）。ページロードで insecure でなければ先頭カメラを `startCamera()` する。
 
 本システムは `cam.js` の後継である。画像処理カーネル・描画・UI・カメラ起動はバンドラ無しのグローバルスクリプトに分割している（PR 6）。`cam.js` にあった typo / 計算バグ（`videoHeight`、RGB プレーン参照、Laplacian の符号、ヒストグラム均等化の `Vmin`、Frame ID 衝突、FPS 統計、`histogram` 命名、蓄積バッファサイズ）を修正したうえで、contain レイアウト・I/O 一時停止・明示的なカメラ停止・secure context カメラ起動・単一 rAF ループ・単一ポート HTTP/HTTPS 多重化を足している。サーバ側は Docker 上の nginx がホストポート `8888` を `ssl_preread` で HTTP (`8081`) と TLS (`8443`) に振り分ける。
 
@@ -25,9 +25,9 @@ JSCam はブラウザ上で動作するライブカメラ画像処理ベンチ�
 
 `/app/jscam` は単一ページの静的アプリである。ビルドツールもモジュールバンドラも無く、`index.html` が `cam2.css` と次の順のグローバルスクリプトを直読みする（PR 6）:
 
-`cam2.js`（`JSCAM_VERSION`, `e`, `Graph`）→ `frame.js` → `accum.js` → `delta.js` → `render.js` → `dispatch.js` → `ui.js` → `camera.js`
+`cam2.js`（`JSCAM_VERSION`, `e`）→ `frame.js` → `accum.js` → `delta.js` → `render.js` → `surface.js` → `dispatch.js` → `ui.js` → `camera.js`
 
-ES module の `import` / `export` は無い。契約は DOM id とページグローバルである。現行 JS（`cam2.js` と 7 分割ファイル）のインデントはタブ。オブジェクトリテラルのメソッド本体は `{` の内側で 1 段下げる（`cam.js` 由来の `Frame.prototype` / `buildImageFuncs` のずれは直した）。`cam.js` スナップショットはスペースのまま。
+ES module の `import` / `export` は無い。契約は DOM id とページグローバルである。現行 JS（`cam2.js` と 8 分割ファイル）のインデントはタブ。オブジェクトリテラルのメソッド本体は `{` の内側で 1 段下げる（`cam.js` 由来の `Frame.prototype` / `buildImageFuncs` のずれは直した）。`cam.js` スナップショットはスペースのまま。
 
 ### `cam.js` から `cam2` への修正（事実）
 
@@ -69,7 +69,7 @@ ES module の `import` / `export` は無い。契約は DOM id とページグ�
 - 起動前に `enumerateDevices` で `videoinput` をスキャンすること。1 台なら従来どおり起動。2 台以上なら列挙の先頭で起動し、`#camera-select` で切替できること。
 - 使っているカメラの `getCapabilities()` に、再構成なしで変えられる項目があれば Controls の `#camera-params` に出すこと。width/height/frameRate は出さない。
 - 入力プレビュー `#video` の表示は縦横とも最大 640 CSS px。超える辺はアスペクト比を保って縮小（内部処理解像度は生サイズのまま）。
-- ヒストグラムは `#h-canvas` overlay。画素契約は ic 座標（x=10、1px×256、高さ `height/3`、底 `height-1`、キーあたり色 2 つ）。`Draw histogram` は `Draw image` から独立。
+- ヒストグラムは `#h-canvas` overlay。ビットマップは表示サイズ（`#d-canvas` と同じ contain CSS px）。画素契約は hc 座標（x=10、1px×256、高さ `height/3`、底 `height-1`、キーあたり色 2 つ）。`Draw histogram` は映像から独立。
 - 非 secure context ではカメラを呼ばず、localhost HTTP / 同一ポート HTTPS への誘導を出すこと。
 - ホスト `8888` 一ポートで HTTP と HTTPS の両方を受け付けること。
 - グローバルスクリプト分割をバンドラ無しで維持し、`histogram` は `Object.create(null)` のままにすること。
@@ -105,7 +105,7 @@ Host :8888  ──►  container :8080  (nginx stream, ssl_preread)
 | --- | --- |
 | `/app/compose.yaml` | `jscam:local` を build。`8888:8080`。`TLS_SAN` を渡す。下記「再マウント vs 再ビルド」参照。Compose の `healthcheck:` キーは無い。 |
 | `/app/jscam/.dockerignore` | 先頭 `*` のあと許可リスト。イメージに入れるファイルは `!` を足す。抜けると `COPY` が checksum / not found で落ちる。 |
-| `/app/jscam/Dockerfile` | `nginx:1.27-alpine` + openssl。`40-gen-tls.sh` を `/docker-entrypoint.d/` に置く。静的ファイル（`index.html` `cam2.css` と 8 本の JS）を `/usr/share/nginx/html/` へ COPY。`EXPOSE 8080`。**イメージの** `HEALTHCHECK` が `wget -qO- http://127.0.0.1:8081/healthz`（Alpine `wget` の実行は本設計書では未検証）。8081 応答はポート 8080 / `ssl_preread` の生存を証明しない（Open Question 6）。 |
+| `/app/jscam/Dockerfile` | `nginx:1.27-alpine` + openssl。`40-gen-tls.sh` を `/docker-entrypoint.d/` に置く。静的ファイル（`index.html` `cam2.css` と 9 本の JS）を `/usr/share/nginx/html/` へ COPY。`EXPOSE 8080`。**イメージの** `HEALTHCHECK` が `wget -qO- http://127.0.0.1:8081/healthz`（Alpine `wget` の実行は本設計書では未検証）。8081 応答はポート 8080 / `ssl_preread` の生存を証明しない（Open Question 6）。 |
 | `/app/jscam/nginx.main.conf` | `stream { ssl_preread on; }` で 8080 を 8081/8443 に分岐。`http { include conf.d/*.conf; }`。`proxy_timeout 1d`（長寿命接続向け。静的配信では実害は小さい）。 |
 | `/app/jscam/nginx.conf` | 8081 と 8443 で同じ document root。`Cache-Control: no-store`。`Permissions-Policy: camera=(self), microphone=()`。`/healthz` → `200 ok`。 |
 | `/app/jscam/40-gen-tls.sh` | 起動時に自己署名証明書。SAN 既定 `DNS:localhost,IP:127.0.0.1`。`TLS_SAN` で追加（例 `IP:192.168.1.10`）。825 日、RSA 2048。 |
@@ -121,7 +121,7 @@ Host :8888  ──►  container :8080  (nginx stream, ssl_preread)
 
 | 変更対象 | 反映方法 |
 | --- | --- |
-| `index.html`, `cam2.css`, `cam2.js`, `frame.js`, `accum.js`, `delta.js`, `render.js`, `dispatch.js`, `ui.js`, `camera.js` | compose の ro bind mount。ブラウザ再読込（`Cache-Control: no-store`）。イメージ再ビルド不要。 |
+| `index.html`, `cam2.css`, `cam2.js`, `frame.js`, `accum.js`, `delta.js`, `render.js`, `surface.js`, `dispatch.js`, `ui.js`, `camera.js` | compose の ro bind mount。ブラウザ再読込（`Cache-Control: no-store`）。イメージ再ビルド不要。 |
 | `nginx.conf` → `/etc/nginx/conf.d/default.conf` | ファイルはマウントされるが nginx は自動 reload しない。`nginx -s reload` またはコンテナ再作成。stream / `ssl_preread` / `proxy_timeout` はここには無い。 |
 | `nginx.main.conf`（8080 多重化, `proxy_timeout`） | イメージに COPY されるだけ。`--build` が必要。 |
 | `40-gen-tls.sh`, `Dockerfile` | `--build`。 |
@@ -136,11 +136,12 @@ index.html          lang="en"。画面コピーは英語
  ├─ frame.js          Frame / カーネル / LRU
  ├─ accum.js          Accum コンストラクタ
  ├─ delta.js          残差 + 独自 Accum
- ├─ render.js         buildImageFuncs, iop / dop / hop, render.accum
- ├─ dispatch.js       layout, rAF kick, zoom/pan, rVFC, fps
+ ├─ render.js         buildImageFuncs, render.accum, render.image / L4
+ ├─ surface.js        Surface（2d canvas の fit / show / extract / inject / histogram）
+ ├─ dispatch.js       layout, rAF kick, zoom/pan, rVFC, fps, Surface インスタンス
  ├─ ui.js             パネル, モード, range, print, wheel/pinch/pan
- └─ camera.js         start / stop / pause, preview
-      overlay canvas  #h-canvas （#dcanvas-layer 内。ic 解像度ビットマップ、CSS contain）
+ └─ camera.js         start / stop / pause, preview。末尾で startCamera()
+      overlay canvas  #h-canvas （#dcanvas-layer 内。表示サイズビットマップ、CSS 100%）
 ```
 
 DOM の役割分担:
@@ -148,13 +149,13 @@ DOM の役割分担:
 - `#video` … getUserMedia のシンク。サイドパネルの `Input preview`。`autoplay playsinline muted`。CSS: `max-width: min(100%, 640px); max-height: 640px; object-fit: contain`。内部処理は `videoWidth/Height` の生解像度。ラベル右の `#preview-size` に同じ生サイズ（`W×H`）を出す。
 - `#field-camera-select` / `#camera-select` … 2 台以上のときだけ表示。起動前スキャンの先頭デバイスで開始し、change で `deviceId.exact` 切替。
 - `#camera-params` … ライブ `getCapabilities()` で動かせる項目だけ。`applyConstraints`。width/height / frameRate は出さない（再構成の待ち）。Stop で hidden。
-- `render.ic` … 内部処理バッファ（未接続 canvas）。ヒストグラムは描かない。`render.zc` はズーム切り出しを ic サイズへ拡大するときだけ使う。
-- `#d-canvas` … ユーザに見える出力。`#dcanvas-layer` 内。内部 canvas を `drawImage`。
-- `#h-canvas` … ヒストグラム overlay。ビットマップは ic と同じ生解像度。CSS は `#d-canvas` と同様に layer いっぱい（`position:absolute; inset:0; width/height:100%; pointer-events:none`）。
+- `_is` … 内部処理バッファ（未接続 Surface、`willReadFrequently`）。ヒストグラムは描かない。小さい ImageData は `inject` で全面へ拡大する。
+- `#d-canvas` … ユーザに見える出力 `_ds`。`#dcanvas-layer` 内。`_ds.show(_is)`。
+- `#h-canvas` … ヒストグラム overlay `_hs`。ビットマップは表示サイズ。CSS は `#d-canvas` と同様に layer いっぱい（`position:absolute; inset:0; width/height:100%; pointer-events:none`）。
 - `#dcanvas-layer` … 表示サイズの CSS ボックス。一時停止 HUD と `#h-canvas` の containing block。
-- `#layers` (`.stage`) … contain フィットの親。ヘッダー下の `.workspace` 内。CSS `padding: 0.5rem`。JS は padding を書かない。`ResizeObserver` の対象。クリックで `.app.chrome-hidden` をトグル（`button` / `.panel` / `.topbar` / `.io-hud` 上は無視）。
+- `#layers` (`.stage`) … contain フィットの親。ヘッダー下の `.workspace` 内。CSS `padding: 0.5rem`。JS は padding を書かない。`ResizeObserver` の対象。`#d-canvas` のダブルタップで `.app.chrome-hidden` をトグル（`button` / `.panel` / `.topbar` / `.io-hud` 上は無視）。
 - `#side-panel` … `.workspace` 内の overlay（右。幅 720px 以下は下からのシート）。ヘッダーとは重ならない。背景 `rgba(18, 21, 29, 0.5)`。初期状態は開。レイアウト幅は取らない。
-- `#field-afactor` … `data-modes="GRAY-accum,BW-delta,Gray-delta"`。初期 `hidden`。`syncModeSettings` がトグル。
+- `#field-afactor` … `data-modes="GRAY-accum,BW-delta,Gray-delta,RGB-accum"`。初期 `hidden`。`syncModeSettings` がトグル。
 - `.io-hud` … `#camera-start` と `#camera-stop` は同じ左端スロット（排他表示）。ライブ中のみ `#io-pause` と badge。`position:absolute; top/left:0.5rem`。レイアウト幅を取らない。`#camera-overlay` より前面。
 
 ### モジュール構造
@@ -166,7 +167,7 @@ flowchart TB
     Stream["nginx stream ssl_preread<br/>nginx.main.conf"]
     HTTP["nginx :8081 HTTP"]
     TLS["nginx :8443 TLS<br/>certs from 40-gen-tls.sh"]
-    Static["index.html + cam2.css + 8 JS files"]
+    Static["index.html + cam2.css + 9 JS files"]
     Compose --> Stream
     Stream --> HTTP
     Stream --> TLS
@@ -182,20 +183,22 @@ flowchart TB
   Static --> Page
 
   subgraph Scripts["グローバルスクリプト（読み込み順）"]
-    Cam2["cam2.js<br/>JSCAM_VERSION / e / Graph"]
+    Cam2["cam2.js<br/>JSCAM_VERSION / e"]
     FrameF["frame.js<br/>Frame"]
-    AccumF["accum.js<br/>accum"]
+    AccumF["accum.js<br/>Accum"]
     DeltaF["delta.js<br/>delta"]
     RenderF["render.js<br/>buildImageFuncs / render"]
+    SurfF["surface.js<br/>Surface"]
     DispF["dispatch.js<br/>layout / dispatch / watch"]
-    UiF["ui.js<br/>slide / setupRange / mode"]
+    UiF["ui.js<br/>fade / setupRange / mode"]
     CamF["camera.js<br/>start / stop / pause"]
-    Cam2 --> FrameF --> AccumF --> DeltaF --> RenderF --> DispF --> UiF --> CamF
+    Cam2 --> FrameF --> AccumF --> DeltaF --> RenderF --> SurfF --> DispF --> UiF --> CamF
   end
 
   HTML --> Scripts
 
   DispF --> RenderF
+  DispF --> SurfF
   RenderF --> FrameF
   RenderF --> AccumF
   RenderF --> DeltaF
@@ -214,16 +217,16 @@ flowchart TB
 | `Accum` | `accum.js` | コンストラクタ | space（`gray` / `rgb` / `yuv`）ごとの指数平滑。`get`/`set('factor')`。 |
 | `render.buildImageFuncs` | `render.js` | オブジェクト | モード名 → `ImageData` 生成。`render.buildImage` が現在の関数。 |
 | `delta` | `delta.js` | オブジェクト | `delta.accum`（別 Accum）に対する残差。 |
-| `render.iop` / `dop` / `hop` | `render.js` | オブジェクト | 内部取り込み、表示、ヒストグラム overlay。 |
+| `Surface` | `surface.js` | コンストラクタ | 2d canvas。`fit` / `show` / `extract` / `inject` / `gFlip` / ヒストグラム描画。 |
 | `render.accum` | `render.js` | `Accum` | GRAY-accum / RGB-accum 用。delta とはインスタンスが別。 |
 | `dispatch` / `dispatch.iDISP` | `dispatch.js` | 関数 + rAF + generator | メインループ。`kick([true])`。pause は vis 後にキック停止。 |
 | `dispatch.watcher.video` | `dispatch.js` | rVFC | `changed()` が新しいビデオフレーム。未対応 UA は常に true。 |
-| `dispatch.watcher.fps` | `dispatch.js` | 関数 | 500ms で HUD。旧 `Graph` / `watch`。 |
+| `dispatch.watcher.fps` | `dispatch.js` | 関数 | 500ms で HUD。旧 `Graph` / `watch`。Surface で `#fps-chart`。 |
 | `cUI` / `fade` | `ui.js` | オブジェクト | print、パネル fade。 |
 | chrome トグル | `ui.js` | `#d-canvas` ダブルタップ（pointer） | `.app.chrome-hidden`。 |
 | `setupRange` | `ui.js` | 関数 | range + ± ボタン + output をコールバックに接続。 |
 | `currentImageMode` / `syncModeSettings` | `ui.js` | 関数 | `#image-mode` のキーと `[data-modes]` の `hidden` を同期。 |
-| `startCamera` / `stopCamera` / `switchCamera` | `camera.js` | 関数 | 許可プローブ → enumerate → 先頭 `deviceId` で起動。2 台以上はセレクト。切替は旧 track を stop して取り直し。 |
+| `startCamera` / `stopCamera` / `switchCamera` | `camera.js` | 関数 | 許可プローブ → enumerate → 先頭 `deviceId` で起動。ページロード末尾で `startCamera()`。2 台以上はセレクト。切替は旧 track を stop して取り直し。 |
 | `syncCameraParams` / `clearCameraParams` | `camera.js` | 関数 | ライブ caps から Controls を生成。`applyConstraints`。attach で同期、stop でクリア。 |
 | `syncPreviewSize` | `camera.js` | 関数 | `#preview-size` に生解像度。`loadedmetadata` / `resize` / attach / stop。 |
 | `scanCameraSupport` | `camera.js` | 関数 | 対応スキャン。`#support-report` に YES/PARTIAL/NO。ストリームは止めない。 |
@@ -237,19 +240,19 @@ flowchart LR
     V["#video"]
   end
 
-  subgraph Internal["render.ic 生解像度（ズーム時は中央切り出し）"]
-    GI["render.imageData<br/>drawImage + getImageData"]
+  subgraph Internal["_is 生解像度（ズーム時は中央切り出し）"]
+    GI["snap.extract(scale, offset, video)"]
     FR["new Frame(imageData)"]
-    BI["render.buildImage = buildImageFuncs[mode]"]
-    PI["putImageData on ic"]
+    BI["render.buildImage"]
+    PI["_is.inject(ImageData)"]
   end
 
-  subgraph Overlay["#h-canvas 生解像度 overlay"]
-    HG["render.histogram<br/>hc 上にバー+CDF"]
+  subgraph Overlay["#h-canvas 表示サイズ overlay"]
+    HG["_hs.gDrawHistogram"]
   end
 
   subgraph Display["#d-canvas"]
-    SH["render.show<br/>drawImage(ic → dc)"]
+    SH["_ds.show(_is)"]
   end
 
   V --> GI --> FR
@@ -259,23 +262,23 @@ flowchart LR
   FR -->|histogram dict| HG
   BI -->|GRAY-accum / RGB-accum| AccumObj["accum.update / planes"]
   BI -->|*delta*| DeltaObj["delta.get"]
-  FR -->|skip vis| Skip["rVFC 無しかつ !_changed なら getImageData しない"]
-  HG -->|CSS contain| Layer["#dcanvas-layer"]
+  FR -->|skip vis| Skip["rVFC 無しかつ !_changed なら extract しない"]
+  HG -->|CSS 100%| Layer["#dcanvas-layer"]
   SH --> Layer
 ```
 
 `dispatch.iDISP` の本体:
 
 1. `video.videoWidth/Height == 0` なら suggestion=100 して continue。
-2. `_layoutDisplay(true)` … CSS と `render.resize`（`dop.fit` / `iop.fit` / `hop.fit`）。`dop.fit` が `dc` の幅高さを変えたときはビットマップ消去後に内部面から `_show` する（ウィンドウリサイズ vis で空白にしない）。
-3. `!watcher.video.changed() && !_changed` なら **continue**（`getImageData` しない）。changed は rVFC カウント。未対応 UA は常に true。`_changed` は zoom / pan / `kick(true)`。
-4. `render.iop.imageData(video, _scale, _offset)` … 中央切り出し＋パンオフセット。座標は `| 0`。処理画素がそのサイズ。
+2. `_layoutDisplay(true)` … CSS とビットマップ fit。順は `_ds.fit(disp)` → 真なら `_ds.show(_is)` → `_is.fit(video)` → `_hs.fit(disp)`。いずれかが真なら `_changed` を立てる（ウィンドウリサイズ vis で表示もヒストグラムも空白にしない）。
+3. `!watcher.video.changed() && !_changed` なら **continue**（`extract` しない）。changed は rVFC カウント。未対応 UA は常に true。`_changed` は zoom / pan / `kick(true)` / fit。
+4. `snap.fit(video size)` のあと `snap.extract(_scale, _offset, _video)` … 中央切り出し＋パンオフセット。座標は `| 0`。`src` があるときズームは video からクロップだけ `drawImage` する。処理画素がそのサイズ。
 5. `new Frame(imageData, video.currentTime)`。
-6. `render.iop.frame`（`buildImageFuncs`）→ `render.dop.show`。`showHistogram` なら hop をクリアして `for…in newFrame.histogram`。`Draw image` チェックは削除。vis が走ればカーネルは走る。
+6. `render.buildImage(null, newFrame)` → `_is.inject` → `_ds.show(_is)`。`showHistogram` なら `_hs.gClear` / `gBeginHistogram` / キーごとに `gDrawHistogram` / `gEndHistogram`。vis が走ればカーネルは走る。
 
 generator 先頭で `yield suggestion`。初回 `next` は yield 0 のみ。`dispatch()` は `minWait = max(duration, lastSuggestion)` を満たしてから `iDISP.next()`。満たさなければ `kick` して return（pause 中でも interval 待ちはキックする）。vis のあと `paused` ならキックしない。Resume が `kick()`。`kick(true)` は `_changed` を立ててからキック（Flip／モード／ヒストグラム）。
 
-処理はメインスレッド。目標 FPS は rAF + `duration` + rVFC 間引き。`Frame interval` 既定 0。未準備は suggestion 100。HUD は out-fps（rAF）、in-fps（rVFC EMA）、view%（viewed/rAF）。
+処理はメインスレッド。目標 FPS は rAF + `duration` + rVFC 間引き。`Frame interval` 既定 0。未準備は suggestion 100。HUD は out（rAF Hz）、in（rVFC Hz）、view%（viewed/rAF）、cpu%（iDISP 時間割合）。チャートは cpu 系列。
 
 負荷の目安:
 
@@ -344,7 +347,7 @@ sequenceDiagram
   Note over XC: pagehide / beforeunload でも同じ
 ```
 
-ページロード時にも `!window.isSecureContext` なら `showInsecureHelp()` を呼ぶ（ボタンを押す前に理由を出す）。`#link-localhost` / `#link-https` は `originWithScheme` で現在のポートを保った URL に差し替える。
+ページロード時にも `!window.isSecureContext` なら `showInsecureHelp()` を呼ぶ（ボタンを押す前に理由を出す）。secure ならスクリプト末尾で `startCamera()` する（`#camera-start` と同じ経路。許可ダイアログはロード直後）。`#link-localhost` / `#link-https` は `originWithScheme` で現在のポートを保った URL に差し替える。
 
 成功後 `#camera-overlay` に `.is-live` が付き `display:none`。失敗時および `stopCamera` 後はオーバーレイが残る / 戻る。`stopCamera` は rAF を落とさない。ループは `videoWidth==0` の idle（suggestion 100）に戻る。
 
@@ -353,22 +356,22 @@ sequenceDiagram
 ```mermaid
 stateDiagram-v2
   [*] --> Boot: スクリプト評価
-  Boot --> Running: dispatch.kick()
-  Running --> Running: rAF dispatch<br/>minWait 未満なら iDISP スキップ<br/>満たせば iDISP.next()<br/>suggestion!=100 なら count++
+  Boot --> Running: dispatch.kick と startCamera
+  Running --> Running: rAF dispatch<br/>minWait 未満なら iDISP スキップ<br/>満たせば iDISP.next()
   Running --> Paused: toggleIoPause / setIoPaused(true)
   Paused --> Running: setIoPaused(false) が kick
-  Paused --> Paused: rAF 停止<br/>iDISP / count なし<br/>ResizeObserver だけ layoutDisplay(video,false)
+  Paused --> Paused: rAF 停止<br/>ResizeObserver だけ _layoutDisplay(false)
   Running --> IdleLive: stopCamera
   IdleLive --> Running: startCamera 成功
   note right of Paused
     video.pause() トラックは live
     CSS だけ fit
-    最後の putImageData を保持
+    最後の _ds ビットマップを保持
   end note
   note right of Running
     video.play()
     準備済みなら layout+Frame
-    未準備なら suggestion=100（~10 Hz、count なし）
+    未準備なら suggestion=100（~10 Hz）
   end note
   note right of IdleLive
     track.stop() srcObject=null
@@ -380,10 +383,10 @@ stateDiagram-v2
 `dispatch`（`dispatch.js`）:
 
 - `dispatch.kick()` が rAF を 1 回予約する。コールバックは `dispatch` 自身。末尾でまた `kick` する。
-- `dispatch.paused === true` なら即 return（**次の rAF を予約しない**）。Resume が `kick`。
-- レイアウトは `ResizeObserver`（`#layers`）が `layoutDisplay(video, false)` する。100ms poll は無い。
-- 非 pause: `minWait = max(dispatch.duration, lastSuggestion)`。`now - lastProcessedEnd < minWait` なら処理スキップ。満たせば `iDISP.next()` → `lastSuggestion = r.value` → `lastProcessedEnd = performance.now()`（終了直後）。**`r.value != 100` のときだけ `dispatch.count.value++`**。
-- カメラ未起動 / 停止後は suggestion 100 で約 10 Hz idle。HUD の FPS は count が増えないので **0 に近づく**（処理メータ）。
+- vis のあと `dispatch.paused` ならキックしない（**次の rAF を予約しない**）。Resume が `kick`。interval 待ち中は pause でもキックする。
+- レイアウトは `ResizeObserver`（`#layers`）が `_layoutDisplay(false)` する。100ms poll は無い。
+- 非 pause: `minWait = max(dispatch.duration, lastSuggestion)`。`now - lastProcessedEnd < minWait` なら処理スキップ。満たせば `iDISP.next()` → `lastSuggestion = r.value` → `lastProcessedEnd = performance.now()`（終了直後）。
+- カメラ未起動 / 停止後は suggestion 100 で約 10 Hz idle。
 - `r.value` はいまの `next()` が yield した suggestion（直前イテレーションが書いた値）。未準備時 100、通常 0。最初の `next()` の yield は初期値 0。
 
 `setIoPaused`（`camera.js` 20–34 行）:
@@ -392,19 +395,19 @@ stateDiagram-v2
 - ストリームがあるとき `video.pause()` または `video.play()`（play の rejection は `print`）。**トラックは `stop()` しない。**
 - `syncIoPauseButtons` が HUD を同期: `.io-hud.is-live` と `hidden`。未起動は `#camera-start` のみ。ライブは Start を隠し `#camera-stop` と `#io-pause` を出す。`attachLiveStream` は params 構築より先に HUD を同期する（params 例外で Pause が残らないように）。
 
-**なぜ pause で `render.resize` しないか。** `HTMLCanvasElement.width` / `height` の代入はコンテキストをリセットしビットマップを透明にする。一時停止中にウィンドウやパネル幅が変わると `layoutDisplay(..., true)` は凍結フレームを消す。よって pause パス（`ResizeObserver`）は `resizeBitmap=false` で `#dcanvas-layer` の CSS `width`/`height` だけ変え、`#d-canvas` / `#h-canvas` は CSS で引き伸ばす。
+**なぜ pause で `Surface.fit` しないか。** `HTMLCanvasElement.width` / `height` の代入はコンテキストをリセットしビットマップを透明にする。一時停止中にウィンドウやパネル幅が変わると `_layoutDisplay(..., true)` は凍結フレームを消す。よって pause パス（`ResizeObserver`）は `resizeBitmap=false` で `#dcanvas-layer` の CSS `width`/`height` だけ変え、`#d-canvas` / `#h-canvas` は CSS で引き伸ばす。
 
 **pause と stop の違い。** pause は最後の処理フレームを残しカメラ LED を付けたまま。stop はデバイスを解放し overlay を戻す。進行中の `getUserMedia` は `startCamera.generation` 不一致なら stream を直ちに `stop()` して捨てる。
 
 ### レイアウト（contain、パネル幅）
 
-`fitDisplaySize(videoW, videoH)`（`dispatch.js` 3–15 行）:
+`_fitDisplaySize(videoW, videoH)`（`dispatch.js`）:
 
 1. `#layers` の `clientWidth/Height` から **既存の CSS padding**（`.stage` の `0.5rem`）だけを引く。パネル幅はここでは触らない。
 2. `scale = min(maxW/videoW, maxH/videoH)`。
 3. `floor` した整数 CSS ピクセルを返す。最小 1。
 
-`layoutDisplay` は `#dcanvas-layer` にそのサイズを書き、`aspect-ratio: auto` で CSS 初期値 `4/3` を上書きする。`resizeBitmap` が真のときだけ `render.resize(disp, [videoWidth, videoHeight])`。表示ビットマップ `#d-canvas` は **CSS ピクセル**（`disp`）であり、`devicePixelRatio` は掛けない。`#h-canvas` のビットマップは **内部解像度**（`ic` と同じ）。どちらも CSS `width/height:100%`（hc は `inset:0`）で layer に引き伸ばされる。2× ディスプレイでは出力が柔らかい（R16）。
+`_layoutDisplay` は `#dcanvas-layer` にそのサイズを書き、`aspect-ratio: auto` で CSS 初期値 `4/3` を上書きする。`resizeBitmap` が真のときだけ `_ds.fit(disp)`（真なら `_ds.show(_is)`）→ `_is.fit([videoWidth, videoHeight])` → `_hs.fit(disp)`。表示ビットマップ `#d-canvas` とヒストグラム `#h-canvas` はどちらも **CSS ピクセル**（`disp`）であり、`devicePixelRatio` は掛けない。内部面 `_is` は生解像度。`#d-canvas` / `#h-canvas` は CSS `width/height:100%`（hc は `inset:0`）で layer に乗る。2× ディスプレイでは出力が柔らかい（R16）。
 
 pause / リサイズパスで `width = cssW * dpr` してはならない。ビットマップ代入は凍結フレームを消す（R2）。dpr 対応を足すなら、リサイズ前にビットマップをコピーする。
 
@@ -469,12 +472,12 @@ end   = src.length + O[0] = len - w - 1
 
 | method | 実装 | 出力 |
 | --- | --- | --- |
-| `'laplacian'` | カーネル `[1,1,1, 1,-8,1, 1,1,1]` を `Int16Array` に畳み込み、`Math.abs` して `Uint8ClampedArray`（>255 は 255） | 8 近傍 Laplacian の絶対値。既存 `G-edge(Laplacian)` |
-| `'laplacian.signed'` | 同じ生値に `+128` して `Uint8ClampedArray`（零 → 128。負は暗、正は明。範囲外は 0/255） | 符号付きプレビュー。`G-edge(Laplacian signed)`（PR 8） |
+| `'laplacian'` | カーネル `[1,1,1, 1,-8,1, 1,1,1]` を `Int16Array` に畳み込み、`Math.abs` して `Uint8ClampedArray`（>255 は 255） | 8 近傍 Laplacian の絶対値。`Edge(Laplacian)` |
+| `'laplacian.signed'` | 同じ生値に `+128` して `Uint8ClampedArray`（零 → 128。負は暗、正は明。範囲外は 0/255） | 符号付きプレビュー。`Edge(Laplacian signed)`（PR 8） |
 | `'sobel'` | Gx/Gy、`sqrt(Ix²+Iy²)` を gray に。代入先が `Uint8ClampedArray` なので 255 クランプ | 勾配強度 |
 | `'sobel.rgb'` | 各プレーンに Sobel、画素ごと `max(eR,eG,eB)` | 色エッジ |
 
-未知 method は throw。結果は `edgeFuncs[method]` と `histogram[method]` に残す。既存 `G-edge(Laplacian)` の画素は変えない。
+未知 method は throw。結果は getter スロットと `histogram[id]` に残す。既存 `Edge(Laplacian)` の画素は変えない。
 
 #### Otsu (`Frame.calcThreshold`)
 
@@ -503,39 +506,37 @@ out[c][i]           = abs( current[space][c][i] - planes[space][c][i] )
 
 ### 描画とヒストグラム overlay
 
-`render.ic` / `render.zc` は `document.createElement('canvas')`（DOM 未接続）。`#i-canvas` は HTML から削除済み。`dc` / `hc` は従来どおり DOM。`render.image(frame)` は `frame.size()` の空 `ImageData`。
+`Surface` が 2d canvas を持つ。`dispatch` がインスタンスを持つ: `_ds`（`#d-canvas`）、`_is`（未接続、`willReadFrequently`）、`_hs`（`#h-canvas`）、`snap`（取り込み、copy キャンバス + `willReadFrequently`）、fps チャート。`#i-canvas` は HTML から削除済み。`render.image(frame)` は `frame.size()` の空 `ImageData`。
 
-`render.frame` は `buildImageFuncs` の返す `ImageData` を内部 canvas に載せる。幅高さが `ic` と一致すれば `putImageData`。ズーム切り出しで小さいときは `zc` に載せて `drawImage` で `ic` 全面へ拡大する（表示用。処理は既に小さい `Frame` で終わっている）。ヒストグラムは焼かない（PR 3）。
+`_is.inject` は共有オフスクリーンへ `putImageData` してから内部面へ `drawImage`（ズーム切り出しで小さい ImageData は全面へ拡大。処理は既に小さい `Frame` で終わっている）。ヒストグラムは焼かない（PR 3）。
 
 ### デジタルズーム（処理画素の中央切り出し）
 
-表示専用の CSS transform 拡縮はしない。ホイール／ピンチは `dispatch._scale` を変え、次 vis の `render.imageData(video, scale)` がビデオ中央を切り出す。切り出し後の画素で Frame / カーネル / accum が走る。
+表示専用の CSS transform 拡縮はしない。ホイール／ピンチは `dispatch._scale` を変え、次 vis の `snap.extract(_scale, _offset, _video)` がビデオ中央を切り出す。切り出し後の画素で Frame / カーネル / accum が走る。
 
 - `_scaleStep` は非負整数。`_scale = 1 / 1.1^step`。step 0 は正確な `1`（`=== 1` 高速経路）。
 - `dir === 0` は何もしない。`dir > 0` は step を減らし（ズームアウト、下限 0）、それ以外は増やしてズームイン。`1/1.1^step <= 1/32` ならインしない。
 - `scale < 1` のとき `sw,sh,sx,sy` は `| 0`（正値では切り捨て）してから `drawImage` のソース／デストと `getImageData` に同じ整数を渡す。描く矩形と読む矩形を揃え、API 内部丸めの 1 画素ずれを抑える。
-- ホイールは `#layers` の `wheel`（`passive: false`、`preventDefault`、`dispatch.zoom(deltaY)`）。ピンチは pointer 2 本のときだけ二乗距離の差。3 本では更新しない。開始 `pointerId` は固定しない（採用済み）。
+- ホイールは `#d-canvas` の `wheel`（`passive: false`、`preventDefault`、`dispatch.zoom(deltaY)`）。ピンチは pointer 2 本のときだけ二乗距離の差。3 本では更新しない。開始 `pointerId` は固定しない（採用済み）。
 - `.stage` / `.topbar` は `touch-action: none`。`.panel` は `pan-y`。パネルの iOS ダブルタップズームは `touchend` 350ms 以内 2 回目を `preventDefault`。
 
 ポインタは `#d-canvas`。`pointerdown` で `setPointerCapture`。1 本はパン（`dispatch.move`、CSS 移動×ビデオ／表示スケール）。2 本はピンチ（二乗距離、`Object.keys` 先頭 2 本、3 本では無視）。ホイールは `dispatch.zoom(deltaY)`。ダブルタップで chrome トグル。
 
-フリップは `render.dop.flip`（表示 CTM）と `dispatch.move.flip`（パン符号）。`kick(true)` で再 vis。pause 中のカメラ切替は表示を更新しない（制限）。
+フリップは `dispatch.move.flip`（`_ds.gFlip` とパン符号 `_vx`）。`kick(true)` で再 vis。pause 中のカメラ切替は表示を更新しない（制限）。
 
-`dispatch.showImage` が真のとき、`dispatch.showHistogram` が真なら `render.clearHistogram()` のあと `newFrame.histogram` の **すべてのキー** について `render.histogram` を呼ぶ。偽なら overlay をクリアするだけ。`Draw histogram` の uncheck は `ui.js` が即 `render.clearHistogram()` する。
+`dispatch.showHistogram` が真なら `_hs.gClear` のあと `newFrame.histogram` の **すべてのキー** について `_hs.gDrawHistogram`。偽ならその vis では overlay を触らない。`Draw histogram` の uncheck は `ui.js` が `#h-canvas` の `display:none` と `kick(true)`。
 
-`render.histogram` の画素契約は **`#h-canvas`（カメラ生解像度 = ic）座標系**。表示では hc が `#dcanvas-layer` に CSS contain（`inset:0; width/height:100%`）されるため、ストリップは `#d-canvas` と同じフィットに乗って拡縮される。数値（x=10、幅 1px、高さ `hc.height/3`）を CSS/`dc` ピクセルに直書きすると、640 表示と 1920 内部で見た目が一致しない。
+ヒストグラムの画素契約は **`#h-canvas`（表示サイズ = `#d-canvas`）座標系**。CSS は `inset:0; width/height:100%`。バーは表示ピクセルで 1px。狭いウィンドウでは 266px ストリップが切れる（R4）。
 
-- バー: `fillRect(x, hc.height-1-h, 1, h)`。`x` は 10 から 1px 刻みで 256 本（カバー幅 266px、左下寄せ）。単位は `hc` のビットマップピクセル（= ic）。
+- バー: `fillRect(x, hc.height-1-h, 1, h)`。`x` は 10 から 1px 刻みで 256 本（カバー幅 266px、左下寄せ）。
 - バー高さ = `bins[i] * (hc.height/3) / max(bins)`。CDF 線高さスケール = `(hc.height/3) / numPixels`。底は `hc.height-1`。
-- キーごとに `rgba()` を **2 回**（バー、続いて CDF）。`rgba()` は先に `color = (color+1) % 8` してから `COLOR8[color]` を `rgba(...,0.5)` にする。
-- `dispatch.iDISP` がループ前に `render.histogram.color = 0` とするため、最初のキーのバーは `COLOR8[1]`（赤）、CDF は `COLOR8[2]`（緑）。**黒 (`COLOR8[0]`) はスキップされる。**
+- キーごとに `_rgba(++color)` を **2 回**（バー、続いて CDF）。`_COLORS` は 16 色。`n % length`。
+- `gBeginHistogram` は `color=0` から始めるため、最初のキーのバーは `_COLORS[1]`（緑）、CDF は `_COLORS[2]`（黄）。**インデックス 0（赤）は最初の `++` でスキップされる。**
 - `index.html` の "The histogram overlays the bottom-left of the image." はコピー上の表現。実装は左下 256px ストリップであり、全幅の下帯ではない。
 
 `#h-canvas` は独立レイヤである。`Show histogram` を外せば映像は動き、overlay は消える。
 
-`render.COLOR8` は `C-edge(Sobel)` の疑似カラー（強度を 32 で割った 0–7）とヒストグラム色で共有。
-
-`render.resize` は `dc` を CSS px、`ic` と `hc` を内部解像度に合わせる。どれも幅高さ変更時のみ代入（クリア副作用）。
+`render.L4` は `Edge4(Sobel)` の 4 段階グレー（強度を 64 で割った 0–3）。ヒストグラム色は `Surface` 内部の `_COLORS`。
 
 ### 起動時配線（スクリプト評価の副作用）
 
@@ -545,10 +546,11 @@ out[c][i]           = abs( current[space][c][i] - planes[space][c][i] )
 2. `frame.js` … `Frame` 定義。
 3. `accum.js` … `Accum` コンストラクタ。
 4. `delta.js` … `delta`（`new Accum()`）。
-5. `render.js` … `buildImageFuncs`、iop/dop/hop、`render.accum`。初期 `buildImage` は `'RGB-frame'`（ui が先頭 `'GRAY-frame'` へ差し替え）。
-6. `dispatch.js` … layout、rVFC、fps watcher、`kick()`。
-7. `ui.js` … パネル fade、`#d-canvas` ポインタ、`render.buildImageFuncs` でモード填充、`#afactor` は両 Accum へ。`#show-preview` 既定オフ。`Draw image` は削除。
-8. `camera.js` … pause/resume、`switchCamera`、preview `loadedmetadata`。pause 中切替は制限（表示は更新しない）。
+5. `render.js` … `buildImageFuncs`、`render.accum`、`render.image` / `L4`。初期 `buildImage` は `'RGB-frame'`（ui が先頭 `'GRAY-frame'` へ差し替え）。
+6. `surface.js` … `Surface` コンストラクタ。
+7. `dispatch.js` … layout、rVFC、fps watcher、`kick()`。`_ds` / `_is` / `_hs`。
+8. `ui.js` … パネル fade、`#d-canvas` ポインタ、`render.buildImageFuncs` でモード填充、`#afactor` は両 Accum へ。`#show-preview` 既定オフ。`Draw image` は削除。
+9. `camera.js` … pause/resume、`switchCamera`、preview `loadedmetadata`、末尾 `startCamera()`。pause 中切替は制限（表示は更新しない）。
 
 `dispatch.iDISP` に空 `new Frame`×4 は無い。未使用ローカル `ic`/`dc`、`watch.last`、コメントの `delta.accum`、`delta.id` / `delta.threshold`、コメントアウト `setupRange('dthreshold')` も削除済み（PR 1）。
 
@@ -569,20 +571,20 @@ out[c][i]           = abs( current[space][c][i] - planes[space][c][i] )
 | `field-camera-select` | `.field` | 2 台以上のとき `hidden=false`。1 台以下と stop 後は hidden。 |
 | `camera-select` | `<select>` | `enumerateDevices` の `videoinput`。value は `deviceId`。change で `switchCamera`。GUM 待ち中 disabled。 |
 | `camera-params` / `camera-params-fields` | 動的フィールド | ライブ制約 UI。caps に幅または 2 値以上あるキーだけ。`cam-<key>`。 |
-| `i-canvas` | （削除） | 内部面は `render.ic = render.canvas(w,h)`（未接続）。ズーム拡大用に `render.zc` も同じ。 |
-| `d-canvas` | `<canvas width=640 height=480>` | 表示。CSS は layer いっぱい。ビットマップは CSS px（dpr なし）。 |
-| `h-canvas` | `<canvas width=640 height=480>` | ヒストグラム overlay。ビットマップは ic 生解像度。CSS contain（`inset:0; 100%`）。`pointer-events:none`。 |
+| `i-canvas` | （削除） | 内部面は `new Surface(null, null, true)`（未接続 `_is`）。取り込みは `snap`（copy canvas）。 |
+| `d-canvas` | `<canvas width=640 height=480>` | 表示 `_ds`。CSS は layer いっぱい。ビットマップは CSS px（dpr なし）。ホイール／ポインタ。 |
+| `h-canvas` | `<canvas width=640 height=480>` | ヒストグラム overlay `_hs`。ビットマップは表示サイズ。CSS `inset:0; 100%`。`pointer-events:none`。 |
 | `dcanvas-layer` | `.stage-layer` | 表示ボックス。JS が px 幅高さを書く。`.io-hud` と `#h-canvas` の親。 |
-| `layers` | `.stage` | contain 計算の基準。全画面。CSS padding のみ。`ResizeObserver`。`touch-action: none`。ホイール／ピンチズーム。ポインタのダブルタップで chrome トグル。 |
-| `fps-chart` | `<canvas 240×56>` | Graph 描画先。 |
-| `fps-caption` | `<p>` | Graph が `FPS ave  (min–max)` を書き、`watch` が `get / frm / hist / show` 平均 ms を足す。CSS: wrap 可、`max-width: 22rem`。 |
+| `layers` | `.stage` | contain 計算の基準。全画面。CSS padding のみ。`ResizeObserver`。`touch-action: none`。 |
+| `fps-chart` | `<canvas 240×56>` | fps watcher の cpu スパークライン。 |
+| `fps-caption` | `<p>` | `out:` rAF Hz、`in:` カメラ Hz、`view:` viewed/rAF %、`cpu:` iDISP 時間%。CSS: wrap 可、`max-width: 22rem`。 |
 | `side-panel` | `<aside class="panel">` | `.workspace` 内 overlay。ヘッダー下。背景 50% 透明。初期 display=block。`slide` が display/opacity。幅 720px 以下は下端シート。 |
 | `panel-open-button` | `.panel-fab` | CSS 既定 `display:none`。パネル閉後に JS が `block`。 |
 | `panel-close-button` | `.panel-close` | パネル見出し内。`position:static`。初期表示。 |
 | `image-mode` | `<select>` | JS が `buildImageFuncs` のキーで `Option` を add。change で `syncModeSettings`。 |
 | `show-histogram` | checkbox | `dispatch.showHistogram`。false で overlay をクリアし `display:none`。 |
 | `show-preview` | checkbox | 既定オフ。`#video` の `display`。 |
-| `flip-horizontal` | checkbox | `dop.flip` + `move.flip` + `kick(true)`。 |
+| `flip-horizontal` | checkbox | `dispatch.move.flip`（`_ds.gFlip` + パン符号）+ `kick(true)`。 |
 | `field-afactor` | `.field[data-modes]` | 蓄積 UI のラッパ。`data-modes="GRAY-accum,BW-delta,Gray-delta,RGB-accum"`。初期 `hidden`。 |
 | `afactor` / `-output` / `-increase` / `-decrease` | range 一式 | `setupRange` 命名規則 `name`, `name-output`, `name-increase`, `name-decrease`。range は `onchange`（ドラッグ中は無視）。 |
 | `pause` / `-output` / `-increase` / `-decrease` | range 一式 | `dispatch.duration`（ms）。I/O pause とは別。`data-modes` 無し（常時表示）。ラベルは `Frame interval`。 |
@@ -617,7 +619,7 @@ syncModeSettings();   // document.querySelectorAll('[data-modes]') の hidden �
 
 | 要素 | `data-modes` | 初期 |
 | --- | --- | --- |
-| `#field-afactor` | `GRAY-accum,BW-delta,Gray-delta` | HTML に `hidden`。起動時モードは `GRAY-frame` なので同期後も隠れる |
+| `#field-afactor` | `GRAY-accum,BW-delta,Gray-delta,RGB-accum` | HTML に `hidden`。起動時モードは `GRAY-frame` なので同期後も隠れる |
 | `#pause` の field | （属性なし） | 常時表示（`Frame interval`） |
 | `Draw image` / `Draw histogram` / `Input preview` / `Log` | （属性なし） | 常時表示 |
 | `#field-camera-select` | （属性なし） | 初期 hidden。`videoinput` が 2 以上のとき `syncCameraSelect` が表示 |
@@ -652,21 +654,34 @@ Frame.map[id]; Frame.array; Frame.serial;
 
 ### `dispatch.watcher.fps`
 
-旧 `Graph` / `watch`。`dispatch()` 先頭で 500ms ごと `watcher.fps()`。caption は `out-fps`（rAF EMA）、`in-fps`（1 / rVFC 間隔 EMA）、`view%`（viewed vis / rAF）。チャートは rAF レート。ステージ平均 ms（get/frm/hist/show）は出さない。`dispatch.count` / `dispatch.time` は廃止。
+旧 `Graph` / `watch`。`dispatch()` 先頭で 500ms ごと `watcher.fps()`。caption は `out`（rAF Hz）、`in`（1 / rVFC 間隔）、`view%`（viewed vis / rAF）、`cpu%`（iDISP 時間 / 壁時計）。チャートは cpu 系列。`dispatch.count` / `dispatch.time` は廃止。
+
+### `Surface`
+
+```javascript
+new Surface(canvas, shape, rBoost, copy);
+// canvas 無しまたは copy 真なら未接続 canvas を作る。rBoost は willReadFrequently
+s.fit(size);                 // 幅高さ変更時だけ代入。flip を掛け直す。dirty
+s.shape();                   // [width, height]
+s.clientRect();
+s.show(src);                 // Surface または CanvasImageSource を全面 drawImage
+s.inject(imageData);         // 共有オフスクリーン putImageData → 全面 drawImage
+s.extract(scale, offset, src); // [ImageData, ox, oy]。src があればそこから描いて読む
+s.gFlip(yes);                // 水平 CTM。fit 後に掛け直す
+s.gClear / gFillRect / gFillStyle / gIdentity
+s.gBeginHistogram(num) / gDrawHistogram(bins256) / gEndHistogram
+```
+
+`dispatch` のインスタンス: `_ds`（`#d-canvas`）、`_is`（未接続, rBoost）、`_hs`（`#h-canvas`）、`snap`（copy, rBoost）、fps チャート。
 
 ### `render`
 
 ```javascript
-render.iop.imageData(video, scale, offset); // 取り込み。切り出しは |0 整数
-render.iop.frame(frame);     // buildImage → ic（小さい vis は zc 経由で拡大）
-render.iop.canvas();         // 未接続 ic
-render.dop.show();           // dc.drawImage(ic)
-render.dop.flip(yes);        // 水平反転 CTM。resize 後 _fit が掛け直す
-render.dop.fit(disp);        // dc ビットマップ。変わったらクリア後 show
-render.hop.draw / clear / fit
-render.resize(disp, internal); // dop.fit + iop.fit + hop.fit。dirty を返す
+render.buildImageFuncs;      // モード名 → (ic, frame) => ImageData。ic は未使用
+render.buildImage;           // 現在の関数。ui が差し替え
 render.accum;                // new Accum()。GRAY/RGB-accum 用
 render.image(frame);         // frame.size() の空 ImageData
+render.L4;                   // Edge4(Sobel) の 4 段階
 ```
 
 ### `Accum`
@@ -698,7 +713,7 @@ dispatch.duration;
 dispatch.showHistogram;
 dispatch.zoom(dir);          // 0 無視。>0 アウト
 dispatch.move(dx, dy);       // CSS 移動 → ビデオ座標オフセット
-dispatch.move.flip(yes);
+dispatch.move.flip(yes);     // _ds.gFlip + パン符号
 dispatch.watcher.video.changed();
 dispatch.watcher.fps();
 dispatch.iDISP;
@@ -712,10 +727,6 @@ dispatch.iDISP;
 | --- | --- | --- |
 | `GRAY-frame` | `get('yuv').Y`（`get('gray')` ではない） | Y を RGB に複製 |
 | `GRAY-Histogram equalization` | `get('equalized')` | 均等化グレー |
-| `G-edge(Laplacian)` | `get('laplacian')` | 絶対 Laplacian（互換維持） |
-| `G-edge(Laplacian signed)` | `get('laplacian.signed')` | 零 = 128 の符号付き |
-| `G-edge(Sobel)` | `get('sobel')` | グレー Sobel |
-| `C-edge(Sobel)` | `get('sobel')` | `COLOR8[floor(e/32)]` |
 | `YUV-frame` | `get('yuv')` | Y+1.402V, Y-0.344U-0.714V, Y+1.772U（canvas がクランプ） |
 | `UV:RG-frame` | `get('yuv').UV` | R=U+128, G=V+128, B=0 |
 | `RGB-frame` | `get('ImageData')` | 入力をそのまま返す |
@@ -724,7 +735,12 @@ dispatch.iDISP;
 | `BW-delta` | `delta.get` | 非零を 255。`#field-afactor` 表示 |
 | `Gray-delta` | `delta.get` | 絶対差分。`#field-afactor` 表示 |
 | `8colors` | 3 planes + Otsu | チャネルごと 0/255 |
-| `Bin-edge` | `get('sobel.rgb')` + Otsu | 二値エッジ |
+| `Edge(Laplacian)` | `get('laplacian')` | 絶対 Laplacian |
+| `Edge(Laplacian signed)` | `get('laplacian.signed')` | 零 = 128 の符号付き |
+| `Edge(Sobel)` | `get('sobel')` | グレー Sobel |
+| `Edge4(Sobel)` | `get('sobel')` | `L4[floor(e/64)]` 4 段階グレー |
+| `Edge2(Sobel)` | `get('sobel')` | 127 超を 255 |
+| `Edge(Bin)` | `get('sobel.rgb')` + Otsu | 二値エッジ |
 
 キー文字列は UI ラベルそのもの。リネームはセレクトの表示とログ `image mode:` と、該当する `data-modes` 属性を変える。
 
@@ -733,11 +749,12 @@ dispatch.iDISP;
 ```javascript
 gumConstraints(deviceId); // deviceId があれば {audio:false, video:{deviceId:{exact}}}
                           // 無ければ {audio:false, video:true}
-startCamera();            // #camera-start
+startCamera();            // #camera-start とページロード末尾
                           // 1) 許可プローブ GUM → 即 stop（処理には載せない）
                           // 2) enumerateDevices で videoinput をスキャン
                           // 3) 先頭 deviceId で本起動。2台以上なら #camera-select
                           // generation 不一致なら stream を stop して破棄
+                          // insecure なら GUM せずヘルプ
 switchCamera(deviceId);   // #camera-select change。旧 track.stop のあと取り直し
                           // pause 状態は維持。overlay は live のまま
 stopCamera();             // #camera-stop, pagehide, beforeunload
@@ -811,7 +828,7 @@ Frame 1 個あたり:
 
 ### マイグレーション
 
-サーバ状態が無いのでマイグレーションは不要。静的ファイルを置き換えればよい。HTML / CSS / 8 JS の bind mount は再ビルド無しでブラウザ再読込に反映する。`nginx.conf` はマウントされても reload が要る。`nginx.main.conf` / 証明書スクリプトは `--build` またはコンテナ再作成。証明書はコンテナ起動ごとに作り直す（永続ボリューム無し）。
+サーバ状態が無いのでマイグレーションは不要。静的ファイルを置き換えればよい。HTML / CSS / 9 JS の bind mount は再ビルド無しでブラウザ再読込に反映する。`nginx.conf` はマウントされても reload が要る。`nginx.main.conf` / 証明書スクリプトは `--build` またはコンテナ再作成。証明書はコンテナ起動ごとに作り直す（永続ボリューム無し）。
 
 ---
 
@@ -829,11 +846,11 @@ Frame 1 個あたり:
 
 ### 3. ヒストグラムを別 canvas / overlay DOM にする（**採用済み、PR 3**）
 
-以前は内部 canvas に半透明描画していた。現行は `#h-canvas` overlay + `#show-histogram`。内部 `ImageData` はクリーン。画素契約（ic 座標、x=10、1px×256、高さ 1/3、底 height-1、キーあたり色 2 つ）は維持し、スケールは CSS contain。dc 後段への直描き（sx/sy 手動）は採っていない。
+以前は内部 canvas に半透明描画していた。現行は `#h-canvas` overlay + `#show-histogram`。内部 `ImageData` はクリーン。画素契約（表示座標、x=10、1px×256、高さ 1/3、底 height-1、キーあたり色 2 つ）。dc 後段への直描き（sx/sy 手動）は採っていない。
 
 ### 4. Worker + `OffscreenCanvas`（未採用）
 
-1080p Sobel のメインスレッド占有を避ける。ただし `ImageBitmap` 転送とグローバル状態（`accum`、`render.ic`）の分割が要る。現行の「グローバルスクリプトで追える」ことを優先。ファイル分割（PR 6）はバンドラ無しの script 順であり、Worker 化ではない。
+1080p Sobel のメインスレッド占有を避ける。ただし `ImageBitmap` 転送とグローバル状態（`accum`、`_is`）の分割が要る。現行の「グローバルスクリプトで追える」ことを優先。ファイル分割（PR 6）はバンドラ無しの script 順であり、Worker 化ではない。
 
 ### 5. HTTP と HTTPS を別ホストポートにする（棄却）
 
@@ -841,7 +858,7 @@ Frame 1 個あたり:
 
 ### 6. Laplacian を符号付きのまま疑似カラーする（一部採用）
 
-ゼロ交差の可視化は opt-in モード `G-edge(Laplacian signed)`（零 = 128）として追加した（PR 8）。既定の `G-edge(Laplacian)` はエッジ強度ベンチとして `abs` + 0–255 クランプのまま。`abs/k` スライダ（Open Question 7）は未実装。
+ゼロ交差の可視化は opt-in モード `Edge(Laplacian signed)`（零 = 128）として追加した（PR 8）。既定の `Edge(Laplacian)` はエッジ強度ベンチとして `abs` + 0–255 クランプのまま。`abs/k` スライダ（Open Question 7）は未実装。
 
 ### 7. Let's Encrypt / 正規 CA vs 起動時自己署名（棄却）
 
@@ -904,7 +921,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 
 切替時: 次のイベントで **プールを空** にする（参照を切って GC 待ち。OS へ即返還はしない）。
 
-- 入力解像度変化（`video.videoWidth/Height`。`layoutDisplay` / `render.resize` と同じ。0→実サイズも含む）
+- 入力解像度変化（`video.videoWidth/Height`。`_layoutDisplay` / `_is.fit` と同じ。0→実サイズも含む）
 - `#image-mode` 変更（`ui.js` onchange）
 - 推奨: `stopCamera`（停止後に YUV が 10 枚残らない）
 
@@ -1001,7 +1018,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 | XSS via `print` | Low | `print` は `innerHTML` で文字列連結。`msg` にカメラエラー名が入る。現状ソースは自分たちだが、エスケープしていない。FPS caption は `innerText`。 |
 | キャッシュ | Low | `Cache-Control: no-store`。古い JS がカメラ権限付きで残るのを避ける。 |
 | 権限ポリシー | Low | `Permissions-Policy: camera=(self)` は **クロスオリジン iframe** のカメラを拒否する。同一オリジンの `self` 埋め込みは許可。 |
-| CSP | Low | 未設定。LAN デモとしては許容。インライン script は HTML に無く、script は 8 本のグローバルファイル。 |
+| CSP | Low | 未設定。LAN デモとしては許容。インライン script は HTML に無く、script は 9 本のグローバルファイル。 |
 | ストリーム生存 | Medium | `Stop camera` と `pagehide` / `beforeunload` で `track.stop()`。一時停止は `video.pause()` のみでトラックは live（意図的。凍結表示のため）。Stop せずタブを開き続けると LED は付いたまま。 |
 | 競合する getUserMedia | Low | `startCamera.generation` で古い解決を破棄し、その stream も `stop()` する。 |
 | `file://` | Low | Non-goal。`originWithScheme` のヘルプリンクが `:8888` 無しになる。 |
@@ -1029,8 +1046,8 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 
 1. **PR 0（元文書）:** コード変更なし。設計書を `/app/jscam/cam2-design.md` に置いた。
 2. **このスタックで完了:** PR 1, 2, 3, 5, 6, 7, 8。**残りは PR 4（解像度 cap）のみで延期。** 必須チェーンには入れない。
-3. **フラグ:** コードの feature flag は無い。モード select と checkbox が実行時スイッチ。破壊的変更は `buildImageFuncs` キーを残し新キーを足す（PR 8 の `G-edge(Laplacian signed)` がその例）。
-4. **ステージング:** `docker compose up --build`。検証 URL は `http://127.0.0.1:8888/` と `https://<LAN>:8888/`。HTML/CSS/JS だけの変更は mount 済みなら再ビルド不要（8 JS すべて mount）。
+3. **フラグ:** コードの feature flag は無い。モード select と checkbox が実行時スイッチ。破壊的変更は `buildImageFuncs` キーを残し新キーを足す（PR 8 の `Edge(Laplacian signed)` がその例）。
+4. **ステージング:** `docker compose up --build`。検証 URL は `http://127.0.0.1:8888/` と `https://<LAN>:8888/`。HTML/CSS/JS だけの変更は mount 済みなら再ビルド不要（9 JS すべて mount）。
 5. **ロールバック:** 静的ファイルとイメージタグを戻す。サーバ状態なし。bind mount 開発の HTML/CSS/JS は git revert で即反映。nginx stream / TLS はイメージ戻し。
 6. **証明書:** 起動時生成。ロールバック単位に含めない。
 
@@ -1044,16 +1061,16 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
    理由: typo と計算バグが処理結果を変える。メンテ対象は cam2 側のみ。`cam.js` は対照用に削除しない（決定 5）。ファイル分割後もバンドラは導入しない（決定 17）。
 
 2. **内部 canvas はカメラ生解像度、表示 canvas は contain フィット。表示 backing store は CSS ピクセルで、`devicePixelRatio` を掛けない。**  
-   理由: アルゴリズムをビューポートから独立させる。表示側の `width/height` 代入はリサイズ時だけ。dpr を pause パスで掛けると R2 で凍結フレームが消える。`#h-canvas` のビットマップは内部解像度で、CSS で同じ contain に乗せる。
+   理由: アルゴリズムをビューポートから独立させる。表示側の `width/height` 代入はリサイズ時だけ。dpr を pause パスで掛けると R2 で凍結フレームが消える。`#h-canvas` のビットマップも表示サイズで、CSS 100% で同じ box に乗る。
 
 3. **一時停止は処理ループと `<video>` を止め、canvas ビットマップはリサイズしない。**  
    理由: `canvas.width` 代入が凍結フレームを消す。HUD は `#dcanvas-layer` の CSS overlay で、レイアウト幅に入れない。pause 中の layout は rAF ではなく `ResizeObserver`。
 
-4. **ヒストグラムは `#h-canvas` overlay（ic 解像度、CSS contain）。内部 canvas には焼かない。**  
-   理由: 独立チェックボックス `Draw histogram` とクリーンな内部 `ImageData` が必要だった（旧決定 2 / PR 3）。画素契約は x=10、幅 1px×256、高さ `hc.height/3`、底 `hc.height-1`、キーあたり色 2 つ。ループ前 `color=0` のため最初は赤バー + 緑 CDF。`index.html` の "bottom-left of the image" は全幅下帯ではなく、この左下ストリップを指す。
+4. **ヒストグラムは `#h-canvas` overlay（表示サイズ、CSS 100%）。内部 canvas には焼かない。**  
+   理由: 独立チェックボックス `Draw histogram` とクリーンな内部 `ImageData` が必要だった（旧決定 2 / PR 3）。画素契約は x=10、幅 1px×256、高さ `hc.height/3`、底 `hc.height-1`、キーあたり色 2 つ。`gBeginHistogram` の `color=0` と `++` のため最初は緑バー + 黄 CDF。`index.html` の "bottom-left of the image" は全幅下帯ではなく、この左下ストリップを指す。
 
 5. **既定 Laplacian は符号付き畳み込み → abs → 0–255 クランプ。符号付きプレビューは別キー。**  
-   理由: `Uint8ClampedArray` へ負値を直接書くと 0 になりエッジが消える（`cam.js` のバグ）。abs 後も 255 超は飽和する。零交差の可視化は `G-edge(Laplacian signed)`（零 = 128）で opt-in（PR 8）。既存キーの画素は変えない。
+   理由: `Uint8ClampedArray` へ負値を直接書くと 0 になりエッジが消える（`cam.js` のバグ）。abs 後も 255 超は飽和する。零交差の可視化は `Edge(Laplacian signed)`（零 = 128）で opt-in（PR 8）。既存キーの画素は変えない。
 
 6. **Frame ID は `++Frame.serial`。キャッシュは 10–20 の LRU。`Frame.map` / `id()` は残す。**  
    理由: `performance.now()` ベース ID は衝突する。現行ループは ID 参照しないが、LRU は削除しない（決定 1）。PR 1 でも触らなかった。
@@ -1080,7 +1097,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
     理由: 負荷は rVFC 間引きと Frame interval。vis が走ればカーネルは走る。ヒストグラムを外すと映像は動き overlay だけ消える。
 
 14. **キャプチャ vis は新しいビデオフレームまたは UI 由来の `_changed`。**  
-    理由: `requestVideoFrameCallback` で間引く。未対応 UA は毎 vis 取り込み。zoom/pan/`kick(true)` は `_changed`。
+    理由: `requestVideoFrameCallback` で間引く。未対応 UA は毎 vis 取り込み。zoom/pan/`kick(true)` / `Surface.fit` が真 は `_changed`。
 
 15. **モードに関係ない設定は `[data-modes]` + `syncModeSettings` で隠す。値は隠しても保持する。**  
     理由: Accumulation factor は `GRAY-accum` / `RGB-accum` / `BW-delta` / `Gray-delta` 以外では無意味。`Frame interval` は全モードの待ち時間なので常時出す。カンマ区切りは trim しない。`.field[hidden] { display: none }` を落とすと grid が表示を復活させる。
@@ -1089,10 +1106,13 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
     理由: pause は凍結フレームを残すため `video.pause()` のみ（トラック live、LED 点灯）。rAF は切る。stop は全 `track.stop()`、`srcObject=null`、overlay 復帰、generation token で進行中 GUM を破棄。`pagehide` / `beforeunload` でも stop。R10 の緩和。
 
 17. **スクリプト分割はグローバルのまま、読み込み順を契約にする。**  
-    理由: バンドラ無し（Non-goal）。順は `cam2.js` → `frame.js` → `accum.js` → `delta.js` → `render.js` → `dispatch.js` → `ui.js` → `camera.js`。Dockerfile COPY と compose bind mount に 8 本すべてを含める。`histogram` / `edgeFuncs` は `Object.create(null)` のまま。
+    理由: バンドラ無し（Non-goal）。順は `cam2.js` → `frame.js` → `accum.js` → `delta.js` → `render.js` → `surface.js` → `dispatch.js` → `ui.js` → `camera.js`。Dockerfile COPY と compose bind mount と `.dockerignore` 許可リストに 9 本すべてを含める。`histogram` は `Object.create(null)` のまま。
 
 18. **デジタルズームは処理画素の中央切り出し。パンはオフセット。表示だけの CSS 拡縮はしない。**  
-    理由: 拡縮後の `ImageData` でカーネルと accum を回す。`_scaleStep` 整数で等倍は正確な `1`。切り出しは `| 0`。ピンチは 2 本・`Object.keys` 先頭 2 本（採用済み）。ウィンドウリサイズの形は CSS。ビットマップを消したら `dop.fit` が内部面から `show`。
+    理由: 拡縮後の `ImageData` でカーネルと accum を回す。`_scaleStep` 整数で等倍は正確な `1`。切り出しは `| 0`。ピンチは 2 本・`Object.keys` 先頭 2 本（採用済み）。ウィンドウリサイズの形は CSS。ビットマップを消したら `_ds.show(_is)`。`_ds.fit` を `_is.fit` より先にし、fit が真なら `_changed` で skip を外す。
+
+19. **2d canvas 操作は `Surface`。`render.iop` / `dop` / `hop` は置かない。**  
+    理由: 取り込み・内部・表示・ヒストグラム・fps チャートを同じ API（`fit` / `show` / `extract` / `inject`）に揃える。`rBoost` は読み取り面だけ `willReadFrequently`。ページロードで先頭カメラを `startCamera()` する。
 
 ---
 
@@ -1102,8 +1122,8 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 
 ### 置き場所と名前
 
-- ループや layout をファイル先頭の裸関数にせず、`dispatch.kick` / `cUI.print` / `render.dop.show` のように名前空間のプロパティにする。
-- 結果は名詞（`imageData`、`iop` / `dop` / `hop`）、動作は短い動詞（`kick`、`zoom`、`move`、`fit`、`show`）。
+- ループや layout をファイル先頭の裸関数にせず、`dispatch.kick` / `cUI.print` / `Surface.prototype.show` のように名前空間のプロパティにする。
+- 結果は名詞（`imageData`、`_ds` / `_is` / `_hs`）、動作は短い動詞（`kick`、`zoom`、`move`、`fit`、`show`）。
 - 内部は `_`（`_scale`、`_changed`、`_getters`）。公開と初回計算関数を分ける。
 - vis 経路は短い識別子（`sw,sh,sx,sy`、`ev`）。ポインタ系は接頭辞 `p`（`pdown` / `pup` / `pdist`）。
 - 関数内定数は大文字（`SCALE_MIN`、`SCALE_FACTOR`）。オブジェクトに出さない。
@@ -1114,7 +1134,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 - カンマ先出しと列揃え（`const sw = …` の次行 `, sh = …`。オブジェクトキーのコロン位置）。
 - イベントはアロー `(ev)=>{`。共有表で `this` が要るラッパは `function () { return this._getXxx() }`。
 - 単式アローは `()=>(value)`。
-- UI 配線は IIFE。ファクトリは同じオブジェクトに小さく置く（`render.canvas` 相当の `_canvas()`）。
+- UI 配線は IIFE。ファクトリは同じオブジェクトに小さく置く（`Surface` の `_getGC`）。
 - カタログは実行経路に載せる（`Frame._getters` を `get` が引く、`Accum.SPACES.includes`）。未参照の `Frame.ids` / `accum.spaces` は置かない。
 
 ### 制御と数値
@@ -1124,7 +1144,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 - 番兵・本数は `!=`（`k.length != 2`）。0/1 フラグは `===`。
 - 正のキャンバス座標の整数化は `| 0`。描く矩形と読む矩形は同じ変数。
 - 大小比較だけなら距離は二乗のまま。sqrt しない理由を短く書いてよい。
-- 副作用関数は値も返してよい（dirty フラグ、`resize` の戻り）。
+- 副作用関数は値も返してよい（dirty フラグ、`Surface.fit` の戻り）。
 
 ### エラーとコメント
 
@@ -1152,9 +1172,9 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 | ID | 内容 | 深刻度 | 緩和（現行 / 今後） |
 | --- | --- | --- | --- |
 | R1 | getUserMedia は secure context 必須。LAN の HTTP は失敗する | High | 起動時検査、localhost / HTTPS 誘導、8888 多重化 |
-| R2 | 表示 canvas のビットマップリサイズは内容クリア | High | Observer は CSS のみ（`false`）。ライブ vis の `dop.fit` は代入後 `_show`。pause 中 RO は CSS だけ |
-| R3 | 既定 Laplacian abs + Uint8 clamp。符号と 255 超の強度を失う | Medium | 符号付きバッファ経由。可視化は `G-edge(Laplacian signed)`（零 = 128）。`abs/k` スライダは未提供 |
-| R4 | ヒストグラム overlay は ic 座標。`hc.width < 266` だとバーが切れる | Low | overlay 分離済み（内部 ImageData はクリーン）。現状は生解像度前提。低解像度カメラでストリップが崩れる |
+| R2 | 表示 canvas のビットマップリサイズは内容クリア | High | Observer は CSS のみ（`false`）。ライブ vis は `_ds.fit` のあと `_ds.show(_is)`。fit が真なら `_changed`。pause 中 RO は CSS だけ |
+| R3 | 既定 Laplacian abs + Uint8 clamp。符号と 255 超の強度を失う | Medium | 符号付きバッファ経由。可視化は `Edge(Laplacian signed)`（零 = 128）。`abs/k` スライダは未提供 |
+| R4 | ヒストグラム overlay は表示座標。`hc.width < 266` だとバーが切れる | Low | overlay 分離済み（内部 ImageData はクリーン）。狭いウィンドウでストリップが崩れる |
 | R5 | メインスレッド画素ループ。1080p + `sobel.rgb` で UI が固まりうる | High | モード切替、`Frame interval`、rVFC 間引き。解像度 cap（PR 4）は延期。Worker は未実装 |
 | R6 | 自己署名証明書。警告無視が必要。SAN 不一致だとまた警告 | Medium | `TLS_SAN`。ドキュメントで手順を固定 |
 | R7 | `Frame.map` / `id()` は現行ループから未使用 | Low | LRU は残す（決定 1）。warmup `new Frame`×4 は削除済み |
@@ -1180,7 +1200,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
    **決定:** 残す。`Frame.map` / `id()` / `HIGH=20` / `LOW=10` は削除しない。現行ループは ID を引かないが、契約として保持する。
 
 2. **ヒストグラムを映像から分離するか。**  
-   **決定:** 分離する。**PR 3 で実装済み。** `#h-canvas` + `#show-histogram`。画素は内部（`hc` = `ic`）座標で描き CSS contain でスケールする。
+   **決定:** 分離する。**PR 3 で実装済み。** `#h-canvas` + `#show-histogram`。画素は表示サイズ（`hc` = `#d-canvas`）座標。
 
 4. **カメラ解像度を固定するか。**  
    **決定:** 固定しない。`{audio:false, video:true}` の UA 既定を維持する。PR 4 は延期。負荷はモード切替・`Frame interval`・rVFC 間引き。
@@ -1199,14 +1219,15 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 
 ## References
 
-- `/app/jscam/cam2.js` — `JSCAM_VERSION`, `e`, `Graph`
+- `/app/jscam/cam2.js` — `JSCAM_VERSION`, `e`
 - `/app/jscam/frame.js` — `Frame` / カーネル / LRU
 - `/app/jscam/accum.js` — 指数平滑背景
 - `/app/jscam/delta.js` — 残差
-- `/app/jscam/render.js` — `buildImageFuncs`, `render`
-- `/app/jscam/dispatch.js` — layout, rAF ループ, `watch`
+- `/app/jscam/render.js` — `buildImageFuncs`, `render.accum`
+- `/app/jscam/surface.js` — `Surface`
+- `/app/jscam/dispatch.js` — layout, rAF ループ, watcher, Surface インスタンス
 - `/app/jscam/ui.js` — パネル / モード / range
-- `/app/jscam/camera.js` — start / stop / pause
+- `/app/jscam/camera.js` — start / stop / pause。ロード末尾で `startCamera()`
 - `/app/jscam/cam.js` — 修正前。バグ対照用
 - `/app/jscam/index.html` — DOM 契約と script 順
 - `/app/jscam/cam2.css` — overlay / contain / パネル / `#h-canvas` / caption wrap
