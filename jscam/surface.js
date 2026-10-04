@@ -5,26 +5,6 @@ const Surface = function (canvas, shape, rBoost, copy) {
 };
 
 (() => {
-	const	_COLORS = [
-		[255,   0,   0]
-	,	[  0, 255,   0]
-	,	[255, 255,   0]
-	,	[  0,   0, 255]
-	,	[255,   0, 255]
-	,	[  0, 255, 255]
-	,	[255, 255, 255]
-	,	[127,   0,   0]
-	,	[  0, 127,   0]
-	,	[127, 127,   0]
-	,	[255, 127,   0]
-	,	[  0,   0, 127]
-	,	[127,   0, 127]
-	,	[  0, 127, 127]
-	,	[  0, 255, 127]
-	,	[127, 127, 127]
-	]
-	;
-
 	const	_getGC = (c, r) => (
 		!!r ? c.getContext('2d', {willReadFrequently: true})
 		    : c.getContext('2d')
@@ -115,12 +95,14 @@ const Surface = function (canvas, shape, rBoost, copy) {
 		,	0, 0, tc.width,  tc.height
 		);
 	};
-	_p.extract = function (scale, offset) {
+	_p.extract = function (scale, offset, src) {
 		const	tc = this._tc
 		,	gc = this._gc
 		;
 		if (scale === undefined
 		||  scale === 1) {
+			if (src) 
+				gc.drawImage(src, 0, 0, tc.width, tc.height);
 			return [gc.getImageData(0, 0, tc.width, tc.height), 0, 0]
 		}
 
@@ -158,7 +140,15 @@ const Surface = function (canvas, shape, rBoost, copy) {
 			} else	sy = ny;
 		}
 
-		return [gc.getImageData(sx, sy, sw, sh), ox, oy]
+		if (!src) 
+			return [gc.getImageData(sx, sy, sw, sh), ox, oy]
+
+		gc.drawImage(src
+		,	sx, sy, sw, sh
+		,	 0,  0, sw, sh
+		);
+
+		return [gc.getImageData(0, 0, sw, sh), ox, oy]
 	}
 
 	_p.gIdentity = function () {
@@ -191,6 +181,25 @@ const Surface = function (canvas, shape, rBoost, copy) {
 		);
 	};
 
+	const	_COLORS = [
+		[255,   0,   0]
+	,	[  0, 255,   0]
+	,	[255, 255,   0]
+	,	[  0,   0, 255]
+	,	[255,   0, 255]
+	,	[  0, 255, 255]
+	,	[255, 255, 255]
+	,	[127,   0,   0]
+	,	[  0, 127,   0]
+	,	[127, 127,   0]
+	,	[255, 127,   0]
+	,	[  0,   0, 127]
+	,	[127,   0, 127]
+	,	[  0, 127, 127]
+	,	[  0, 255, 127]
+	,	[127, 127, 127]
+	]
+	;
 	const	_rgba = (n)=>{
 		const C = _COLORS[n % _COLORS.length];
 		return 'rgba(' + C[0] + ',' + C[1] + ',' + C[2] + ',0.5)'
@@ -212,7 +221,6 @@ const Surface = function (canvas, shape, rBoost, copy) {
 		,	max = histogram.reduce((a,b)=>(Math.max(a,b)), 0)
 		,	barScale = (tc.height / 3) / max
 		;
-
 		gc.fillStyle = _rgba(++hs.color);
 		for (let x = 10, i = 0; i < histogram.length; ++i, ++x) {
 			const h = histogram[i] * barScale;

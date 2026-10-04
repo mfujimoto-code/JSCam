@@ -204,9 +204,8 @@ const dispatch = ()=>{
 			_stat.inc('viewed');
 
 			snap.fit([_video.videoWidth, _video.videoHeight]);
-			snap.show(_video);
 
-			const	extract = snap.extract(_scale, _offset)
+			const	extract = snap.extract(_scale, _offset, _video)
 			,	srcImage = extract[0]
 			;
 			_offset[0] = extract[1];
