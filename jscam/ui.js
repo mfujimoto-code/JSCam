@@ -190,7 +190,6 @@ cUI.print = (msg) => {
 
 (() => {
 	e('flip-horizontal').onchange = function () {
-		render.dop.flip(this.checked);
 		dispatch.move.flip(this.checked);
 		dispatch.kick(true);
 	}
@@ -198,7 +197,6 @@ cUI.print = (msg) => {
 	e('show-histogram').onchange = function () {
 		dispatch.showHistogram = this.checked;
 		e('h-canvas').style.display = this.checked ? 'block' : 'none';
-		render.hop.clear();
 		dispatch.kick(true);
 	}
 

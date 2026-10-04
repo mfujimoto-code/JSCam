@@ -28,20 +28,33 @@ const dispatch = ()=>{
 	const	_stage = e('layers')
 	,	_layer = e('dcanvas-layer')
 	,	_video = e('video')
+	,	_ds = new Surface(e('d-canvas'))	// display surface (image)
+	,	_is = new Surface(null, null, true)	// internal  surface (image)
+	,	_hs = new Surface(e('h-canvas'))	// histogram surface
 	;
 
 	const	_stat = {
 			rAF: 0
 		,	viewed: 0
 		,	rVFC: 0
+		,	iDISP: 0
 		,	reset: ()=>{
-				_stat.rAF = 0;
+				_stat.rAF    = 0;
 				_stat.viewed = 0;
+				_stat.iDISP  = 0;
 			}
 		,	inc: (prop)=>{
 				_stat[prop] = (_stat[prop] + 1) >>> 0
 			}
 		}
+	;
+
+	let	_scale = 1
+	,	_scaleStep = 0
+	,	_offset = [0.0, 0.0]
+	,	_changed = false
+	,	_vx = 1.0
+	,	_vy = 1.0
 	;
 
 	const  _fitDisplaySize = (videoW, videoH)=>{
@@ -74,8 +87,14 @@ const dispatch = ()=>{
 		_layer.style.height = disp[1] + 'px';
 		_layer.style.aspectRatio = 'auto';
 
-		if (resizeBitmap)
-			render.resize(disp, [_video.videoWidth, _video.videoHeight]);
+		if (resizeBitmap) {
+			const dfit = _ds.fit(disp);
+			if (dfit) _ds.show(_is);
+			const ifit = _is.fit([_video.videoWidth, _video.videoHeight]);
+			const hfit = _hs.fit(disp);
+
+			_changed = _changed || dfit || ifit || hfit;
+		}
 
 		return disp
 	};
@@ -86,14 +105,6 @@ const dispatch = ()=>{
 
 	_displayResize.observe(_stage);
 
-	let	_scale = 1
-	,	_scaleStep = 0
-	,	_offset = [0.0, 0.0]
-	,	_changed = false
-	,	_vx = 1.0
-	,	_vy = 1.0
-	;
-
 	const	_xscale = (r, is)=>{
 		if (r.width <= 0) return 1.0
 		return is[0] * _scale / r.width
@@ -103,8 +114,8 @@ const dispatch = ()=>{
 		return is[1] * _scale / r.height
 	};
 	dispatch.move = (x, y) => {
-		const	r = render.dop.clientRect()
-		,	is = render.iop.size()
+		const	r = _ds.clientRect()
+		,	is = _is.shape()
 		,	xscale = _xscale(r, is)
 		,	yscale = _yscale(r, is)
 		;
@@ -114,6 +125,7 @@ const dispatch = ()=>{
 	}
 	dispatch.move.flip = (yes) => {
 		_vx = yes ? -1.0 : 1.0;
+		_ds.gFlip(yes);
 	};
 
 	dispatch.zoom = (dir)=>{
@@ -160,10 +172,20 @@ const dispatch = ()=>{
 
 	dispatch.iDISP = (function * () {
 		let	suggestion = 0
+		,	begin = performance.now()
 		;
+		const	snap = new Surface(
+			_video
+		,	[_video.videoWidth, _video.videoHeight]
+		,	true
+		,	true
+		);
 
 		while (true) {
+			_stat.iDISP += performance.now() - begin;
 			yield suggestion;
+			begin = performance.now();
+
 			suggestion = 0;
 
 			if (_video.videoWidth == 0 || _video.videoHeight == 0) {
@@ -183,20 +205,30 @@ const dispatch = ()=>{
 			_changed = false;
 			_stat.inc('viewed');
 
-			const	imageData = render.iop.imageData(_video, _scale, _offset);
-			_offset = render.iop.lastOffset();
+			snap.fit([_video.videoWidth, _video.videoHeight]);
 
-			const	newFrame = new Frame(imageData, _video.currentTime);
+			const	extract = snap.extract(_scale, _offset, _video)
+			,	srcImage = extract[0]
+			;
+			_offset[0] = extract[1];
+			_offset[1] = extract[2];
 
-			render.iop.frame(newFrame);
-			render.dop.show();
+			const	newFrame = new Frame(srcImage, _video.currentTime)
+			,	di = render.buildImage(null, newFrame)
+			;
+
+			_is.inject(di);
+			_ds.show(_is);
 
 			if (!dispatch.showHistogram)
 				continue
-			render.hop.clear();
+
+			_hs.gClear();
+			_hs.gBeginHistogram(newFrame.num());
 			for (let k in newFrame.histogram) {
-				render.hop.draw(newFrame, newFrame.histogram[k]);
+				_hs.gDrawHistogram(newFrame.histogram[k]);
 			}
+			_hs.gEndHistogram();
 		}
 	})();	// end dispatch.iDISP
 
@@ -209,7 +241,7 @@ const dispatch = ()=>{
 	dispatch.watcher = {video:{}, fps:{}};
 	(()=>{	// begin video watcher 
 		const	_wv = dispatch.watcher.video
-		,	_AFACTOR = 0.2
+		,	_AFACTOR = (1/4)
 		;
 
 		if (!_video.requestVideoFrameCallback) {
@@ -258,31 +290,30 @@ const dispatch = ()=>{
 
 		dispatch.watcher.fps = _wf;
 
-		const	_fc = e('fps-chart')
-		,	_gc = _fc.getContext('2d')
-		,	_caption = e('fps-caption')
-		,	_ema = {rAF:0, viewed:0}
+		const	_cs = new Surface(e('fps-chart'));
+
+		const	_caption = e('fps-caption')
+		,	_emaStat = {rAF:0, viewed:0, iDISP:0}
 		,	_AFACTOR = 0.2
+		,	_ema = (a, b) => ((1 - _AFACTOR) * a + _AFACTOR * b)
 		,	_STEP = 2
-		,	_COLOR = 'rgba(255,0,255,0.5)'
-		,	_low = Math.round(_fc.width / _STEP)
-		,	_high = Math.round(_low * 1.5)
+		,	_low = (_cs.shape()[0] / _STEP)|0
+		,	_high = (_low * 1.5)|0
 		,	_values = []
 		;
 		let	_max = -Infinity;
 
-		_gc.fillStyle = _COLOR;
+		_cs.gFillStyle('rgba(255,0,255,0.5)');
 
 		const _update = (duration)=>{
-			const 	factor = 1 / duration * 1000
-			,	frAF = _stat.rAF * factor
-			,	fframe = _stat.viewed * factor
-			;
+			const 	factor = 1 / duration;
 
-			_ema.rAF = (1 - _AFACTOR) * _ema.rAF + _AFACTOR * frAF;
-			_ema.viewed = (1 - _AFACTOR) * _ema.viewed + _AFACTOR * fframe;
-			_values.push(_ema.rAF);
-			(_max < _ema.rAF) && (_max = _ema.rAF);
+			_emaStat.rAF = _ema(_emaStat.rAF, _stat.rAF * factor);
+			_emaStat.viewed = _ema(_emaStat.viewed, _stat.viewed * factor);
+			_emaStat.iDISP = _ema(_emaStat.iDISP, _stat.iDISP * factor);
+
+			_values.push(_emaStat.iDISP);
+			(_max < _emaStat.iDISP) && (_max = _emaStat.iDISP);
 			if (_values.length > _high) {
 				while (_values.length > _low) {
 					_values.shift();
@@ -293,26 +324,32 @@ const dispatch = ()=>{
 
 		const _showText = ()=>{
 			_caption.textContent =
-				'out-fps:'
-			+	Math.round(_ema.rAF)
-			+	' in-fps:'
-			+	Math.round(1 / dispatch.watcher.video.duration())
+				'out:'
+			+	(Math.round(_emaStat.rAF * 1000))
+			+	' in:'
+			+	(Math.round(1 / dispatch.watcher.video.duration()))
 			+	' view:'
-			+	((_ema.rAF > 0) ? Math.round(_ema.viewed / _ema.rAF * 100) : 0)
+			+	((_emaStat.rAF > 0) ? Math.round(_emaStat.viewed / _emaStat.rAF * 100): 0)
+			+	'% cpu:'
+			+	(Math.round(_emaStat.iDISP * 100))
 			+	'%'
 			;
 		};
 
 		const _showChart = ()=>{
-			const scale = (_max == 0) ? 0 : _fc.height / Math.abs(_max);
-			_gc.clearRect(0, 0, _fc.width, _fc.height);
-			_gc.fillRect(0, _fc.height - 1, _fc.width, 1);
-			for (let x = _fc.width - _STEP
+			const	shape = _cs.shape()
+			,	cw = shape[0]
+			,	ch = shape[1]
+			;
+			const scale = (_max == 0) ? 0 : ch / Math.abs(_max);
+			_cs.gClear();
+			_cs.gFillRect(0, ch - 1, cw, 1);
+			for (let x = cw - _STEP
 			     ,   i = _values.length - 1;
 			     x >= 0 && i >= 0;
 			     --i, x -= _STEP) {
-				const h = Math.floor(Math.abs(_values[i]) * scale);
-				_gc.fillRect(x, _fc.height - h, _STEP, h);
+				const h = (Math.abs(_values[i]) * scale)|0;
+				_cs.gFillRect(x, ch - h, _STEP, h);
 			}
 		};
 
