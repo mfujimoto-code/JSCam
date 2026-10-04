@@ -80,9 +80,10 @@ const dispatch = ()=>{
 		_layer.style.aspectRatio = 'auto';
 
 		if (resizeBitmap) {
-			_ds.fit(disp);
 			_is.fit([_video.videoWidth, _video.videoHeight]);
 			_hs.fit(disp);
+			if (_ds.fit(disp))
+				_ds.show(_is);
 		}
 
 		return disp
