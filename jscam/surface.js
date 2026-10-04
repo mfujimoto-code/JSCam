@@ -1,19 +1,27 @@
 'use strict';
 
-const Surface = function (canvas, shape, boostRead, copy) {
-	this._init(canvas, shape, boostRead, copy);
+const Surface = function (canvas, shape, rBoost, copy) {
+	this._init(canvas, shape, rBoost, copy);
 };
 
 (() => {
-	const	_COLOR8 = [
-		[127, 127, 127]
-	,	[255,   0,   0]
+	const	_COLORS = [
+		[255,   0,   0]
 	,	[  0, 255,   0]
-	,	[  0,   0, 255]
 	,	[255, 255,   0]
+	,	[  0,   0, 255]
 	,	[255,   0, 255]
 	,	[  0, 255, 255]
 	,	[255, 255, 255]
+	,	[127,   0,   0]
+	,	[  0, 127,   0]
+	,	[127, 127,   0]
+	,	[255, 127,   0]
+	,	[  0,   0, 127]
+	,	[127,   0, 127]
+	,	[  0, 127, 127]
+	,	[  0, 255, 127]
+	,	[127, 127, 127]
 	]
 	;
 
@@ -24,15 +32,7 @@ const Surface = function (canvas, shape, boostRead, copy) {
 
 	const _p = Surface.prototype;
 
-	// canvas: a canvas element to make surface
-	// rBoost: boost extracting pixels from surface
-	// copy:   take a snapshot of canvas and use it 
 	_p._init = function (canvas, shape, rBoost, copy) {
-		// itinialize properties
-		//	_state: internal state
-		//	_tc:    target canvas
-		//	_gc:    context for rendering to this surface
-
 		this._state = {
 			flip:	false		// flip horizontal
 		};
@@ -92,7 +92,7 @@ const Surface = function (canvas, shape, boostRead, copy) {
 		gc.drawImage(src, 0, 0, tc.width, tc.height);
 	};
 
-	// internal use for extracting a part of surface
+	// internal use for injecting
 	const	_ic = document.createElement('canvas')
 	, 	_igc = _getGC(_ic, true)
 	;
@@ -192,7 +192,7 @@ const Surface = function (canvas, shape, boostRead, copy) {
 	};
 
 	const	_rgba = (n)=>{
-		const C = _COLOR8[n % _COLOR8.length];
+		const C = _COLORS[n % _COLORS.length];
 		return 'rgba(' + C[0] + ',' + C[1] + ',' + C[2] + ',0.5)'
 	};
 	_p.gBeginHistogram = function (num) {
