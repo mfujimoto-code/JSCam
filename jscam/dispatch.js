@@ -49,6 +49,14 @@ const dispatch = ()=>{
 		}
 	;
 
+	let	_scale = 1
+	,	_scaleStep = 0
+	,	_offset = [0.0, 0.0]
+	,	_changed = false
+	,	_vx = 1.0
+	,	_vy = 1.0
+	;
+
 	const  _fitDisplaySize = (videoW, videoH)=>{
 		const cs = getComputedStyle(_stage);
 		const maxW = Math.max(1,
@@ -80,10 +88,12 @@ const dispatch = ()=>{
 		_layer.style.aspectRatio = 'auto';
 
 		if (resizeBitmap) {
-			_is.fit([_video.videoWidth, _video.videoHeight]);
-			_hs.fit(disp);
-			if (_ds.fit(disp))
-				_ds.show(_is);
+			const dfit = _ds.fit(disp);
+			if (dfit) _ds.show(_is);
+			const ifit = _is.fit([_video.videoWidth, _video.videoHeight]);
+			const hfit = _hs.fit(disp);
+
+			_changed = _changed || dfit || ifit || hfit;
 		}
 
 		return disp
@@ -94,14 +104,6 @@ const dispatch = ()=>{
 	});
 
 	_displayResize.observe(_stage);
-
-	let	_scale = 1
-	,	_scaleStep = 0
-	,	_offset = [0.0, 0.0]
-	,	_changed = false
-	,	_vx = 1.0
-	,	_vy = 1.0
-	;
 
 	const	_xscale = (r, is)=>{
 		if (r.width <= 0) return 1.0
