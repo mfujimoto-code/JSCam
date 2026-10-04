@@ -6,6 +6,7 @@
 !accum.js
 !delta.js
 !render.js
+!surface.js
 !dispatch.js
 !ui.js
 !camera.js
