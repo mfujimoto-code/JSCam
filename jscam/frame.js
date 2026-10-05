@@ -10,24 +10,8 @@ const Frame = function (image, timestamp) {
 	this.timestamp = ()=>(timestamp);
 
 	this.feed(image);
-
-	// const id = ++Frame.serial;
-	// this.id = ()=>(id);
-	// Frame.array.push(id);
-	// Frame.map[id] = this;
-
-	// if (Frame.array.length > Frame.HIGH) {
-	// 	while (Frame.array.length > Frame.LOW) {
-	// 		const oldest = Frame.array.shift();
-	// 		delete Frame.map[oldest];
-	// 	}
-	// }
 }
-Frame.HIGH = 20;
-Frame.LOW = 10;
-Frame.array = [];
-Frame.map = {};
-Frame.serial = 0;
+
 Frame._Laplacian = (dst, src, O)=>{ // 3x3 8direction
 	const K = [ // Laplacian kernel
 		  1,  1, 1

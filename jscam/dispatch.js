@@ -217,7 +217,7 @@ const dispatch = ()=>{
 				continue
 			}
 
-			if (!dispatch.watcher.video.changed() && !_changed)
+			if (!_changed)
 				continue
 
 			_changed = false;
@@ -251,41 +251,26 @@ const dispatch = ()=>{
 
 	dispatch.watcher = {video:{}, fps:{}};
 	(()=>{	// begin video watcher 
-		const	_wv = dispatch.watcher.video
-		,	_AFACTOR = (1/4)
-		;
+		const	_wv = dispatch.watcher.video;
 
-		if (!_video.requestVideoFrameCallback) {
-			_wv.kick = ()=>{};
-			_wv.changed = ()=>(true);
-			_wv.duration = ()=>(1/30);
-			return
-		}
-
-		let	_lastVFCCount = 0;
+		if (!_video.requestVideoFrameCallback) 
+			throw new Error('not supported requestVideoFrameCallback')
 
 		let	_VFCkicked = false;
 		_wv.kick = () => {
 			if (_VFCkicked) return
 			_VFCkicked = true;
-			// NOTE:
-			//   Keep this callback lightweight.
-			//   If canvas/video operations are done in here,
-			//   some operations may go wrong even if those are done in the rAF.
-			//   It seems to conflict graphics operations in the lower layer.
 			_video.requestVideoFrameCallback(()=>{
+				// With some UAs, canvas/video work here can make
+				// rAF drawIamge stop updating.
+				// Keep this callback lightweight.
 				const	begin = performance.now();
 				_VFCkicked = false;
 				++_stat.rVFC;
+				_changed = true;
 				_wv.kick();
 				_stat.running += performance.now() - begin;
 			});
-		};
-
-		_wv.changed = () => {
-			const changed = _stat.rVFC != _lastVFCCount;
-			_lastVFCCount = _stat.rVFC;
-			return changed
 		};
 	})();	// end video watcher
 
@@ -298,7 +283,7 @@ const dispatch = ()=>{
 
 		const	_caption = e('fps-caption')
 		,	_emaStat = {rAF:0, rVFC:0, viewed:0, running:0}
-		,	_AFACTOR = 0.2
+		,	_AFACTOR = (1/4)
 		,	_ema = (a, b) => ((1 - _AFACTOR) * a + _AFACTOR * b)
 		,	_STEP = 2
 		,	_low = (_cs.shape()[0] / _STEP)|0
