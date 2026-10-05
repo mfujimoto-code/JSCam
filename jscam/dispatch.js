@@ -213,7 +213,7 @@ const dispatch = ()=>{
 			_offset[1] = extract[2];
 
 			const	newFrame = new Frame(srcImage, _video.currentTime)
-			,	di = render.buildImage(null, newFrame)
+			,	di = render.buildImage(newFrame)
 			;
 
 			_is.inject(di);

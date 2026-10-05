@@ -3,7 +3,7 @@
 const render = Object.create(null);
 
 render.buildImageFuncs = Object.assign(Object.create(null), {
-	'GRAY-frame': function (ic, frame) {
+	'GRAY-frame': function (frame) {
 		const yuv = frame.get('yuv');
 		const num  = frame.num()
 		,     imageData = render.image(frame)
@@ -17,7 +17,7 @@ render.buildImageFuncs = Object.assign(Object.create(null), {
 		}
 		return imageData;
 	}
-,	'GRAY-Histogram equalization': function (ic, frame) {
+,	'GRAY-Histogram equalization': function (frame) {
 		const e = frame.get('equalized')
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
@@ -34,7 +34,7 @@ render.buildImageFuncs = Object.assign(Object.create(null), {
 	// R = 1.000Y          + 1.402V
 	// G = 1.000Y - 0.344U - 0.714V
 	// B = 1.000Y + 1.772U
-,	'YUV-frame': function (ic, frame) {
+,	'YUV-frame': function (frame) {
 		const yuv = frame.get('yuv')
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
@@ -52,7 +52,7 @@ render.buildImageFuncs = Object.assign(Object.create(null), {
 		}
 		return imageData;
 	}
-,	'UV:RG-frame': function (ic, frame) {
+,	'UV:RG-frame': function (frame) {
 		const yuv = frame.get('yuv')
 		,     num  = frame.num() * 2
 		,     imageData = render.image(frame)
@@ -69,10 +69,10 @@ render.buildImageFuncs = Object.assign(Object.create(null), {
 		}
 		return imageData;
 	}
-,	'RGB-frame': function (ic, frame) {
+,	'RGB-frame': function (frame) {
 		return frame.get('ImageData');
 	}
-,	'GRAY-accum': function (ic, frame) {
+,	'GRAY-accum': function (frame) {
 		render.accum.update(frame, 'gray');
 		const gray = render.accum.planes('gray')[0]
 		,     num  = frame.num()
@@ -88,7 +88,7 @@ render.buildImageFuncs = Object.assign(Object.create(null), {
 
 		return imageData
 	}
-,	'RGB-accum': function (ic, frame) {
+,	'RGB-accum': function (frame) {
 		render.accum.update(frame, 'rgb');
 		const rgb = render.accum.planes('rgb')
 		,     num  = frame.num()
@@ -104,7 +104,7 @@ render.buildImageFuncs = Object.assign(Object.create(null), {
 
 		return imageData
 	}
-,	'BW-delta': function (ic, frame) {
+,	'BW-delta': function (frame) {
 		const d = delta.get(frame)
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
@@ -120,7 +120,7 @@ render.buildImageFuncs = Object.assign(Object.create(null), {
 
 		return imageData
 	}
-,	'Gray-delta': function (ic, frame) {
+,	'Gray-delta': function (frame) {
 		const d = delta.get(frame)
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
@@ -136,7 +136,7 @@ render.buildImageFuncs = Object.assign(Object.create(null), {
 
 		return imageData
 	}
-,	'8colors': function (ic, frame) {
+,	'8colors': function (frame) {
 		const num  = frame.num()
 		,     imageData = render.image(frame)
 		,     data = imageData.data
@@ -157,7 +157,7 @@ render.buildImageFuncs = Object.assign(Object.create(null), {
 
 		return imageData
 	}
-,	'Edge(Laplacian)': function (ic, frame) {
+,	'Edge(Laplacian)': function (frame) {
 		const e = frame.get('laplacian')
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
@@ -173,7 +173,7 @@ render.buildImageFuncs = Object.assign(Object.create(null), {
 
 		return imageData
 	}
-,	'Edge(Laplacian signed)': function (ic, frame) {
+,	'Edge(Laplacian signed)': function (frame) {
 		const e = frame.get('laplacian.signed')
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
@@ -189,7 +189,7 @@ render.buildImageFuncs = Object.assign(Object.create(null), {
 
 		return imageData
 	}
-,	'Edge(Sobel)': function (ic, frame) {
+,	'Edge(Sobel)': function (frame) {
 		const e = frame.get('sobel')
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
@@ -205,7 +205,7 @@ render.buildImageFuncs = Object.assign(Object.create(null), {
 
 		return imageData
 	}
-,	'Edge4(Sobel)': function (ic, frame) {
+,	'Edge4(Sobel)': function (frame) {
 		const e = frame.get('sobel')
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
@@ -221,7 +221,7 @@ render.buildImageFuncs = Object.assign(Object.create(null), {
 
 		return imageData
 	}
-,	'Edge2(Sobel)': function (ic, frame) {
+,	'Edge2(Sobel)': function (frame) {
 		const e = frame.get('sobel')
 		,     num  = frame.num()
 		,     imageData = render.image(frame)
@@ -237,7 +237,7 @@ render.buildImageFuncs = Object.assign(Object.create(null), {
 
 		return imageData
 	}
-,	'Edge(Bin)': function (ic, frame) {
+,	'Edge(Bin)': function (frame) {
 		const num  = frame.num()
 		,     imageData = render.image(frame)
 		,     data = imageData.data
