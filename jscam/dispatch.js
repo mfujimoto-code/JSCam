@@ -33,6 +33,17 @@ const dispatch = ()=>{
 	,	_hs = new Surface(e('h-canvas'))	// histogram surface
 	;
 
+	const _SNAPNUM = 5;
+	dispatch.snap = [];
+	for (let i = 0; i < _SNAPNUM; ++i) {
+		dispatch.snap.push(new Surface(
+			_video
+		,	[_video.videoWidth, _video.videoHeight]
+		,	true
+		,	true
+		));
+	}
+
 	const	_stat = {
 			rAF:     0
 		,	viewed:  0
@@ -173,12 +184,22 @@ const dispatch = ()=>{
 	dispatch.iDISP = (function * () {
 		let	suggestion = 0
 		;
-		const	snap = new Surface(
-			_video
-		,	[_video.videoWidth, _video.videoHeight]
-		,	true
-		,	true
-		);
+
+		const _fetchVF = ()=>{
+		 	const shot = dispatch.snap.pop();
+		 	dispatch.snap.unshift(shot);
+		 	shot.fit([_video.videoWidth, _video.videoHeight]);
+		 	shot.show(_video);
+		}
+		, _showHistogram = (f)=>{
+			_hs.gClear();
+			_hs.gBeginHistogram(f.num());
+			for (let k in f.histogram) {
+				_hs.gDrawHistogram(f.histogram[k]);
+			}
+			_hs.gEndHistogram();
+		}
+		;
 
 		while (true) {
 			yield suggestion;
@@ -202,9 +223,9 @@ const dispatch = ()=>{
 			_changed = false;
 			++_stat.viewed;
 
-			snap.fit([_video.videoWidth, _video.videoHeight]);
+			_fetchVF();
 
-			const	extract = snap.extract(_scale, _offset, _video)
+			const	extract = dispatch.snap[0].extract(_scale, _offset)
 			,	srcImage = extract[0]
 			;
 			_offset[0] = extract[1];
@@ -217,15 +238,8 @@ const dispatch = ()=>{
 			_is.inject(di);
 			_ds.show(_is);
 
-			if (!dispatch.showHistogram)
-				continue
-
-			_hs.gClear();
-			_hs.gBeginHistogram(newFrame.num());
-			for (let k in newFrame.histogram) {
-				_hs.gDrawHistogram(newFrame.histogram[k]);
-			}
-			_hs.gEndHistogram();
+			if (dispatch.showHistogram)
+				_showHistogram(newFrame);
 		}
 	})();	// end dispatch.iDISP
 
@@ -250,19 +264,20 @@ const dispatch = ()=>{
 
 		let	_lastVFCCount = 0;
 
-		const _rVFC = () => {
-			_wv.kick();
-		};
-
 		let	_VFCkicked = false;
 		_wv.kick = () => {
 			if (_VFCkicked) return
 			_VFCkicked = true;
+			// NOTE:
+			//   Keep this callback lightweight.
+			//   If canvas/video operations are done in here,
+			//   some operations may go wrong even if those are done in the rAF.
+			//   It seems to conflict graphics operations in the lower layer.
 			_video.requestVideoFrameCallback(()=>{
 				const	begin = performance.now();
 				_VFCkicked = false;
 				++_stat.rVFC;
-				_rVFC();
+				_wv.kick();
 				_stat.running += performance.now() - begin;
 			});
 		};

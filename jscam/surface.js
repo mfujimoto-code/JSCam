@@ -10,6 +10,11 @@ const Surface = function (canvas, shape, rBoost, copy) {
 		    : c.getContext('2d')
 	);
 
+	const	_useOC = (typeof OffscreenCanvas !== 'undefined')
+	,	_getCanvas = _useOC ? ()=>(new OffscreenCanvas(640, 480))
+		                    : ()=>(document.createElement('canvas'))
+	;
+
 	const _p = Surface.prototype;
 
 	_p._init = function (canvas, shape, rBoost, copy) {
@@ -19,7 +24,7 @@ const Surface = function (canvas, shape, rBoost, copy) {
 
 		let	tc = canvas;
 		if (!tc || copy) {
-			tc = document.createElement('canvas');
+			tc = _getCanvas();
 		}
 		const	gc = _getGC(tc, rBoost)
 		;
@@ -73,7 +78,7 @@ const Surface = function (canvas, shape, rBoost, copy) {
 	};
 
 	// internal use for injecting
-	const	_ic = document.createElement('canvas')
+	const	_ic = _getCanvas()
 	, 	_igc = _getGC(_ic, true)
 	;
 	_p.inject = function (imageData) {

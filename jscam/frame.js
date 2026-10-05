@@ -11,17 +11,17 @@ const Frame = function (image, timestamp) {
 
 	this.feed(image);
 
-	const id = ++Frame.serial;
-	this.id = ()=>(id);
-	Frame.array.push(id);
-	Frame.map[id] = this;
+	// const id = ++Frame.serial;
+	// this.id = ()=>(id);
+	// Frame.array.push(id);
+	// Frame.map[id] = this;
 
-	if (Frame.array.length > Frame.HIGH) {
-		while (Frame.array.length > Frame.LOW) {
-			const oldest = Frame.array.shift();
-			delete Frame.map[oldest];
-		}
-	}
+	// if (Frame.array.length > Frame.HIGH) {
+	// 	while (Frame.array.length > Frame.LOW) {
+	// 		const oldest = Frame.array.shift();
+	// 		delete Frame.map[oldest];
+	// 	}
+	// }
 }
 Frame.HIGH = 20;
 Frame.LOW = 10;
