@@ -33,18 +33,27 @@ const dispatch = ()=>{
 	,	_hs = new Surface(e('h-canvas'))	// histogram surface
 	;
 
+	const _SNAPNUM = 5;
+	dispatch.snap = [];
+	for (let i = 0; i < _SNAPNUM; ++i) {
+		dispatch.snap.push(new Surface(
+			_video
+		,	[_video.videoWidth, _video.videoHeight]
+		,	true
+		,	true
+		));
+	}
+
 	const	_stat = {
-			rAF: 0
-		,	viewed: 0
-		,	rVFC: 0
-		,	iDISP: 0
+			rAF:     0
+		,	viewed:  0
+		,	rVFC:    0
+		,	running: 0
 		,	reset: ()=>{
-				_stat.rAF    = 0;
-				_stat.viewed = 0;
-				_stat.iDISP  = 0;
-			}
-		,	inc: (prop)=>{
-				_stat[prop] = (_stat[prop] + 1) >>> 0
+				_stat.rAF      = 0;
+				_stat.rVFC     = 0;
+				_stat.viewed   = 0;
+				_stat.running  = 0;
 			}
 		}
 	;
@@ -164,27 +173,36 @@ const dispatch = ()=>{
 
 		_AFkicked = true;
 		requestAnimationFrame(()=>{
+			const	begin = performance.now();
 			_AFkicked = false;
-			_stat.inc('rAF');
+			++_stat.rAF;
 			dispatch();
+			_stat.running += performance.now() - begin;
 		});
 	}
 
 	dispatch.iDISP = (function * () {
 		let	suggestion = 0
-		,	begin = performance.now()
 		;
-		const	snap = new Surface(
-			_video
-		,	[_video.videoWidth, _video.videoHeight]
-		,	true
-		,	true
-		);
+
+		const _fetchVF = ()=>{
+		 	const shot = dispatch.snap.pop();
+		 	dispatch.snap.unshift(shot);
+		 	shot.fit([_video.videoWidth, _video.videoHeight]);
+		 	shot.show(_video);
+		}
+		, _showHistogram = (f)=>{
+			_hs.gClear();
+			_hs.gBeginHistogram(f.num());
+			for (let k in f.histogram) {
+				_hs.gDrawHistogram(f.histogram[k]);
+			}
+			_hs.gEndHistogram();
+		}
+		;
 
 		while (true) {
-			_stat.iDISP += performance.now() - begin;
 			yield suggestion;
-			begin = performance.now();
 
 			suggestion = 0;
 
@@ -199,36 +217,29 @@ const dispatch = ()=>{
 				continue
 			}
 
-			if (!dispatch.watcher.video.changed() && !_changed)
+			if (!_changed)
 				continue
 
 			_changed = false;
-			_stat.inc('viewed');
+			++_stat.viewed;
 
-			snap.fit([_video.videoWidth, _video.videoHeight]);
+			_fetchVF();
 
-			const	extract = snap.extract(_scale, _offset, _video)
+			const	extract = dispatch.snap[0].extract(_scale, _offset)
 			,	srcImage = extract[0]
 			;
 			_offset[0] = extract[1];
 			_offset[1] = extract[2];
 
 			const	newFrame = new Frame(srcImage, _video.currentTime)
-			,	di = render.buildImage(null, newFrame)
+			,	di = render.buildImage(newFrame)
 			;
 
 			_is.inject(di);
 			_ds.show(_is);
 
-			if (!dispatch.showHistogram)
-				continue
-
-			_hs.gClear();
-			_hs.gBeginHistogram(newFrame.num());
-			for (let k in newFrame.histogram) {
-				_hs.gDrawHistogram(newFrame.histogram[k]);
-			}
-			_hs.gEndHistogram();
+			if (dispatch.showHistogram)
+				_showHistogram(newFrame);
 		}
 	})();	// end dispatch.iDISP
 
@@ -240,48 +251,26 @@ const dispatch = ()=>{
 
 	dispatch.watcher = {video:{}, fps:{}};
 	(()=>{	// begin video watcher 
-		const	_wv = dispatch.watcher.video
-		,	_AFACTOR = (1/4)
-		;
+		const	_wv = dispatch.watcher.video;
 
-		if (!_video.requestVideoFrameCallback) {
-			_wv.kick = ()=>{};
-			_wv.changed = ()=>(true);
-			_wv.duration = ()=>(1/30);
-			return
-		}
-
-		let	_lastVFCCount = 0
-		,	_lastVFC = performance.now()
-		,	_emaVFC = 1
-		;
-
-		const _rVFC = () => {
-			const	now = performance.now()
-			,	d = now - _lastVFC
-			;
-			_emaVFC = (1 - _AFACTOR) * _emaVFC + _AFACTOR * d * 0.001;
-			_lastVFC = now;
-			_wv.kick();
-		};
-
-		_wv.duration = ()=>(_emaVFC);
+		if (!_video.requestVideoFrameCallback) 
+			throw new Error('not supported requestVideoFrameCallback')
 
 		let	_VFCkicked = false;
 		_wv.kick = () => {
 			if (_VFCkicked) return
 			_VFCkicked = true;
 			_video.requestVideoFrameCallback(()=>{
+				// With some UAs, canvas/video work here can make
+				// rAF drawImage stop updating.
+				// Keep this callback lightweight.
+				const	begin = performance.now();
 				_VFCkicked = false;
-				_stat.inc('rVFC');
-				_rVFC();
+				++_stat.rVFC;
+				_changed = true;
+				_wv.kick();
+				_stat.running += performance.now() - begin;
 			});
-		};
-
-		_wv.changed = () => {
-			const changed = _stat.rVFC != _lastVFCCount;
-			_lastVFCCount = _stat.rVFC;
-			return changed
 		};
 	})();	// end video watcher
 
@@ -293,8 +282,8 @@ const dispatch = ()=>{
 		const	_cs = new Surface(e('fps-chart'));
 
 		const	_caption = e('fps-caption')
-		,	_emaStat = {rAF:0, viewed:0, iDISP:0}
-		,	_AFACTOR = 0.2
+		,	_emaStat = {rAF:0, rVFC:0, viewed:0, running:0}
+		,	_AFACTOR = (1/4)
 		,	_ema = (a, b) => ((1 - _AFACTOR) * a + _AFACTOR * b)
 		,	_STEP = 2
 		,	_low = (_cs.shape()[0] / _STEP)|0
@@ -308,12 +297,13 @@ const dispatch = ()=>{
 		const _update = (duration)=>{
 			const 	factor = 1 / duration;
 
-			_emaStat.rAF = _ema(_emaStat.rAF, _stat.rAF * factor);
-			_emaStat.viewed = _ema(_emaStat.viewed, _stat.viewed * factor);
-			_emaStat.iDISP = _ema(_emaStat.iDISP, _stat.iDISP * factor);
+			_emaStat.rAF     = _ema(_emaStat.rAF,     _stat.rAF     * factor);
+			_emaStat.rVFC    = _ema(_emaStat.rVFC,    _stat.rVFC    * factor);
+			_emaStat.viewed  = _ema(_emaStat.viewed,  _stat.viewed  * factor);
+			_emaStat.running = _ema(_emaStat.running, _stat.running * factor);
 
-			_values.push(_emaStat.iDISP);
-			(_max < _emaStat.iDISP) && (_max = _emaStat.iDISP);
+			_values.push(_emaStat.running);
+			(_max < _emaStat.running) && (_max = _emaStat.running);
 			if (_values.length > _high) {
 				while (_values.length > _low) {
 					_values.shift();
@@ -327,11 +317,11 @@ const dispatch = ()=>{
 				'out:'
 			+	(Math.round(_emaStat.rAF * 1000))
 			+	' in:'
-			+	(Math.round(1 / dispatch.watcher.video.duration()))
+			+	(Math.round(_emaStat.rVFC * 1000))
 			+	' view:'
 			+	((_emaStat.rAF > 0) ? Math.round(_emaStat.viewed / _emaStat.rAF * 100): 0)
-			+	'% cpu:'
-			+	(Math.round(_emaStat.iDISP * 100))
+			+	'% run:'
+			+	(Math.round(_emaStat.running * 100))
 			+	'%'
 			;
 		};
