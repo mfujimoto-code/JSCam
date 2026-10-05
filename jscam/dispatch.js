@@ -37,11 +37,11 @@ const dispatch = ()=>{
 			rAF: 0
 		,	viewed: 0
 		,	rVFC: 0
-		,	iDISP: 0
+		,	running: 0
 		,	reset: ()=>{
 				_stat.rAF    = 0;
 				_stat.viewed = 0;
-				_stat.iDISP  = 0;
+				_stat.running  = 0;
 			}
 		,	inc: (prop)=>{
 				_stat[prop] = (_stat[prop] + 1) >>> 0
@@ -164,15 +164,16 @@ const dispatch = ()=>{
 
 		_AFkicked = true;
 		requestAnimationFrame(()=>{
+			const	begin = performance.now();
 			_AFkicked = false;
 			_stat.inc('rAF');
 			dispatch();
+			_stat.running += performance.now() - begin;
 		});
 	}
 
 	dispatch.iDISP = (function * () {
 		let	suggestion = 0
-		,	begin = performance.now()
 		;
 		const	snap = new Surface(
 			_video
@@ -182,9 +183,7 @@ const dispatch = ()=>{
 		);
 
 		while (true) {
-			_stat.iDISP += performance.now() - begin;
 			yield suggestion;
-			begin = performance.now();
 
 			suggestion = 0;
 
@@ -272,9 +271,11 @@ const dispatch = ()=>{
 			if (_VFCkicked) return
 			_VFCkicked = true;
 			_video.requestVideoFrameCallback(()=>{
+				const	begin = performance.now();
 				_VFCkicked = false;
 				_stat.inc('rVFC');
 				_rVFC();
+				_stat.running += performance.now() - begin;
 			});
 		};
 
@@ -293,7 +294,7 @@ const dispatch = ()=>{
 		const	_cs = new Surface(e('fps-chart'));
 
 		const	_caption = e('fps-caption')
-		,	_emaStat = {rAF:0, viewed:0, iDISP:0}
+		,	_emaStat = {rAF:0, viewed:0, running:0}
 		,	_AFACTOR = 0.2
 		,	_ema = (a, b) => ((1 - _AFACTOR) * a + _AFACTOR * b)
 		,	_STEP = 2
@@ -310,10 +311,10 @@ const dispatch = ()=>{
 
 			_emaStat.rAF = _ema(_emaStat.rAF, _stat.rAF * factor);
 			_emaStat.viewed = _ema(_emaStat.viewed, _stat.viewed * factor);
-			_emaStat.iDISP = _ema(_emaStat.iDISP, _stat.iDISP * factor);
+			_emaStat.running = _ema(_emaStat.running, _stat.running * factor);
 
-			_values.push(_emaStat.iDISP);
-			(_max < _emaStat.iDISP) && (_max = _emaStat.iDISP);
+			_values.push(_emaStat.running);
+			(_max < _emaStat.running) && (_max = _emaStat.running);
 			if (_values.length > _high) {
 				while (_values.length > _low) {
 					_values.shift();
@@ -330,8 +331,8 @@ const dispatch = ()=>{
 			+	(Math.round(1 / dispatch.watcher.video.duration()))
 			+	' view:'
 			+	((_emaStat.rAF > 0) ? Math.round(_emaStat.viewed / _emaStat.rAF * 100): 0)
-			+	'% cpu:'
-			+	(Math.round(_emaStat.iDISP * 100))
+			+	'% run:'
+			+	(Math.round(_emaStat.running * 100))
 			+	'%'
 			;
 		};
