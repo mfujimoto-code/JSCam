@@ -262,7 +262,7 @@ const dispatch = ()=>{
 			_VFCkicked = true;
 			_video.requestVideoFrameCallback(()=>{
 				// With some UAs, canvas/video work here can make
-				// rAF drawIamge stop updating.
+				// rAF drawImage stop updating.
 				// Keep this callback lightweight.
 				const	begin = performance.now();
 				_VFCkicked = false;
