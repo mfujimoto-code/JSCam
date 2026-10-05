@@ -34,17 +34,15 @@ const dispatch = ()=>{
 	;
 
 	const	_stat = {
-			rAF: 0
-		,	viewed: 0
-		,	rVFC: 0
+			rAF:     0
+		,	viewed:  0
+		,	rVFC:    0
 		,	running: 0
 		,	reset: ()=>{
-				_stat.rAF    = 0;
-				_stat.viewed = 0;
+				_stat.rAF      = 0;
+				_stat.rVFC     = 0;
+				_stat.viewed   = 0;
 				_stat.running  = 0;
-			}
-		,	inc: (prop)=>{
-				_stat[prop] = (_stat[prop] + 1) >>> 0
 			}
 		}
 	;
@@ -166,7 +164,7 @@ const dispatch = ()=>{
 		requestAnimationFrame(()=>{
 			const	begin = performance.now();
 			_AFkicked = false;
-			_stat.inc('rAF');
+			++_stat.rAF;
 			dispatch();
 			_stat.running += performance.now() - begin;
 		});
@@ -202,7 +200,7 @@ const dispatch = ()=>{
 				continue
 
 			_changed = false;
-			_stat.inc('viewed');
+			++_stat.viewed;
 
 			snap.fit([_video.videoWidth, _video.videoHeight]);
 
@@ -250,21 +248,11 @@ const dispatch = ()=>{
 			return
 		}
 
-		let	_lastVFCCount = 0
-		,	_lastVFC = performance.now()
-		,	_emaVFC = 1
-		;
+		let	_lastVFCCount = 0;
 
 		const _rVFC = () => {
-			const	now = performance.now()
-			,	d = now - _lastVFC
-			;
-			_emaVFC = (1 - _AFACTOR) * _emaVFC + _AFACTOR * d * 0.001;
-			_lastVFC = now;
 			_wv.kick();
 		};
-
-		_wv.duration = ()=>(_emaVFC);
 
 		let	_VFCkicked = false;
 		_wv.kick = () => {
@@ -273,7 +261,7 @@ const dispatch = ()=>{
 			_video.requestVideoFrameCallback(()=>{
 				const	begin = performance.now();
 				_VFCkicked = false;
-				_stat.inc('rVFC');
+				++_stat.rVFC;
 				_rVFC();
 				_stat.running += performance.now() - begin;
 			});
@@ -294,7 +282,7 @@ const dispatch = ()=>{
 		const	_cs = new Surface(e('fps-chart'));
 
 		const	_caption = e('fps-caption')
-		,	_emaStat = {rAF:0, viewed:0, running:0}
+		,	_emaStat = {rAF:0, rVFC:0, viewed:0, running:0}
 		,	_AFACTOR = 0.2
 		,	_ema = (a, b) => ((1 - _AFACTOR) * a + _AFACTOR * b)
 		,	_STEP = 2
@@ -309,8 +297,9 @@ const dispatch = ()=>{
 		const _update = (duration)=>{
 			const 	factor = 1 / duration;
 
-			_emaStat.rAF = _ema(_emaStat.rAF, _stat.rAF * factor);
-			_emaStat.viewed = _ema(_emaStat.viewed, _stat.viewed * factor);
+			_emaStat.rAF     = _ema(_emaStat.rAF,     _stat.rAF     * factor);
+			_emaStat.rVFC    = _ema(_emaStat.rVFC,    _stat.rVFC    * factor);
+			_emaStat.viewed  = _ema(_emaStat.viewed,  _stat.viewed  * factor);
 			_emaStat.running = _ema(_emaStat.running, _stat.running * factor);
 
 			_values.push(_emaStat.running);
@@ -328,7 +317,7 @@ const dispatch = ()=>{
 				'out:'
 			+	(Math.round(_emaStat.rAF * 1000))
 			+	' in:'
-			+	(Math.round(1 / dispatch.watcher.video.duration()))
+			+	(Math.round(_emaStat.rVFC * 1000))
 			+	' view:'
 			+	((_emaStat.rAF > 0) ? Math.round(_emaStat.viewed / _emaStat.rAF * 100): 0)
 			+	'% run:'
