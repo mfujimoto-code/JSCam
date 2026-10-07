@@ -6,7 +6,7 @@ render.buildImageFuncs = Object.assign(Object.create(null), {
 	'Raw(RGBA-packed)': function (frame) {
 		return frame.get('ImageData');
 	}
-,	'RGB-planer': function (frame) {
+,	'RGB-planar': function (frame) {
 		const	plane = frame.get('rgb')
 		,	R = plane[0]
 		,	G = plane[1]
@@ -272,7 +272,7 @@ render.buildImageFuncs = Object.assign(Object.create(null), {
 	}
 });
 
-render.buildImage = render.buildImageFuncs['RGB-frame'];
+render.buildImage = render.buildImageFuncs['Raw(RGBA-packed)'];
 
 render.image = function(frame) {
 	const size = frame.size();
