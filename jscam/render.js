@@ -23,6 +23,48 @@ render.buildImageFuncs = Object.assign(Object.create(null), {
 		}
 		return imageData;
 	}
+,	'Red': function (frame) {
+		const	plane = frame.get('red')
+		,	num  = frame.num()
+		,	imageData = render.image(frame)
+		,	data = imageData.data
+		;
+		for (let i = 0, o = 0; i < num; ++i, o += 4) {
+			data[o  ] = 
+			data[o+1] =
+			data[o+2] = plane[i];
+			data[o+3] = 255;
+		}
+		return imageData;
+	}
+,	'Green': function (frame) {
+		const	plane = frame.get('green')
+		,	num  = frame.num()
+		,	imageData = render.image(frame)
+		,	data = imageData.data
+		;
+		for (let i = 0, o = 0; i < num; ++i, o += 4) {
+			data[o  ] = 
+			data[o+1] =
+			data[o+2] = plane[i];
+			data[o+3] = 255;
+		}
+		return imageData;
+	}
+,	'Blue': function (frame) {
+		const	plane = frame.get('blue')
+		,	num  = frame.num()
+		,	imageData = render.image(frame)
+		,	data = imageData.data
+		;
+		for (let i = 0, o = 0; i < num; ++i, o += 4) {
+			data[o  ] = 
+			data[o+1] =
+			data[o+2] = plane[i];
+			data[o+3] = 255;
+		}
+		return imageData;
+	}
 ,	'GRAY-frame': function (frame) {
 		const yuv = frame.get('yuv');
 		const num  = frame.num()
