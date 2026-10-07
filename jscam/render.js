@@ -3,7 +3,27 @@
 const render = Object.create(null);
 
 render.buildImageFuncs = Object.assign(Object.create(null), {
-	'GRAY-frame': function (frame) {
+	'Raw(RGBA-packed)': function (frame) {
+		return frame.get('ImageData');
+	}
+,	'RGB-planer': function (frame) {
+		const	plane = frame.get('rgb')
+		,	R = plane[0]
+		,	G = plane[1]
+		,	B = plane[2]
+		,	num  = frame.num()
+		,	imageData = render.image(frame)
+		,	data = imageData.data
+		;
+		for (let i = 0, o = 0; i < num; ++i, o += 4) {
+			data[o  ] = R[i];
+			data[o+1] = G[i];
+			data[o+2] = B[i];
+			data[o+3] = 255;
+		}
+		return imageData;
+	}
+,	'GRAY-frame': function (frame) {
 		const yuv = frame.get('yuv');
 		const num  = frame.num()
 		,     imageData = render.image(frame)
@@ -68,9 +88,6 @@ render.buildImageFuncs = Object.assign(Object.create(null), {
 			data[o+3] = 255;
 		}
 		return imageData;
-	}
-,	'RGB-frame': function (frame) {
-		return frame.get('ImageData');
 	}
 ,	'GRAY-accum': function (frame) {
 		render.accum.update(frame, 'gray');
