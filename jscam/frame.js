@@ -92,8 +92,11 @@ Frame.calcThreshold = (histogram)=>{
 }
 Frame._getters = Object.assign(Object.create(null), {
 	'rgba':             function () {return this._getRgba()}
-,	'gray':             function () {return this._getGray()}
+,	'red':              function () {return this._getRed()}
+,	'green':            function () {return this._getGreen()}
+,	'blue':             function () {return this._getBlue()}
 ,	'rgb':              function () {return this._getRgb()}
+,	'gray':             function () {return this._getGray()}
 ,	'yuv':              function () {return this._getYUV()}
 ,	'equalized':        function () {return this._getEqualized()}
 ,	'laplacian':        function () {return this._getEdge('laplacian')}
@@ -126,30 +129,39 @@ Frame.prototype = {
 		this.getter['rgba'] = ()=>(data);
 		return this.get('rgba')
 	}
-	, _getRgb: function () {
+	, __getComponent: function (index, cTag, hTag) {
 		const num  = this.num()
 		,     data = this.get('rgba')
-		,     R = new Uint8ClampedArray(num)
-		,     G = new Uint8ClampedArray(num)
-		,     B = new Uint8ClampedArray(num)
-		,     hR = new Array(256)
-		,     hG = new Array(256)
-		,     hB = new Array(256)
+		,     C = new Uint8ClampedArray(num)
+		,     hC = new Array(256)
 		;
 
-		hR.fill(0);
-		hG.fill(0);
-		hB.fill(0);
-		for (let i = 0, o = 0; i < num; ++i, o += 4) {
-			R[i] = data[o+0]; hR[R[i]] += 1;
-			G[i] = data[o+1]; hG[G[i]] += 1;
-			B[i] = data[o+2]; hB[B[i]] += 1;
+		hC.fill(0);
+		for (let i = 0, o = index; i < num; ++i, o += 4) {
+			C[i] = data[o];
+			hC[C[i]] += 1;
 		}
 
-		this.histogram['R'] = hR;
-		this.histogram['G'] = hG;
-		this.histogram['B'] = hB;
-		this.getter['rgb'] = ()=>[R,G,B];
+		this.histogram[hTag] = hC;
+		this.getter[cTag] = ()=>(C);
+
+		return this.get(cTag)
+	}
+	, _getRed: function () {
+		return this.__getComponent(0, 'red', 'R')
+	}
+	, _getGreen: function () {
+		return this.__getComponent(1, 'green', 'G')
+	}
+	, _getBlue: function () {
+		return this.__getComponent(2, 'blue', 'B')
+	}
+	, _getRgb: function () {
+		this.getter['rgb'] = ()=>[
+			this.get('red')
+		,	this.get('green')
+		,	this.get('blue')
+		];
 
 		return this.get('rgb')
 	}
