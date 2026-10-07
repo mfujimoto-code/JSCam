@@ -5,15 +5,15 @@
 | 文書タイトル | JSCam live-camera bench 現行アーキテクチャ設計書 |
 | 対象 | `/app/jscam/` の分割グローバルスクリプト（`cam2.js` / `frame.js` / `accum.js` / `delta.js` / `render.js` / `surface.js` / `dispatch.js` / `ui.js` / `camera.js`）および付随する HTML / CSS / Docker / nginx |
 | 著者 | JSCam maintainers |
-| 日付 | 2026-10-05 |
-| ステータス | Draft（PR 1–3, 5–8 実装済み。PR 4 延期。画素プール／GC 観測は方式検討のみ。RGBaccum 再マージ：Frame LRU 廃止、映像 Surface リング 5、rVFC が `_changed`、未対応は throw） |
+| 日付 | 2026-10-07 |
+| ステータス | Draft（PR 1–3, 5–8 実装済み。PR 4 延期。画素プール／GC 観測は方式検討のみ。RGBaccum 再マージ：RGB 平面 getter、`Raw(RGBA-packed)` / `RGB-planar`、既定は packed 素通し） |
 | 種別 | 現行システムの記述（greenfield 再設計ではない） |
 
 ---
 
 ## Overview
 
-JSCam はブラウザ上で動作するライブカメラ画像処理ベンチである。`getUserMedia` の映像は `dispatch.snap`（Surface 5 枚のリング）に保持し、vis で `show(video)` してから `extract` する。`Frame` は今 vis の切り出しだけを持ち、過去 Frame の LRU は無い。グレー／YUV／エッジ／ヒストグラム／Otsu／蓄積差分を計算し、内部面 `_is` へ `inject` して `#d-canvas`（`_ds`）に `show` する。ホイール／ピンチは中央切り出し。パンはオフセット。フリップは表示 Surface の水平 CTM。ヒストグラムは `#h-canvas`（`_hs`）。蓄積は `render.accum` と `delta.accum` の 2 本。キャプチャ vis は rVFC（または zoom/pan/kick/fit）が `_changed` を立てたときだけ走る。rVFC 未対応 UA は dispatch 評価時に throw。FPS は out / in / view% / run%。ページロードで insecure でなければ先頭カメラを `startCamera()` する。
+JSCam はブラウザ上で動作するライブカメラ画像処理ベンチである。`getUserMedia` の映像は `dispatch.snap`（Surface 5 枚のリング）に保持し、vis で `show(video)` してから `extract` する。`Frame` は今 vis の切り出しだけを持ち、過去 Frame の LRU は無い。RGB は packed RGBA から `red` / `green` / `blue` 平面を遅延生成し、`get('rgb')` は `[R,G,B]` を返す。グレー／YUV／エッジ／ヒストグラム／Otsu／蓄積差分を計算し、内部面 `_is` へ `inject` して `#d-canvas`（`_ds`）に `show` する。ホイール／ピンチは中央切り出し。パンはオフセット。フリップは表示 Surface の水平 CTM。ヒストグラムは `#h-canvas`（`_hs`）。蓄積は `render.accum` と `delta.accum` の 2 本。キャプチャ vis は rVFC（または zoom/pan/kick/fit）が `_changed` を立てたときだけ走る。rVFC 未対応 UA は dispatch 評価時に throw。FPS は out / in / view% / run%。既定モードはセレクト先頭の `Raw(RGBA-packed)`。ページロードで insecure でなければ先頭カメラを `startCamera()` する。
 
 本システムは `cam.js` の後継である。画像処理カーネル・描画・UI・カメラ起動はバンドラ無しのグローバルスクリプトに分割している（PR 6）。`cam.js` にあった typo / 計算バグ（`videoHeight`、RGB プレーン参照、Laplacian の符号、ヒストグラム均等化の `Vmin`、Frame ID 衝突、FPS 統計、`histogram` 命名、蓄積バッファサイズ）を修正したうえで、contain レイアウト・I/O 一時停止・明示的なカメラ停止・secure context カメラ起動・単一 rAF ループ・単一ポート HTTP/HTTPS 多重化を足している。サーバ側は Docker 上の nginx がホストポート `8888` を `ssl_preread` で HTTP (`8081`) と TLS (`8443`) に振り分ける。
 
@@ -104,6 +104,7 @@ Host :8888  ──►  container :8080  (nginx stream, ssl_preread)
 | ファイル | 役割 |
 | --- | --- |
 | `/app/compose.yaml` | `jscam:local` を build。`8888:8080`。`TLS_SAN` を渡す。下記「再マウント vs 再ビルド」参照。Compose の `healthcheck:` キーは無い。 |
+| `/app/.gitignore` | `tmp/`。作業ディレクトリ。イメージには入らない。 |
 | `/app/jscam/.dockerignore` | 先頭 `*` のあと許可リスト。イメージに入れるファイルは `!` を足す。抜けると `COPY` が checksum / not found で落ちる。 |
 | `/app/jscam/Dockerfile` | `nginx:1.27-alpine` + openssl。`40-gen-tls.sh` を `/docker-entrypoint.d/` に置く。静的ファイル（`index.html` `cam2.css` と 9 本の JS）を `/usr/share/nginx/html/` へ COPY。`EXPOSE 8080`。**イメージの** `HEALTHCHECK` が `wget -qO- http://127.0.0.1:8081/healthz`（Alpine `wget` の実行は本設計書では未検証）。8081 応答はポート 8080 / `ssl_preread` の生存を証明しない（Open Question 6）。 |
 | `/app/jscam/nginx.main.conf` | `stream { ssl_preread on; }` で 8080 を 8081/8443 に分岐。`http { include conf.d/*.conf; }`。`proxy_timeout 1d`（長寿命接続向け。静的配信では実害は小さい）。 |
@@ -449,7 +450,7 @@ pause / リサイズパスで `width = cssW * dpr` してはならない。ビ�
   - インターリーブ `UV = [u0, v0, u1, v1, …]`（長さ `num*2`）。
   - `histogram['gray']` を **上書き**する。
 - **Y と Gray は一致しない。** `GRAY-frame` は `get('yuv').Y` を使う。`.5` の丸めとクランプ経路が違うため、`get('gray')` とは 1 階調ずれうる。先に gray を計算するとヒストグラムキーも衝突する。
-- **3 planes** (`get('rgb')` / `_getRgb`): R/G/B を別 `Uint8ClampedArray` + 各 256 bin。
+- **RGB 平面** (`__getComponent` / `_getRed` / `_getGreen` / `_getBlue`): packed `rgba` からチャネル 1 本を `Uint8ClampedArray`（長さ `num`）に抜き、`histogram['R'|'G'|'B']` を書く。`get('rgb')` は `[get('red'), get('green'), get('blue')]`。8colors / RGB-accum / `sobel.rgb` はこの 3 本を使う。
 - **Equalize** (`_getEqualized`): gray の CDF `V[i]∈[0,1]`、`Vmin = min(V)`（初期値 `Infinity`）、`E = (V[g]-Vmin)*factor`。`factor = (1-Vmin)==0 ? 0 : 255/(1-Vmin)`（全画素ビン 0 で `Vmin===1`）。
 
 #### エッジ
@@ -546,7 +547,7 @@ out[c][i]           = abs( current[space][c][i] - planes[space][c][i] )
 2. `frame.js` … `Frame` 定義。
 3. `accum.js` … `Accum` コンストラクタ。
 4. `delta.js` … `delta`（`new Accum()`）。
-5. `render.js` … `buildImageFuncs`、`render.accum`、`render.image` / `L4`。初期 `buildImage` は `'RGB-frame'`（ui が先頭 `'GRAY-frame'` へ差し替え）。
+5. `render.js` … `buildImageFuncs`、`render.accum`、`render.image` / `L4`。初期 `buildImage` は `'Raw(RGBA-packed)'`。ui は挿入順でセレクトを埋め、`options[0]`（同じ packed）へ差し替える。
 6. `surface.js` … `Surface` コンストラクタ。
 7. `dispatch.js` … layout、rVFC、fps watcher、`kick()`。`_ds` / `_is` / `_hs`。`dispatch.snap` 5 枚。rVFC 未対応は throw。
 8. `ui.js` … パネル fade、`#d-canvas` ポインタ、`render.buildImageFuncs` でモード填充、`#afactor` は両 Accum へ。`#show-preview` 既定オフ。`Draw image` は削除。
@@ -619,7 +620,7 @@ syncModeSettings();   // document.querySelectorAll('[data-modes]') の hidden �
 
 | 要素 | `data-modes` | 初期 |
 | --- | --- | --- |
-| `#field-afactor` | `GRAY-accum,BW-delta,Gray-delta,RGB-accum` | HTML に `hidden`。起動時モードは `GRAY-frame` なので同期後も隠れる |
+| `#field-afactor` | `GRAY-accum,BW-delta,Gray-delta,RGB-accum` | HTML に `hidden`。起動時モードは `Raw(RGBA-packed)` なので同期後も隠れる |
 | `#pause` の field | （属性なし） | 常時表示（`Frame interval`） |
 | `Draw image` / `Draw histogram` / `Input preview` / `Log` | （属性なし） | 常時表示 |
 | `#field-camera-select` | （属性なし） | 初期 hidden。`videoinput` が 2 以上のとき `syncCameraSelect` が表示 |
@@ -639,7 +640,10 @@ f.get('yuv');           // { Y: Uint8ClampedArray ToUint8Clamp, UV: Array }
                         // UV = [u0,v0,...]; U=-0.169R-0.331G+0.500B; V=0.500R-0.419G-0.081B
                         // Y と get('gray') は丸めが違い、GRAY-frame は Y を使う
 f.get('equalized');     // Uint8ClampedArray。histogram キーは 'equalization' のまま
-f.get('rgb');           // [R,G,B] 各 Uint8ClampedArray
+f.get('red');           // Uint8ClampedArray。histogram['R']
+f.get('green');         // histogram['G']
+f.get('blue');          // histogram['B']
+f.get('rgb');           // [get('red'), get('green'), get('blue')]
 f.get('laplacian');     // ほか 'laplacian.signed' | 'sobel' | 'sobel.rgb'
 f.histogram;            // Object.create(null): gray?, equalization?, R?, G?, B?,
                         // laplacian?, 'laplacian.signed'?, sobel?, 'sobel.rgb'?
@@ -723,16 +727,17 @@ dispatch.iDISP;
 
 | キー | 入力 | 出力 |
 | --- | --- | --- |
+| `Raw(RGBA-packed)` | `get('ImageData')` | 入力をそのまま返す。セレクト先頭＝既定 |
+| `RGB-planar` | `get('rgb')` | R/G/B 平面を packed RGBA に戻す（A=255） |
 | `GRAY-frame` | `get('yuv').Y`（`get('gray')` ではない） | Y を RGB に複製 |
 | `GRAY-Histogram equalization` | `get('equalized')` | 均等化グレー |
 | `YUV-frame` | `get('yuv')` | Y+1.402V, Y-0.344U-0.714V, Y+1.772U（canvas がクランプ） |
 | `UV:RG-frame` | `get('yuv').UV` | R=U+128, G=V+128, B=0 |
-| `RGB-frame` | `get('ImageData')` | 入力をそのまま返す |
 | `GRAY-accum` | `render.accum.update` + `planes('gray')[0]` | 蓄積グレー。`#field-afactor` 表示 |
 | `RGB-accum` | `render.accum.update` + `planes('rgb')` | 蓄積 RGB。`#field-afactor` 表示 |
 | `BW-delta` | `delta.get` | 非零を 255。`#field-afactor` 表示 |
 | `Gray-delta` | `delta.get` | 絶対差分。`#field-afactor` 表示 |
-| `8colors` | 3 planes + Otsu | チャネルごと 0/255 |
+| `8colors` | `get('rgb')` + Otsu(`histogram['R'|'G'|'B']`) | チャネルごと 0/255 |
 | `Edge(Laplacian)` | `get('laplacian')` | 絶対 Laplacian |
 | `Edge(Laplacian signed)` | `get('laplacian.signed')` | 零 = 128 の符号付き |
 | `Edge(Sobel)` | `get('sobel')` | グレー Sobel |
@@ -1114,6 +1119,9 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 20. **vis の映像取り込みはリング先頭へ `show(video)` してから `extract`（src 無し）。**  
     理由: 過去フレーム相当は Surface 上のビデオ画素。`buildImage` は `(frame) => ImageData`。
 
+21. **RGB は packed と平面を分ける。既定モードはセレクト先頭。**  
+    理由: `get('red'|'green'|'blue')` がチャネルを抜き、`get('rgb')` は 3 本の配列。旧 `'RGB-frame'` は `'Raw(RGBA-packed)'`。再パック表示は `'RGB-planar'`。`buildImageFuncs` 先頭が packed なので起動時は素通し（受け入れ済み）。
+
 ---
 
 ## コーディングルール（`GAF04571@nifty.com`）
@@ -1220,7 +1228,8 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 ## References
 
 - `/app/jscam/cam2.js` — `JSCAM_VERSION`, `e`
-- `/app/jscam/frame.js` — `Frame` / カーネル
+- `/app/jscam/frame.js` — `Frame` / カーネル。`red`/`green`/`blue`/`rgb`
+- `/app/.gitignore` — `tmp/`
 - `/app/jscam/accum.js` — 指数平滑背景
 - `/app/jscam/delta.js` — 残差
 - `/app/jscam/render.js` — `buildImageFuncs`, `render.accum`
