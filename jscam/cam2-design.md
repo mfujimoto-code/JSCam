@@ -5,15 +5,15 @@
 | 文書タイトル | JSCam live-camera bench 現行アーキテクチャ設計書 |
 | 対象 | `/app/jscam/` の分割グローバルスクリプト（`cam2.js` / `frame.js` / `accum.js` / `delta.js` / `render.js` / `surface.js` / `dispatch.js` / `ui.js` / `camera.js`）および付随する HTML / CSS / Docker / nginx |
 | 著者 | JSCam maintainers |
-| 日付 | 2026-10-07 |
-| ステータス | Draft（PR 1–3, 5–8 実装済み。PR 4 延期。画素プール／GC 観測は方式検討のみ。RGBaccum 再マージ：RGB 平面 getter、`Raw(RGBA-packed)` / `RGB-planar`、既定は packed 素通し） |
+| 日付 | 2026-10-09 |
+| ステータス | Draft（PR 1–3, 5–8 実装済み。PR 4 延期。画素プール／GC 観測は方式検討のみ。RGBaccum 再マージ：Red/Green/Blue モード、`imageMode` / `dispatch.get|set`、FPS は vis と独立な 500ms timeout） |
 | 種別 | 現行システムの記述（greenfield 再設計ではない） |
 
 ---
 
 ## Overview
 
-JSCam はブラウザ上で動作するライブカメラ画像処理ベンチである。`getUserMedia` の映像は `dispatch.snap`（Surface 5 枚のリング）に保持し、vis で `show(video)` してから `extract` する。`Frame` は今 vis の切り出しだけを持ち、過去 Frame の LRU は無い。RGB は packed RGBA から `red` / `green` / `blue` 平面を遅延生成し、`get('rgb')` は `[R,G,B]` を返す。グレー／YUV／エッジ／ヒストグラム／Otsu／蓄積差分を計算し、内部面 `_is` へ `inject` して `#d-canvas`（`_ds`）に `show` する。ホイール／ピンチは中央切り出し。パンはオフセット。フリップは表示 Surface の水平 CTM。ヒストグラムは `#h-canvas`（`_hs`）。蓄積は `render.accum` と `delta.accum` の 2 本。キャプチャ vis は rVFC（または zoom/pan/kick/fit）が `_changed` を立てたときだけ走る。rVFC 未対応 UA は dispatch 評価時に throw。FPS は out / in / view% / run%。既定モードはセレクト先頭の `Raw(RGBA-packed)`。ページロードで insecure でなければ先頭カメラを `startCamera()` する。
+JSCam はブラウザ上で動作するライブカメラ画像処理ベンチである。`getUserMedia` の映像は Surface 5 枚のリングに保持し、vis で `show(video)` してから `extract` する。`Frame` は今 vis の切り出しだけを持ち、過去 Frame の LRU は無い。RGB は packed RGBA から `red` / `green` / `blue` 平面を遅延生成し、`get('rgb')` は `[R,G,B]` を返す。グレー／YUV／エッジ／ヒストグラム／Otsu／蓄積差分を計算し、内部面 `_is` へ `inject` して `#d-canvas`（`_ds`）に `show` する。ホイール／ピンチは中央切り出し。パンはオフセット。フリップは表示 Surface の水平 CTM。ヒストグラムは `#h-canvas`（`_hs`）。蓄積は render 内 `_accum` と `delta.accum` の 2 本（`#afactor` は `render.set('afactor')` と `delta.accum.set`）。キャプチャ vis は rVFC（または zoom/pan/kick/fit）が `_changed` を立てたときだけ走る。rVFC 未対応 UA は dispatch 評価時に throw。FPS HUD は vis と独立な 500ms `setTimeout`。既定モードはセレクト先頭の `Raw(RGBA-packed)`。ページロードで insecure でなければ先頭カメラを `startCamera()` する。
 
 本システムは `cam.js` の後継である。画像処理カーネル・描画・UI・カメラ起動はバンドラ無しのグローバルスクリプトに分割している（PR 6）。`cam.js` にあった typo / 計算バグ（`videoHeight`、RGB プレーン参照、Laplacian の符号、ヒストグラム均等化の `Vmin`、Frame ID 衝突、FPS 統計、`histogram` 命名、蓄積バッファサイズ）を修正したうえで、contain レイアウト・I/O 一時停止・明示的なカメラ停止・secure context カメラ起動・単一 rAF ループ・単一ポート HTTP/HTTPS 多重化を足している。サーバ側は Docker 上の nginx がホストポート `8888` を `ssl_preread` で HTTP (`8081`) と TLS (`8443`) に振り分ける。
 
@@ -137,7 +137,7 @@ index.html          lang="en"。画面コピーは英語
  ├─ frame.js          Frame / カーネル（過去 Frame の LRU は無い）
  ├─ accum.js          Accum コンストラクタ
  ├─ delta.js          残差 + 独自 Accum
- ├─ render.js         buildImageFuncs, render.accum, render.image / L4
+ ├─ render.js         imageMode / buildImage、閉じた _accum、render.set('afactor')
  ├─ surface.js        Surface（2d canvas の fit / show / extract / inject / histogram）
  ├─ dispatch.js       layout, rAF kick, zoom/pan, rVFC, fps, Surface インスタンス
  ├─ ui.js             パネル, モード, range, print, wheel/pinch/pan
@@ -216,13 +216,13 @@ flowchart TB
 | `e` | `cam2.js` | 関数 | `document.getElementById` の短縮。 |
 | `Frame` | `frame.js` | コンストラクタ + 静的メソッド | 今 vis の画素派生。第 2 引数 timestamp（省略時 `performance.now()`）。LRU / `id` / `map` は無い。 |
 | `Accum` | `accum.js` | コンストラクタ | space（`gray` / `rgb` / `yuv`）ごとの指数平滑。`get`/`set('factor')`。 |
-| `render.buildImageFuncs` | `render.js` | オブジェクト | モード名 → `ImageData` 生成。`render.buildImage` が現在の関数。 |
+| `render.imageMode` | `render.js` | 関数 | 引数なしでキー配列。文字列で現在の `buildImage` を差し替え。戻り値は捨てる。 |
 | `delta` | `delta.js` | オブジェクト | `delta.accum`（別 Accum）に対する残差。 |
 | `Surface` | `surface.js` | コンストラクタ | 2d canvas。`fit` / `show` / `extract` / `inject` / `gFlip` / ヒストグラム描画。 |
-| `render.accum` | `render.js` | `Accum` | GRAY-accum / RGB-accum 用。delta とはインスタンスが別。 |
-| `dispatch` / `dispatch.iDISP` | `dispatch.js` | 関数 + rAF + generator | メインループ。`kick([true])`。pause は vis 後にキック停止。 |
+| `render.set` | `render.js` | 関数 | `'afactor'` を閉じた `_accum` へ。`render.accum` は公開しない。 |
+| `dispatch` / `dispatch.iDISP` | `dispatch.js` | 関数 + rAF + generator | メインループ。`kick([true])`。`get`/`set`（pause / duration / showHistogram）。pause は vis 後にキック停止。 |
 | `dispatch.watcher.video` | `dispatch.js` | rVFC | コールバックが `_changed = true`。未対応は throw。canvas/video 操作は置かない。 |
-| `dispatch.watcher.fps` | `dispatch.js` | 関数 | 500ms で HUD。旧 `Graph` / `watch`。Surface で `#fps-chart`。 |
+| `dispatch.watcher.fps` | `dispatch.js` | 関数 | `kick()` が 500ms `setTimeout`。vis パイプラインとは独立。 |
 | `cUI` / `fade` | `ui.js` | オブジェクト | print、パネル fade。 |
 | chrome トグル | `ui.js` | `#d-canvas` ダブルタップ（pointer） | `.app.chrome-hidden`。 |
 | `setupRange` | `ui.js` | 関数 | range + ± ボタン + output をコールバックに接続。 |
@@ -231,7 +231,7 @@ flowchart TB
 | `syncCameraParams` / `clearCameraParams` | `camera.js` | 関数 | ライブ caps から Controls を生成。`applyConstraints`。attach で同期、stop でクリア。 |
 | `syncPreviewSize` | `camera.js` | 関数 | `#preview-size` に生解像度。`loadedmetadata` / `resize` / attach / stop。 |
 | `scanCameraSupport` | `camera.js` | 関数 | 対応スキャン。`#support-report` に YES/PARTIAL/NO。ストリームは止めない。 |
-| I/O pause 一式 | `camera.js` | 関数 | `dispatch.paused` と `video.pause()`。トラックは止めない。 |
+| I/O pause 一式 | `camera.js` | 関数 | `dispatch.set('pause')` と `video.pause()`。トラックは止めない。 |
 
 ### 1 フレームのデータフロー
 
@@ -273,13 +273,13 @@ flowchart LR
 1. `video.videoWidth/Height == 0` なら suggestion=100 して continue。
 2. `_layoutDisplay(true)` … CSS とビットマップ fit。順は `_ds.fit(disp)` → 真なら `_ds.show(_is)` → `_is.fit(video)` → `_hs.fit(disp)`。いずれかが真なら `_changed` を立てる（ウィンドウリサイズ vis で表示もヒストグラムも空白にしない）。
 3. `!_changed` なら **continue**（リングを回さず `extract` しない）。`_changed` は rVFC コールバック、zoom / pan / `kick(true)` / fit。minWait 早期 return は `_changed` を落とさない。
-4. `_fetchVF` … `dispatch.snap`（5 枚）を pop/unshift し、先頭に `fit(video size)` と `show(_video)`。続いて `dispatch.snap[0].extract(_scale, _offset)`（src 無し。既に snap 上の映像から切る）。座標は `| 0`。処理画素がそのサイズ。
-5. `new Frame(imageData, video.currentTime)`。過去 Frame は持たない。
-6. `render.buildImage(newFrame)` → `_is.inject` → `_ds.show(_is)`。`showHistogram` なら `_showHistogram`。vis が走ればカーネルは走る。
+4. `_pipeline` を shift して実行（各段が自分を末尾に戻す）。`_pFetch` … リング 5 枚を pop/unshift し、先頭に `fit(video size)` と `show(_video)`。`_pExtract` … `snap[0].extract(_scale, _offset)`（src 無し）→ `new Frame` → `render.buildImage` → `_is.inject` → `_ds.show(_is)`。座標は `| 0`。
+5. `_pHistogram` は `dispatch.get('showHistogram')` が偽なら積まない。真なら `gClear` / `gBeginHistogram` / キーごとに `gDrawHistogram` / `gEndHistogram`。
+6. vis が走ればカーネルは走る。過去 Frame は持たない。
 
 generator 先頭で `yield suggestion`。初回 `next` は yield 0 のみ。`dispatch()` は `minWait = max(duration, lastSuggestion)` を満たしてから `iDISP.next()`。満たさなければ `kick` して return（pause 中でも interval 待ちはキックする）。vis のあと `paused` ならキックしない。Resume が `kick()`。`kick(true)` は `_changed` を立ててからキック（Flip／モード／ヒストグラム）。
 
-処理はメインスレッド。目標 FPS は rAF + `duration` + rVFC 間引き。`Frame interval` 既定 0。未準備は suggestion 100。HUD は out（rAF Hz）、in（rVFC Hz）、view%（viewed/rAF）、run%（rAF コールバック＋rVFC コールバックの壁時計割合）。チャートは run 系列。rVFC 未対応は throw。
+処理はメインスレッド。目標 FPS は rAF + `duration` + rVFC 間引き。`Frame interval` 既定 0。未準備は suggestion 100。HUD は out / in / view% / run%。チャートは run 系列。`dispatch.watcher.fps.kick()` が 500ms ごと（vis の skip とは独立）。Pause 後は rAF が止まり timeout は回り、`out` は 0 に落ちる。rVFC 未対応は throw。
 
 負荷の目安:
 
@@ -384,15 +384,15 @@ stateDiagram-v2
 `dispatch`（`dispatch.js`）:
 
 - `dispatch.kick()` が rAF を 1 回予約する。コールバックは `dispatch` 自身。末尾でまた `kick` する。
-- vis のあと `dispatch.paused` ならキックしない（**次の rAF を予約しない**）。Resume が `kick`。interval 待ち中は pause でもキックする。
+- vis のあと `dispatch.get('pause')` ならキックしない（**次の rAF を予約しない**）。Resume が `kick`。interval 待ち中は pause でもキックする。
 - レイアウトは `ResizeObserver`（`#layers`）が `_layoutDisplay(false)` する。100ms poll は無い。
-- 非 pause: `minWait = max(dispatch.duration, lastSuggestion)`。`now - lastProcessedEnd < minWait` なら処理スキップ。満たせば `iDISP.next()` → `lastSuggestion = r.value` → `lastProcessedEnd = performance.now()`（終了直後）。
+- 非 pause: `minWait = max(duration, lastSuggestion)`。`now - lastProcessedEnd < minWait` なら処理スキップ。満たせば `iDISP.next()` → `lastSuggestion = r.value` → `lastProcessedEnd = performance.now()`（終了直後）。
 - カメラ未起動 / 停止後は suggestion 100 で約 10 Hz idle。
 - `r.value` はいまの `next()` が yield した suggestion（直前イテレーションが書いた値）。未準備時 100、通常 0。最初の `next()` の yield は初期値 0。
 
 `setIoPaused`（`camera.js` 20–34 行）:
 
-- `dispatch.paused` を設定。
+- `dispatch.set('pause', …)`。
 - ストリームがあるとき `video.pause()` または `video.play()`（play の rejection は `print`）。**トラックは `stop()` しない。**
 - `syncIoPauseButtons` が HUD を同期: `.io-hud.is-live` と `hidden`。未起動は `#camera-start` のみ。ライブは Start を隠し `#camera-stop` と `#io-pause` を出す。`attachLiveStream` は params 構築より先に HUD を同期する（params 例外で Pause が残らないように）。
 
@@ -428,7 +428,7 @@ pause / リサイズパスで `width = cssW * dpr` してはならない。ビ�
 
 #### `Frame` ライフサイクル
 
-コンストラクタは `ImageData` 必須（それ以外は throw）。`feed` のあと vis ローカルとして使う。`Frame.serial` / `id()` / `array` / `map` / HIGH / LOW は無い。過去フレームは `dispatch.snap`（映像 Surface 5 枚）が持つ。
+コンストラクタは `ImageData` 必須（それ以外は throw）。`feed` のあと vis ローカルとして使う。`Frame.serial` / `id()` / `array` / `map` / HIGH / LOW は無い。過去フレームは閉じた `_snap`（映像 Surface 5 枚）が持つ。
 
 `feed` がメタと画素ディスパッチを付ける:
 
@@ -491,7 +491,7 @@ planes[space][c][t] = (1-factor)*planes[space][c][t-1] + factor * extract(delayR
 out[c][i]           = abs( current[space][c][i] - planes[space][c][i] )
 ```
 
-- `new Accum()`。グローバルシングルトン `accum` は無い。`render.accum` がプレビュー用、`delta.accum` が残差用。`#afactor` は両方へ `set('factor', v)`。
+- `new Accum()`。グローバルシングルトン `accum` は無い。render の `_accum` がプレビュー用、`delta.accum` が残差用。`#afactor` は `render.set('afactor')` と `delta.accum.set('factor')`。
 - `update(frame, space)` が指定 space だけ進める。未知 space は `Accum.SPACES` で throw。
 - `get`/`set('factor')`。既定 `Accum.FACTOR` 0.5。残差は factor でスケールしない。
 - vis ごとの EMA（旧 `accum.time` 100ms ゲートは削除）。遅延 RGBA 1 本をコピーしてから混ぜる。
@@ -513,7 +513,7 @@ out[c][i]           = abs( current[space][c][i] - planes[space][c][i] )
 
 ### デジタルズーム（処理画素の中央切り出し）
 
-表示専用の CSS transform 拡縮はしない。ホイール／ピンチは `dispatch._scale` を変え、次 vis の `_fetchVF` が `snap[0]` に映像を載せ、`extract(_scale, _offset)` が中央を切り出す。切り出し後の画素で Frame / カーネル / accum が走る。
+表示専用の CSS transform 拡縮はしない。ホイール／ピンチは `dispatch._scale` を変え、次 vis の `_pFetch` がリング先頭に映像を載せ、`_pExtract` が `extract(_scale, _offset)` で中央を切り出す。切り出し後の画素で Frame / カーネル / accum が走る。
 
 - `_scaleStep` は非負整数。`_scale = 1 / 1.1^step`。step 0 は正確な `1`（`=== 1` 高速経路）。
 - `dir === 0` は何もしない。`dir > 0` は step を減らし（ズームアウト、下限 0）、それ以外は増やしてズームイン。`1/1.1^step <= 1/32` ならインしない。
@@ -525,14 +525,14 @@ out[c][i]           = abs( current[space][c][i] - planes[space][c][i] )
 
 フリップは `dispatch.move.flip`（`_ds.gFlip` とパン符号 `_vx`）。`kick(true)` で再 vis。pause 中のカメラ切替は表示を更新しない（制限）。
 
-`dispatch.showHistogram` が真なら `_hs.gClear` のあと `newFrame.histogram` の **すべてのキー** について `_hs.gDrawHistogram`。偽ならその vis では overlay を触らない。`Draw histogram` の uncheck は `ui.js` が `#h-canvas` の `display:none` と `kick(true)`。
+`dispatch.get('showHistogram')` が真ならパイプラインに `_pHistogram` を積む。`_hs.gClear` のあと `currentFrame.histogram` の **すべてのキー** について `_hs.gDrawHistogram`。偽ならその vis では overlay を触らない。`Draw histogram` の uncheck は `ui.js` が `dispatch.set('showHistogram')`、`#h-canvas` の `display:none`、`kick(true)`。
 
 ヒストグラムの画素契約は **`#h-canvas`（表示サイズ = `#d-canvas`）座標系**。CSS は `inset:0; width/height:100%`。バーは表示ピクセルで 1px。狭いウィンドウでは 266px ストリップが切れる（R4）。
 
 - バー: `fillRect(x, hc.height-1-h, 1, h)`。`x` は 10 から 1px 刻みで 256 本（カバー幅 266px、左下寄せ）。
 - バー高さ = `bins[i] * (hc.height/3) / max(bins)`。CDF 線高さスケール = `(hc.height/3) / numPixels`。底は `hc.height-1`。
-- キーごとに `_rgba(++color)` を **2 回**（バー、続いて CDF）。`_COLORS` は 16 色。`n % length`。
-- `gBeginHistogram` は `color=0` から始めるため、最初のキーのバーは `_COLORS[1]`（緑）、CDF は `_COLORS[2]`（黄）。**インデックス 0（赤）は最初の `++` でスキップされる。**
+- キーごとに同じ `_COLORS[color]` でバーと CDF を描き、その vis のあと `++color`。先頭 3 色は R/G/B。`n % length`。
+- `gBeginHistogram` は `color=0` から始めるため、最初のキーは赤、次は緑、次は青。`for…in histogram` の挿入順（`red`/`green`/`blue` をこの順で計算すると R,G,B）。
 - `index.html` の "The histogram overlays the bottom-left of the image." はコピー上の表現。実装は左下 256px ストリップであり、全幅の下帯ではない。
 
 `#h-canvas` は独立レイヤである。`Show histogram` を外せば映像は動き、overlay は消える。
@@ -547,10 +547,10 @@ out[c][i]           = abs( current[space][c][i] - planes[space][c][i] )
 2. `frame.js` … `Frame` 定義。
 3. `accum.js` … `Accum` コンストラクタ。
 4. `delta.js` … `delta`（`new Accum()`）。
-5. `render.js` … `buildImageFuncs`、`render.accum`、`render.image` / `L4`。初期 `buildImage` は `'Raw(RGBA-packed)'`。ui は挿入順でセレクトを埋め、`options[0]`（同じ packed）へ差し替える。
-6. `surface.js` … `Surface` コンストラクタ。
-7. `dispatch.js` … layout、rVFC、fps watcher、`kick()`。`_ds` / `_is` / `_hs`。`dispatch.snap` 5 枚。rVFC 未対応は throw。
-8. `ui.js` … パネル fade、`#d-canvas` ポインタ、`render.buildImageFuncs` でモード填充、`#afactor` は両 Accum へ。`#show-preview` 既定オフ。`Draw image` は削除。
+5. `render.js` … `_buildImageFuncs`、`render.imageMode`、閉じた `_accum`、`render.set('afactor')`。初期化は `render.imageMode(render.imageMode()[0])`（戻り値は捨てる）。先頭キー `'Raw(RGBA-packed)'`。
+6. `surface.js` … `Surface` コンストラクタ。ヒストグラム色はバーと CDF が同色。先頭 R/G/B。
+7. `dispatch.js` … layout、rVFC、`get`/`set`、パイプライン（fetch/extract/histogram）、`kick()`。映像リング 5 枚はクロージャ。fps は `watcher.fps.kick()`。rVFC 未対応は throw。
+8. `ui.js` … パネル fade、`#d-canvas` ポインタ、`render.imageMode()` でモード填充、`#afactor` は `render.set` と `delta.accum`。`#show-preview` 既定オフ。`Draw image` は削除。
 9. `camera.js` … pause/resume、`switchCamera`、preview `loadedmetadata`、末尾 `startCamera()`。pause 中切替は制限（表示は更新しない）。
 
 `dispatch.iDISP` に空 `new Frame`×4 は無い。未使用ローカル `ic`/`dc`、`watch.last`、コメントの `delta.accum`、`delta.id` / `delta.threshold`、コメントアウト `setupRange('dthreshold')` も削除済み（PR 1）。
@@ -572,7 +572,7 @@ out[c][i]           = abs( current[space][c][i] - planes[space][c][i] )
 | `field-camera-select` | `.field` | 2 台以上のとき `hidden=false`。1 台以下と stop 後は hidden。 |
 | `camera-select` | `<select>` | `enumerateDevices` の `videoinput`。value は `deviceId`。change で `switchCamera`。GUM 待ち中 disabled。 |
 | `camera-params` / `camera-params-fields` | 動的フィールド | ライブ制約 UI。caps に幅または 2 値以上あるキーだけ。`cam-<key>`。 |
-| `i-canvas` | （削除） | 内部面は `new Surface(null, null, true)`（未接続 `_is`）。取り込みは `dispatch.snap` 5 枚。 |
+| `i-canvas` | （削除） | 内部面は `new Surface(null, null, true)`（未接続 `_is`）。取り込みは閉じた `_snap` 5 枚。 |
 | `d-canvas` | `<canvas width=640 height=480>` | 表示 `_ds`。CSS は layer いっぱい。ビットマップは CSS px（dpr なし）。ホイール／ポインタ。 |
 | `h-canvas` | `<canvas width=640 height=480>` | ヒストグラム overlay `_hs`。ビットマップは表示サイズ。CSS `inset:0; 100%`。`pointer-events:none`。 |
 | `dcanvas-layer` | `.stage-layer` | 表示ボックス。JS が px 幅高さを書く。`.io-hud` と `#h-canvas` の親。 |
@@ -582,13 +582,13 @@ out[c][i]           = abs( current[space][c][i] - planes[space][c][i] )
 | `side-panel` | `<aside class="panel">` | `.workspace` 内 overlay。ヘッダー下。背景 50% 透明。初期 display=block。`slide` が display/opacity。幅 720px 以下は下端シート。 |
 | `panel-open-button` | `.panel-fab` | CSS 既定 `display:none`。パネル閉後に JS が `block`。 |
 | `panel-close-button` | `.panel-close` | パネル見出し内。`position:static`。初期表示。 |
-| `image-mode` | `<select>` | JS が `buildImageFuncs` のキーで `Option` を add。change で `syncModeSettings`。 |
-| `show-histogram` | checkbox | `dispatch.showHistogram`。false で overlay をクリアし `display:none`。 |
+| `image-mode` | `<select>` | JS が `render.imageMode()` のキーで `Option` を add。change で `syncModeSettings`。 |
+| `show-histogram` | checkbox | `dispatch.set('showHistogram')`。false で overlay をクリアし `display:none`。 |
 | `show-preview` | checkbox | 既定オフ。`#video` の `display`。 |
 | `flip-horizontal` | checkbox | `dispatch.move.flip`（`_ds.gFlip` + パン符号）+ `kick(true)`。 |
 | `field-afactor` | `.field[data-modes]` | 蓄積 UI のラッパ。`data-modes="GRAY-accum,BW-delta,Gray-delta,RGB-accum"`。初期 `hidden`。 |
 | `afactor` / `-output` / `-increase` / `-decrease` | range 一式 | `setupRange` 命名規則 `name`, `name-output`, `name-increase`, `name-decrease`。range は `onchange`（ドラッグ中は無視）。 |
-| `pause` / `-output` / `-increase` / `-decrease` | range 一式 | `dispatch.duration`（ms）。I/O pause とは別。`data-modes` 無し（常時表示）。ラベルは `Frame interval`。 |
+| `pause` / `-output` / `-increase` / `-decrease` | range 一式 | `dispatch.set('duration')`（ms）。I/O pause とは別。`data-modes` 無し（常時表示）。ラベルは `Frame interval`。 |
 | `support-scan` | button | カメラ対応スキャン。ライブトラックがあれば `getCapabilities` / `getSettings` も読む。 |
 | `support-report` | `<pre>` | スキャン結果。`textContent`。初期 `hidden`。`#message` の 7 行リングとは別。 |
 | `message` | ログ | `print` が直近 7 行を `<br>` で描く。 |
@@ -614,7 +614,7 @@ syncModeSettings();   // document.querySelectorAll('[data-modes]') の hidden �
 - `data-modes` はカンマ区切りの `buildImageFuncs` キー。`split(',')` のみ。**空白は trim しない**（`GRAY-accum, BW-delta` は一致しない）。
 - 現在のモードがリストに無ければ `element.hidden = true`。あれば `false`。
 - 呼ぶタイミング: `image-mode` の option 填充直後、および `onchange`。
-- 隠すのは UI だけ。`setupRange` のコールバックと `accum.factor` / `dispatch.duration` は hidden 中も有効。
+- 隠すのは UI だけ。`setupRange` のコールバックと `render.set('afactor')` / `dispatch.set('duration')` は hidden 中も有効。
 
 現行のマーク:
 
@@ -655,7 +655,7 @@ Frame.calcThreshold(histogram256); // Otsu k
 
 ### `dispatch.watcher.fps`
 
-旧 `Graph` / `watch`。`dispatch()` 先頭で 500ms ごと `watcher.fps()`。caption は `out`（rAF Hz）、`in`（rVFC Hz）、`view%`（viewed vis / rAF）、`run%`（rAF+rVFC コールバック時間 / 壁時計）。チャートは run 系列。窓のあと `_stat.reset()`（rAF / rVFC / viewed / running）。skip は `_changed` だけを見るので、reset で vis は増えない。`dispatch.count` / `dispatch.time` は廃止。
+旧 `Graph` / `watch`。`dispatch.watcher.fps.kick()` が 500ms `setTimeout` で `iFPS.next()`。vis パイプラインとは独立なので skip / `videoWidth==0` でもキャプションは更新される。caption は `out` / `in` / `view%` / `run%`。チャートは run 系列。窓のあと `_stat.reset()`。Pause 後は rAF が止まり timeout は回り、`out` は 0 に落ちる。`dispatch.count` / `dispatch.time` は廃止。
 
 ### `Surface`
 
@@ -673,16 +673,16 @@ s.gClear / gFillRect / gFillStyle / gIdentity
 s.gBeginHistogram(num) / gDrawHistogram(bins256) / gEndHistogram
 ```
 
-`dispatch` のインスタンス: `_ds`（`#d-canvas`）、`_is`（未接続, rBoost）、`_hs`（`#h-canvas`）、`dispatch.snap`（映像リング 5、copy + rBoost）、fps チャート。vis は `snap.pop` / `unshift` して `snap[0]` に `show(video)` してから `extract`。
+`dispatch` のインスタンス: `_ds`（`#d-canvas`）、`_is`（未接続, rBoost）、`_hs`（`#h-canvas`）、閉じた `_snap`（映像リング 5、copy + rBoost）、fps チャート。vis は `_pFetch` で pop/unshift して `show(video)`、`_pExtract` で `extract`。
 
 ### `render`
 
 ```javascript
-render.buildImageFuncs;      // モード名 → (frame) => ImageData
-render.buildImage;           // 現在の関数。ui が差し替え
-render.accum;                // new Accum()。GRAY/RGB-accum 用
+render.imageMode();          // キー配列（挿入順）
+render.imageMode(name);      // 現在の buildImage を差し替え。戻り値なし
+render.buildImage(frame);    // 現在の関数
+render.set('afactor', v);    // 閉じた _accum.set('factor')
 render.image(frame);         // frame.size() の空 ImageData
-render.L4;                   // Edge4(Sobel) の 4 段階
 ```
 
 ### `Accum`
@@ -696,45 +696,46 @@ a.update(frame, space);      // 省略時 'gray'。毎 vis 混ぜる。遅延 RG
 a.planes(space);             // float 平面。未 update は空
 ```
 
-インスタンスは `render.accum` と `delta.accum` の 2 本。スライダは両方へ書く。
+インスタンスは render の `_accum` と `delta.accum` の 2 本。スライダは `render.set('afactor')` と `delta.accum.set`。
 
 ### `delta`
 
 ```javascript
-delta.accum;                 // new Accum()。残差用。render.accum とは別
+delta.accum;                 // new Accum()。残差用。render の _accum とは別
 delta.get(frame, space);     // delta.accum.update のあと |current − planes|
 ```
 
 ### `dispatch`
 
 ```javascript
-dispatch.paused;
+dispatch.get('pause'|'duration'|'showHistogram');
+dispatch.set(tag, value);    // のち _buildPipeline()
 dispatch.kick(noskip);       // noskip 真なら _changed。rAF デバウンス _AFkicked
-dispatch.duration;
-dispatch.showHistogram;
 dispatch.zoom(dir);          // 0 無視。>0 アウト
 dispatch.move(dx, dy);       // CSS 移動 → ビデオ座標オフセット
 dispatch.move.flip(yes);     // _ds.gFlip + パン符号
-dispatch.snap;               // Surface[5]。映像スナップショット
 dispatch.watcher.video.kick();
-dispatch.watcher.fps();
+dispatch.watcher.fps.kick(); // 500ms setTimeout
 dispatch.iDISP;
 ```
 
 ### `buildImageFuncs` キー
 
-`(frame) => ImageData`。
+`(frame) => ImageData`。公開は `render.imageMode`。
 
 | キー | 入力 | 出力 |
 | --- | --- | --- |
 | `Raw(RGBA-packed)` | `get('ImageData')` | 入力をそのまま返す。セレクト先頭＝既定 |
 | `RGB-planar` | `get('rgb')` | R/G/B 平面を packed RGBA に戻す（A=255） |
+| `Red` | `get('red')` | R 平面をグレーとして複製 |
+| `Green` | `get('green')` | G 平面をグレーとして複製 |
+| `Blue` | `get('blue')` | B 平面をグレーとして複製 |
 | `GRAY-frame` | `get('yuv').Y`（`get('gray')` ではない） | Y を RGB に複製 |
 | `GRAY-Histogram equalization` | `get('equalized')` | 均等化グレー |
 | `YUV-frame` | `get('yuv')` | Y+1.402V, Y-0.344U-0.714V, Y+1.772U（canvas がクランプ） |
 | `UV:RG-frame` | `get('yuv').UV` | R=U+128, G=V+128, B=0 |
-| `GRAY-accum` | `render.accum.update` + `planes('gray')[0]` | 蓄積グレー。`#field-afactor` 表示 |
-| `RGB-accum` | `render.accum.update` + `planes('rgb')` | 蓄積 RGB。`#field-afactor` 表示 |
+| `GRAY-accum` | `_accum.update` + `planes('gray')[0]` | 蓄積グレー。`#field-afactor` 表示 |
+| `RGB-accum` | `_accum.update` + `planes('rgb')` | 蓄積 RGB。`#field-afactor` 表示 |
 | `BW-delta` | `delta.get` | 非零を 255。`#field-afactor` 表示 |
 | `Gray-delta` | `delta.get` | 絶対差分。`#field-afactor` 表示 |
 | `8colors` | `get('rgb')` + Otsu(`histogram['R'|'G'|'B']`) | チャネルごと 0/255 |
@@ -771,7 +772,7 @@ clearCameraParams();    // stop
 originWithScheme(scheme, hostname);
 ```
 
-pause はここには無い。`setIoPaused` はトラックを止めない。`dispatch.paused` が真のとき rAF は繋がず、Resume が `dispatch.kick()` する。
+pause はここには無い。`setIoPaused` はトラックを止めない。`dispatch.get('pause')` が真のとき rAF は繋がず、Resume が `dispatch.kick()` する。
 
 ### I/O pause
 
@@ -811,7 +812,7 @@ scanCameraSupport(); // #support-scan。非同期。結果は #support-report（
 ### フレーム状態
 
 ```
-dispatch.snap: Surface[5]   // 映像リング。vis で pop/unshift、読むのは [0]
+_snap: Surface[5]           // 映像リング。_pFetch で pop/unshift、読むのは [0]
 Frame 1 個あたり（今 vis のみ）:
   ImageData (width*height*4 bytes)
   必要に応じて gray / Y / UV / E / R,G,B / edge
@@ -844,7 +845,7 @@ Frame LRU は無い。1080p で派生配列が揃うと今フレーム数十 MiB
 
 ### 2. `requestAnimationFrame` メインループ（**採用済み、PR 7**）
 
-以前は `setTimeout(dispatch.duration + suggestion)` + generator だった。現行は **単一 rAF**（`dispatch.kick`）。`minWait = max(duration, lastSuggestion)` で Frame interval と idle 100ms を保つ。pause 中は rAF を切る。vsync 毎の idle `iDISP` はしない（~10 Hz idle を維持）。`watch` はループ内 500ms。単一 `while (true) { await delay(...) }` は未採用。
+以前は `setTimeout(dispatch.duration + suggestion)` + generator だった。現行は **単一 rAF**（`dispatch.kick`）。`minWait = max(duration, lastSuggestion)` で Frame interval と idle 100ms を保つ。pause 中は rAF を切る。vsync 毎の idle `iDISP` はしない（~10 Hz idle を維持）。FPS HUD は独立な 500ms timeout。単一 `while (true) { await delay(...) }` は未採用。
 
 ### 3. ヒストグラムを別 canvas / overlay DOM にする（**採用済み、PR 3**）
 
@@ -886,7 +887,7 @@ PR 6 は既存のグローバル境界に沿った `<script src>` 順である�
 
 ### 現状の寿命
 
-毎 vis `new Frame(imageData)`。過去 Frame は持たない。ループはローカル `newFrame` のみ。平面は `_get*` 初回の `new` をクロージャでメモ化する。vis 終了後は参照が切れれば GC。映像は `dispatch.snap` 5 枚が canvas として残る。
+毎 vis `new Frame(imageData)`。過去 Frame は持たない。ループはローカル `newFrame` のみ。平面は `_get*` 初回の `new` をクロージャでメモ化する。vis 終了後は参照が切れれば GC。映像は閉じた `_snap` 5 枚が canvas として残る。
 
 遅延入力は `accum` が RGBA をコピー所有する（成功 tick、既定 10 Hz）。Frame の gray をエイリアスしない。
 
@@ -1033,7 +1034,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 
 - **ログ UI:** `#message`。リング 7 本。`print()`。サイズ変更、モード、range、camera enabled（先頭デバイス名）/disabled/stopped、`camera: <label>`（切替）、io paused/resumed、playback failed、`support scan done`。
 - **対応スキャン:** `#support-report`。`scanCameraSupport` が選択・解像度・ズーム/フォーカス・フレームレート・ImageCapture の YES/PARTIAL/NO を書く。ライブトラックが無いと範囲は UA レベルまで。
-- **FPS HUD:** 500ms。`out` / `in` / `view%` / `run%`。チャートは run EMA。
+- **FPS HUD:** vis と独立な 500ms timeout。`out` / `in` / `view%` / `run%`。チャートは run EMA。
 - **ステージ時間:** 廃止。`run%` は rAF コールバックと rVFC コールバックの合計時間割合。
 - **カメラ状態:** `#camera-status` と `print` の二重。getUserMedia 失敗は `error.name` + `message`。API 欠如は固定英語 `This browser does not support the camera API.`。video 欠如は `video element not found`。insecure は `Camera is blocked at …` と "Advanced, then Proceed"。停止は `camera stopped`。
 - **nginx:** アクセスログ既定、error_log notice。`/healthz` は access_log off。**イメージ `HEALTHCHECK`** はコンテナ内 HTTP 8081 のみ（stream の 8080 / `ssl_preread` は見ない。Open Question 6）。Compose `healthcheck:` は無い。
@@ -1074,7 +1075,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 5. **既定 Laplacian は符号付き畳み込み → abs → 0–255 クランプ。符号付きプレビューは別キー。**  
    理由: `Uint8ClampedArray` へ負値を直接書くと 0 になりエッジが消える（`cam.js` のバグ）。abs 後も 255 超は飽和する。零交差の可視化は `Edge(Laplacian signed)`（零 = 128）で opt-in（PR 8）。既存キーの画素は変えない。
 
-6. **過去 Frame の LRU は置かない。映像は `dispatch.snap`（Surface 5 枚）に保持する。**  
+6. **過去 Frame の LRU は置かない。映像は閉じた `_snap`（Surface 5 枚）に保持する。**  
    理由: パイプラインは今 vis の `new Frame` だけを見る。過去画素はビデオフレームの canvas で足りる。`Frame.map` / `id()` / HIGH / LOW は削除。
 
 7. **メインループは単一 rAF。予約は `dispatch.kick()`。pause は vis のあとキックしない。**  
@@ -1092,10 +1093,10 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 11. **ヘッダーは専用行。Controls はヘッダー下の映像エリアに overlay。JS は `paddingRight` を書かない。CSS `cqw` の 4:3 ボックスはライブ後に `aspect-ratio:auto` で破棄。**  
     理由: トップバーと Close / Pause が重なると操作不能になる。chrome 非表示時はヘッダー行が潰れ映像が全画面。Controls 背景 50% 透過。`fitDisplaySize` は `#layers` から CSS padding だけ引く。
 
-12. **蓄積は `Accum` コンストラクタ。平面は `Array`。遅延は RGBA コピー。毎 vis 混ぜる。`render.accum` と `delta.accum` は別インスタンス。**  
+12. **蓄積は `Accum` コンストラクタ。平面は `Array`。遅延は RGBA コピー。毎 vis 混ぜる。render の `_accum` と `delta.accum` は別インスタンス。**  
     理由: プレビュー EMA と残差 EMA を独立にする。factor スライダは両方へ。`ImageData` には積まない。gray と Y は同一視しない。
 
-13. **`showHistogram` は overlay 専用。`Draw image` / `dispatch.showImage` は削除。**  
+13. **`showHistogram` は overlay 専用。`dispatch.set('showHistogram')`。`Draw image` / `dispatch.showImage` は削除。**  
     理由: 負荷は rVFC 間引きと Frame interval。vis が走ればカーネルは走る。ヒストグラムを外すと映像は動き overlay だけ消える。
 
 14. **キャプチャ vis は `_changed`。rVFC コールバックが立てる。**  
@@ -1120,7 +1121,10 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
     理由: 過去フレーム相当は Surface 上のビデオ画素。`buildImage` は `(frame) => ImageData`。
 
 21. **RGB は packed と平面を分ける。既定モードはセレクト先頭。**  
-    理由: `get('red'|'green'|'blue')` がチャネルを抜き、`get('rgb')` は 3 本の配列。旧 `'RGB-frame'` は `'Raw(RGBA-packed)'`。再パック表示は `'RGB-planar'`。`buildImageFuncs` 先頭が packed なので起動時は素通し（受け入れ済み）。
+    理由: `get('red'|'green'|'blue')` がチャネルを抜き、`get('rgb')` は 3 本の配列。旧 `'RGB-frame'` は `'Raw(RGBA-packed)'`。再パック表示は `'RGB-planar'`。単チャネル表示は `'Red'` / `'Green'` / `'Blue'`。先頭が packed なので起動時は素通し（受け入れ済み）。
+
+22. **モードと蓄積はクロージャ。FPS 監視は vis と独立。**  
+    理由: `render.imageMode` / `render.set('afactor')`。`dispatch.get`/`set`（pause / duration / showHistogram）。映像リングは `_snap`。HUD は 500ms `setTimeout`。`imageMode` の setter は戻り値を持たない（初期化は副作用だけ）。ヒストグラムはキーごとにバーと CDF を同色。先頭 3 色は R/G/B。
 
 ---
 
@@ -1205,7 +1209,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 ### 決定済み（2026-09-12、これ以上議論しない）
 
 1. **`Frame` LRU を残すか。**  
-   **決定:** 廃止（2026-10-05）。過去画素は `dispatch.snap`（映像 Surface 5 枚）。`Frame.map` / `id()` / HIGH / LOW は削除。
+   **決定:** 廃止（2026-10-05）。過去画素は閉じた `_snap`（映像 Surface 5 枚）。`Frame.map` / `id()` / HIGH / LOW は削除。
 
 2. **ヒストグラムを映像から分離するか。**  
    **決定:** 分離する。**PR 3 で実装済み。** `#h-canvas` + `#show-histogram`。画素は表示サイズ（`hc` = `#d-canvas`）座標。
@@ -1218,7 +1222,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 
 ### 未決
 
-3. **`dispatch.duration` と I/O pause の用語衝突。** UI は `Frame interval`、コードは `pause`。リネームは DOM 契約変更。
+3. **`dispatch.set('duration')` と I/O pause の用語衝突。** UI は `Frame interval`、コードは `pause`。リネームは DOM 契約変更。
 6. **healthcheck を stream ポート 8080 経由にするか。** 現状 8081 直叩きなので `ssl_preread` の死を検知しない。
 7. **Laplacian のスケール。** 既定 abs 後 255 clamp で強いエッジが飽和する。符号付きプレビューは PR 8 で追加済み。`min(255, abs/k)` の k をスライダにするかは未決。
 8. **getXXX 平面を手動プールするか、GC に任せるか。** 方式検討メモ参照。未実装。Frame LRU は廃止済みなので「破棄 vis で Salvage」前提は現状に合わない。入力 `ImageData` は現行 `getImageData` ではプール不可。
@@ -1232,9 +1236,9 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 - `/app/.gitignore` — `tmp/`
 - `/app/jscam/accum.js` — 指数平滑背景
 - `/app/jscam/delta.js` — 残差
-- `/app/jscam/render.js` — `buildImageFuncs`, `render.accum`
-- `/app/jscam/surface.js` — `Surface`
-- `/app/jscam/dispatch.js` — layout, rAF ループ, watcher, Surface インスタンス
+- `/app/jscam/render.js` — `imageMode` / `buildImage`、閉じた `_accum`、`render.set`
+- `/app/jscam/surface.js` — `Surface`。ヒストグラム色はバーと CDF が同色、先頭 R/G/B
+- `/app/jscam/dispatch.js` — layout, rAF ループ, `get`/`set`, パイプライン, watcher
 - `/app/jscam/ui.js` — パネル / モード / range
 - `/app/jscam/camera.js` — start / stop / pause。ロード末尾で `startCamera()`
 - `/app/jscam/cam.js` — 修正前。バグ対照用
