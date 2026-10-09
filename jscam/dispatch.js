@@ -1,27 +1,7 @@
 'use strict';
 
 const dispatch = ()=>{
-	const now = performance.now();
-
-	if (now - dispatch.watcher.fps.last >= 500) {
-		dispatch.watcher.fps.last = now;
-		dispatch.watcher.fps();
-	}
-
-	const minWait = Math.max(dispatch.duration, dispatch.lastSuggestion);
-	if (now - dispatch.lastProcessedEnd < minWait) {
-		dispatch.kick();
-		return
-	}
-
-	const r = dispatch.iDISP.next();
-	dispatch.lastSuggestion = r.value;
-	dispatch.lastProcessedEnd = performance.now();
-
-	if (dispatch.paused)	// don't kick, it will re-kicked at resume.
-		return
-
-	dispatch.kick();
+	dispatch._doit();
 }
 
 (()=>{
@@ -31,12 +11,64 @@ const dispatch = ()=>{
 	,	_ds = new Surface(e('d-canvas'))	// display surface (image)
 	,	_is = new Surface(null, null, true)	// internal  surface (image)
 	,	_hs = new Surface(e('h-canvas'))	// histogram surface
+	,	_WATCH = 500
 	;
 
-	const _SNAPNUM = 5;
-	dispatch.snap = [];
+	let	_showHistogram    = true
+	,	_duration         = 0
+	,	_lastSuggestion   = 0
+	,	_lastProcessedEnd = 0
+	,	_paused           = false
+	;
+
+	const _getter = {
+		'showHistogram': ()=>(_showHistogram)
+	,	'duration':      ()=>(_duration)
+	,	'pause':         ()=>(_paused)
+	};
+	const _setter = {
+		'showHistogram': (v)=>(_showHistogram = v)
+	,	'duration':      (v)=>(_duration      = v)
+	,	'pause':         (v)=>(_paused        = v)
+	};
+	dispatch.get = (tag)=>{
+		const fn = _getter[tag];
+		if (!fn)
+			throw new Error('not supported ' + tag)
+		return fn()
+	};
+	dispatch.set = (tag, value)=>{
+		const fn = _setter[tag];
+		if (!fn)
+			throw new Error('not supported ' + tag)
+		fn(value);
+		_buildPipeline();
+	};
+
+	dispatch._doit = ()=>{
+		const now = performance.now();
+
+		const minWait = Math.max(_duration, _lastSuggestion);
+		if (now - _lastProcessedEnd < minWait) {
+			dispatch.kick();
+			return
+		}
+
+		const r = dispatch.iDISP.next();
+		_lastSuggestion = r.value;
+		_lastProcessedEnd = performance.now();
+
+		if (_paused)	// don't kick, it will re-kicked at resume.
+			return
+
+		dispatch.kick();
+	};
+
+	const _SNAPNUM = 5
+	,     _snap = [];
+	;
 	for (let i = 0; i < _SNAPNUM; ++i) {
-		dispatch.snap.push(new Surface(
+		_snap.push(new Surface(
 			_video
 		,	[_video.videoWidth, _video.videoHeight]
 		,	true
@@ -181,25 +213,70 @@ const dispatch = ()=>{
 		});
 	}
 
-	dispatch.iDISP = (function * () {
-		let	suggestion = 0
+	const _pipeline = []
+	, _pWatch = (context, me)=>{
+		const now = performance.now();
+		if (now - dispatch.watcher.fps.last >= _WATCH) {
+			dispatch.watcher.fps.last = now;
+			dispatch.watcher.fps();
+		}
+		_pipeline.push(me);
+	}
+	, _pFetch = (context, me)=>{
+		const shot = _snap.pop();
+		_snap.unshift(shot);
+		shot.fit([_video.videoWidth, _video.videoHeight]);
+		shot.show(_video);
+		context.snap = _snap;
+		_pipeline.push(me);
+	}
+	, _pExtract = (context, me) => {
+		const	extract = context.snap[0].extract(_scale, _offset)
+		,	srcImage = extract[0]
+		;
+		_offset[0] = extract[1];
+		_offset[1] = extract[2];
+
+		const	newFrame = new Frame(srcImage, _video.currentTime)
+		,	di = render.buildImage(newFrame)
 		;
 
-		const _fetchVF = ()=>{
-		 	const shot = dispatch.snap.pop();
-		 	dispatch.snap.unshift(shot);
-		 	shot.fit([_video.videoWidth, _video.videoHeight]);
-		 	shot.show(_video);
+		_is.inject(di);
+		_ds.show(_is);
+		context.currentFrame = newFrame;
+
+		_pipeline.push(me);
+	}
+	, __pHistogram = (context, me) => {
+		const f = context.currentFrame;
+		_hs.gClear();
+		_hs.gBeginHistogram(f.num());
+		for (let k in f.histogram) {
+			_hs.gDrawHistogram(f.histogram[k]);
 		}
-		, _showHistogram = (f)=>{
-			_hs.gClear();
-			_hs.gBeginHistogram(f.num());
-			for (let k in f.histogram) {
-				_hs.gDrawHistogram(f.histogram[k]);
-			}
-			_hs.gEndHistogram();
-		}
-		;
+		_hs.gEndHistogram();
+
+		_pipeline.push(me);
+	}
+	, _pHistogram = (context, me) => {
+		if (!_showHistogram)	// don't push if it is disabled
+			return
+		__pHistogram(context, __pHistogram);
+	}
+	, _buildPipeline= () => {
+		_pipeline.length = 0;
+
+		_pipeline.push(_pWatch);
+		_pipeline.push(_pFetch);
+		_pipeline.push(_pExtract);
+		_pipeline.push(_pHistogram);
+	}
+	;
+
+	dispatch.iDISP = (function * () {
+		let	suggestion = 0;
+
+		_buildPipeline();
 
 		while (true) {
 			yield suggestion;
@@ -223,31 +300,13 @@ const dispatch = ()=>{
 			_changed = false;
 			++_stat.viewed;
 
-			_fetchVF();
-
-			const	extract = dispatch.snap[0].extract(_scale, _offset)
-			,	srcImage = extract[0]
-			;
-			_offset[0] = extract[1];
-			_offset[1] = extract[2];
-
-			const	newFrame = new Frame(srcImage, _video.currentTime)
-			,	di = render.buildImage(newFrame)
-			;
-
-			_is.inject(di);
-			_ds.show(_is);
-
-			if (dispatch.showHistogram)
-				_showHistogram(newFrame);
+			const context = {};
+			for (let i = 0; i < _pipeline.length; ++i) {
+				const fn = _pipeline.shift();
+				fn(context, fn);
+			}
 		}
 	})();	// end dispatch.iDISP
-
-	dispatch.duration = 0;
-	dispatch.paused = false;
-	dispatch.showHistogram = true;
-	dispatch.lastProcessedEnd = 0;
-	dispatch.lastSuggestion = 0;
 
 	dispatch.watcher = {video:{}, fps:{}};
 	(()=>{	// begin video watcher 

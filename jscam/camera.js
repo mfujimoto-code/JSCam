@@ -2,7 +2,7 @@
 
 (() => {
 	const syncIoPauseButtons = ()=>{
-		const paused = dispatch.paused;
+		const paused = dispatch.get('pause');
 		const video = e('video');
 		const hasStream = !!(video && video.srcObject);
 		const hud = document.querySelector('.io-hud');
@@ -30,10 +30,10 @@
 	}
 
 	const setIoPaused = (paused)=>{
-		dispatch.paused = !!paused;
+		dispatch.set('pause', !!paused);
 		const video = e('video');
 		if (video && video.srcObject) {
-			if (dispatch.paused) {
+			if (!!paused) {
 				video.pause();
 			} else {
 				const playing = video.play();
@@ -52,8 +52,8 @@
 			cUI.print('camera not started');
 			return;
 		}
-		setIoPaused(!dispatch.paused);
-		cUI.print(dispatch.paused ? 'io paused' : 'io resumed');
+		setIoPaused(!dispatch.get('pause'));
+		cUI.print(dispatch.get('pause') ? 'io paused' : 'io resumed');
 	}
 
 	const gumConstraints = (deviceId)=>{
@@ -268,7 +268,7 @@
 		}
 		const video = e('video');
 		if (!video || !video.srcObject) return;
-		const paused = dispatch.paused;
+		const paused = dispatch.get('pause');
 		const generation = ++startCamera.generation;
 		const sel = e('camera-select');
 		const label = (sel && sel.options[sel.selectedIndex])
