@@ -214,14 +214,6 @@ const dispatch = ()=>{
 	}
 
 	const _pipeline = []
-	, _pWatch = (context, me)=>{
-		const now = performance.now();
-		if (now - dispatch.watcher.fps.last >= _WATCH) {
-			dispatch.watcher.fps.last = now;
-			dispatch.watcher.fps();
-		}
-		_pipeline.push(me);
-	}
 	, _pFetch = (context, me)=>{
 		const shot = _snap.pop();
 		_snap.unshift(shot);
@@ -266,7 +258,6 @@ const dispatch = ()=>{
 	, _buildPipeline= () => {
 		_pipeline.length = 0;
 
-		_pipeline.push(_pWatch);
 		_pipeline.push(_pFetch);
 		_pipeline.push(_pExtract);
 		_pipeline.push(_pHistogram);
@@ -403,7 +394,6 @@ const dispatch = ()=>{
 		};
 
 		_wf.iFPS = (function * () {
-
 			let last = performance.now();
 
 			while (true) {
@@ -422,11 +412,19 @@ const dispatch = ()=>{
 				_stat.reset();
 			}
 		})();
-		_wf.last = performance.now();
-
+		
+		_wf.kick = ()=>{
+			setTimeout(()=>{
+				_wf.iFPS.next();
+				_wf.kick();
+			}
+			, _WATCH
+			);
+		};
 	})();	// end fsp watcher
 
 })();
 
 dispatch.kick();
 dispatch.watcher.video.kick();
+dispatch.watcher.fps.kick();

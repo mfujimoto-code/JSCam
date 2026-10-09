@@ -331,11 +331,22 @@ const render = Object.create(null);
 		_buildFunc = _buildImageFuncs[param];
 	}
 
-	_buildFunc = render.imageMode(render.imageMode()[0]);
+	render.imageMode(render.imageMode()[0]);
 
 	render.buildImage = (frame)=>(_buildFunc(frame));
 	render.image = function(frame) {
 		const size = frame.size();
 		return new ImageData(size[0], size[1])
 	}
+
+	const _setter = {
+		'afactor': (v)=>(_accum.set('factor', v))
+	};
+
+	render.set = (tag, value)=>{
+		const fn = _setter[tag];
+		if (!fn)
+			throw new Error('not supported ' + tag)
+		fn(value);
+	};
 })();

@@ -276,7 +276,7 @@ cUI.print = (msg) => {
 
 	setupRange('afactor', 'accumulation factor', (v)=>{
 		const	f = Number(v);
-		render.accum.set('factor', f);
+		render.set('afactor', f);
 		delta.accum.set('factor', f);
 	});
 	setupRange('pause', 'pause@frame', (v)=>(
