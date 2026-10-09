@@ -195,7 +195,7 @@ cUI.print = (msg) => {
 	}
 
 	e('show-histogram').onchange = function () {
-		dispatch.showHistogram = this.checked;
+		dispatch.set('showHistogram', this.checked);
 		e('h-canvas').style.display = this.checked ? 'block' : 'none';
 		dispatch.kick(true);
 	}
@@ -208,10 +208,10 @@ cUI.print = (msg) => {
 		e('video').style.display = 'block';
 	}
 
-	for (let k in render.buildImageFuncs) {
-		e('image-mode').add(new Option(k, k));
-	}
-	render.buildImage = render.buildImageFuncs[e('image-mode').options[0].value];
+	render.imageMode().forEach((key, index)=>{
+		e('image-mode').add(new Option(key, key));
+	});
+	render.imageMode([e('image-mode').options[0].value]);
 
 	const currentImageMode = ()=>{
 		const sel = e('image-mode');
@@ -236,7 +236,7 @@ cUI.print = (msg) => {
 	e('image-mode').onchange = function () {
 		const mode = this.options[this.selectedIndex].value;
 		cUI.print('image mode:' + mode);
-		render.buildImage = render.buildImageFuncs[mode];
+		render.imageMode(mode);
 		syncModeSettings();
 		dispatch.kick(true);
 	}
@@ -276,10 +276,12 @@ cUI.print = (msg) => {
 
 	setupRange('afactor', 'accumulation factor', (v)=>{
 		const	f = Number(v);
-		render.accum.set('factor', f);
+		render.set('afactor', f);
 		delta.accum.set('factor', f);
 	});
-	setupRange('pause', 'pause@frame', (v)=>(dispatch.duration = Number(v)));
+	setupRange('pause', 'pause@frame', (v)=>(
+		dispatch.set('duration', Number(v))
+	));
 
 	const appVersion = e('app-version');
 	if (appVersion) appVersion.textContent = JSCAM_VERSION;

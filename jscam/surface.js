@@ -189,20 +189,20 @@ const Surface = function (canvas, shape, rBoost, copy) {
 	const	_COLORS = [
 		[255,   0,   0]
 	,	[  0, 255,   0]
-	,	[255, 255,   0]
 	,	[  0,   0, 255]
+	,	[255, 255,   0]
 	,	[255,   0, 255]
 	,	[  0, 255, 255]
 	,	[255, 255, 255]
 	,	[127,   0,   0]
 	,	[  0, 127,   0]
-	,	[127, 127,   0]
-	,	[255, 127,   0]
 	,	[  0,   0, 127]
+	,	[127, 127,   0]
 	,	[127,   0, 127]
 	,	[  0, 127, 127]
-	,	[  0, 255, 127]
 	,	[127, 127, 127]
+	,	[255, 127,   0]
+	,	[  0, 255, 127]
 	]
 	;
 	const	_rgba = (n)=>{
@@ -226,14 +226,14 @@ const Surface = function (canvas, shape, rBoost, copy) {
 		,	max = histogram.reduce((a,b)=>(Math.max(a,b)), 0)
 		,	barScale = (tc.height / 3) / max
 		;
-		gc.fillStyle = _rgba(++hs.color);
+		gc.fillStyle = _rgba(hs.color);
 		for (let x = 10, i = 0; i < histogram.length; ++i, ++x) {
 			const h = histogram[i] * barScale;
 			gc.fillRect(x, tc.height - 1 - h, 1, h);
 		}
 		let y = histogram[0];
 		const yStart = tc.height - 1;
-		gc.strokeStyle = _rgba(++hs.color);
+		gc.strokeStyle = _rgba(hs.color);
 		gc.lineWidth = 2;
 		gc.beginPath();
 		gc.moveTo(10, yStart - y * hs.lineScale);
@@ -242,5 +242,7 @@ const Surface = function (canvas, shape, rBoost, copy) {
 			gc.lineTo(x, yStart - y * hs.lineScale);
 		}
 		gc.stroke();
+
+		++hs.color;
 	};
 })();
