@@ -19,6 +19,10 @@ const _load = (pathArray, kicker)=>{
 	const script = document.createElement('script');
 	script.src = path;
 
+	script.onerror = () => {
+		throw new Error('failed to load ' + path);
+	};
+
 	script.onload = () => {
 		_load(pathArray, kicker);
 	};

@@ -197,7 +197,7 @@ _j.Frame.prototype = {
 		for (let i = 0; i < num; ++i) {
 			const lum = (V[g[i]] - Vmin) * factor;
 			E[i] = lum;
-			histogram[lum] += 1;
+			histogram[E[i]] += 1;	// don't use lum as index because it's a float
 			tl += lum;
 		}
 		this.histogram['equalization'] = histogram;
