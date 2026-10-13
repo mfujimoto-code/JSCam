@@ -1,10 +1,12 @@
 'use strict';
 
-const Surface = function (canvas, shape, rBoost, copy) {
-	this._init(canvas, shape, rBoost, copy);
-};
+jsCam.initFn.push((kparam)=>{
+	const Surface = function (canvas, shape, rBoost, copy) {
+		this._init(canvas, shape, rBoost, copy);
+	};
 
-(() => {
+	jsCam.Surface = Surface;
+
 	const	_getGC = (c, r) => (
 		!!r ? c.getContext('2d', {willReadFrequently: true})
 		    : c.getContext('2d')
@@ -245,4 +247,4 @@ const Surface = function (canvas, shape, rBoost, copy) {
 
 		++hs.color;
 	};
-})();
+});

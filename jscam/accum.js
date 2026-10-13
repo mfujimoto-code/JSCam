@@ -1,16 +1,20 @@
 'use strict';
 
-const Accum = function () {
-	this._delay = new Uint8ClampedArray(0);	// image pixels for next update
-	this._delayNum = 0;
-	this._hasDelay = false;
-	this._getter = Object.create(null);
-	this._buf = Object.create(null);
+jsCam.initFn.push((kparam)=>{
+	const _j = jsCam;
 
-	this.set('factor', Accum.FACTOR);
-};
+	const Accum = function () {
+		this._delay = new Uint8ClampedArray(0);	// image pixels for next update
+		this._delayNum = 0;
+		this._hasDelay = false;
+		this._getter = Object.create(null);
+		this._buf = Object.create(null);
 
-(() => {
+		this.set('factor', Accum.FACTOR);
+	};
+
+	_j.Accum = Accum;
+
 	Accum.SPACES = Object.freeze(['gray', 'rgb', 'yuv']);
 	Accum.FACTOR = 0.5;
 	const _check = (space) => {
@@ -136,4 +140,4 @@ const Accum = function () {
 		if (space === 'gray') return [[]];
 		return [[], [], []];
 	}
-})();
+});

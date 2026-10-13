@@ -1,11 +1,20 @@
 'use strict';
 
-const render = Object.create(null);
+jsCam.initFn.push((kparam)=>{
+	const _j = jsCam;
 
-(()=>{
+	const render = Object.create(null);
+
+	_j.render = render;
+
 	const _L4 = [0, 255/3, 255/3*2, 255];
 
-	const _accum = new Accum();
+	const _accum = new _j.Accum();
+
+	const _image = function(frame) {
+		const size = frame.size();
+		return new ImageData(size[0], size[1])
+	}
 
 	const _buildImageFuncs = Object.assign(Object.create(null), {
 		'Raw(RGBA-packed)': function (frame) {
@@ -17,7 +26,7 @@ const render = Object.create(null);
 			,	G = plane[1]
 			,	B = plane[2]
 			,	num  = frame.num()
-			,	imageData = render.image(frame)
+			,	imageData = _image(frame)
 			,	data = imageData.data
 			;
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
@@ -31,7 +40,7 @@ const render = Object.create(null);
 	,	'Red': function (frame) {
 			const	plane = frame.get('red')
 			,	num  = frame.num()
-			,	imageData = render.image(frame)
+			,	imageData = _image(frame)
 			,	data = imageData.data
 			;
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
@@ -45,7 +54,7 @@ const render = Object.create(null);
 	,	'Green': function (frame) {
 			const	plane = frame.get('green')
 			,	num  = frame.num()
-			,	imageData = render.image(frame)
+			,	imageData = _image(frame)
 			,	data = imageData.data
 			;
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
@@ -59,7 +68,7 @@ const render = Object.create(null);
 	,	'Blue': function (frame) {
 			const	plane = frame.get('blue')
 			,	num  = frame.num()
-			,	imageData = render.image(frame)
+			,	imageData = _image(frame)
 			,	data = imageData.data
 			;
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
@@ -73,7 +82,7 @@ const render = Object.create(null);
 	,	'GRAY-frame': function (frame) {
 			const yuv = frame.get('yuv');
 			const num  = frame.num()
-			,     imageData = render.image(frame)
+			,     imageData = _image(frame)
 			,     data = imageData.data
 			;
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
@@ -87,7 +96,7 @@ const render = Object.create(null);
 	,	'GRAY-Histogram equalization': function (frame) {
 			const e = frame.get('equalized')
 			,     num  = frame.num()
-			,     imageData = render.image(frame)
+			,     imageData = _image(frame)
 			,     data = imageData.data
 			;
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
@@ -104,7 +113,7 @@ const render = Object.create(null);
 	,	'YUV-frame': function (frame) {
 			const yuv = frame.get('yuv')
 			,     num  = frame.num()
-			,     imageData = render.image(frame)
+			,     imageData = _image(frame)
 			,     data = imageData.data
 			;
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
@@ -122,7 +131,7 @@ const render = Object.create(null);
 	,	'UV:RG-frame': function (frame) {
 			const yuv = frame.get('yuv')
 			,     num  = frame.num() * 2
-			,     imageData = render.image(frame)
+			,     imageData = _image(frame)
 			,     data = imageData.data
 			;
 			for (let i = 0, o = 0; i < num; i += 2, o += 4) {
@@ -140,7 +149,7 @@ const render = Object.create(null);
 			_accum.update(frame, 'gray');
 			const gray = _accum.planes('gray')[0]
 			,     num  = frame.num()
-			,     imageData = render.image(frame)
+			,     imageData = _image(frame)
 			,     data = imageData.data;
 
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
@@ -156,7 +165,7 @@ const render = Object.create(null);
 			_accum.update(frame, 'rgb');
 			const rgb = _accum.planes('rgb')
 			,     num  = frame.num()
-			,     imageData = render.image(frame)
+			,     imageData = _image(frame)
 			,     data = imageData.data;
 
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
@@ -169,9 +178,9 @@ const render = Object.create(null);
 			return imageData
 		}
 	,	'BW-delta': function (frame) {
-			const d = delta.get(frame)
+			const d = _j.delta.get(frame)
 			,     num  = frame.num()
-			,     imageData = render.image(frame)
+			,     imageData = _image(frame)
 			,     data = imageData.data;
 
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
@@ -185,9 +194,9 @@ const render = Object.create(null);
 			return imageData
 		}
 	,	'Gray-delta': function (frame) {
-			const d = delta.get(frame)
+			const d = _j.delta.get(frame)
 			,     num  = frame.num()
-			,     imageData = render.image(frame)
+			,     imageData = _image(frame)
 			,     data = imageData.data
 			;
 
@@ -202,15 +211,15 @@ const render = Object.create(null);
 		}
 	,	'8colors': function (frame) {
 			const num  = frame.num()
-			,     imageData = render.image(frame)
+			,     imageData = _image(frame)
 			,     data = imageData.data
 			,     RGB = frame.get('rgb')
 			,     R = RGB[0]
 			,     G = RGB[1]
 			,     B = RGB[2]
-			,     tR = Frame.calcThreshold(frame.histogram['R'])
-			,     tG = Frame.calcThreshold(frame.histogram['G'])
-			,     tB = Frame.calcThreshold(frame.histogram['B'])
+			,     tR = _j.Frame.calcThreshold(frame.histogram['R'])
+			,     tG = _j.Frame.calcThreshold(frame.histogram['G'])
+			,     tB = _j.Frame.calcThreshold(frame.histogram['B'])
 			;
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
 				data[o+0] = R[i] > tR ? 255 : 0;
@@ -224,7 +233,7 @@ const render = Object.create(null);
 	,	'Edge(Laplacian)': function (frame) {
 			const e = frame.get('laplacian')
 			,     num  = frame.num()
-			,     imageData = render.image(frame)
+			,     imageData = _image(frame)
 			,     data = imageData.data
 			;
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
@@ -240,7 +249,7 @@ const render = Object.create(null);
 	,	'Edge(Laplacian signed)': function (frame) {
 			const e = frame.get('laplacian.signed')
 			,     num  = frame.num()
-			,     imageData = render.image(frame)
+			,     imageData = _image(frame)
 			,     data = imageData.data
 			;
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
@@ -256,7 +265,7 @@ const render = Object.create(null);
 	,	'Edge(Sobel)': function (frame) {
 			const e = frame.get('sobel')
 			,     num  = frame.num()
-			,     imageData = render.image(frame)
+			,     imageData = _image(frame)
 			,     data = imageData.data
 			;
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
@@ -272,7 +281,7 @@ const render = Object.create(null);
 	,	'Edge4(Sobel)': function (frame) {
 			const e = frame.get('sobel')
 			,     num  = frame.num()
-			,     imageData = render.image(frame)
+			,     imageData = _image(frame)
 			,     data = imageData.data
 			;
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
@@ -288,7 +297,7 @@ const render = Object.create(null);
 	,	'Edge2(Sobel)': function (frame) {
 			const e = frame.get('sobel')
 			,     num  = frame.num()
-			,     imageData = render.image(frame)
+			,     imageData = _image(frame)
 			,     data = imageData.data
 			;
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
@@ -303,10 +312,10 @@ const render = Object.create(null);
 		}
 	,	'Edge(Bin)': function (frame) {
 			const num  = frame.num()
-			,     imageData = render.image(frame)
+			,     imageData = _image(frame)
 			,     data = imageData.data
 			,     e = frame.get('sobel.rgb')
-			,     t = Frame.calcThreshold(frame.histogram['sobel.rgb'])
+			,     t = _j.Frame.calcThreshold(frame.histogram['sobel.rgb'])
 			;
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
 				data[o+0] =
@@ -334,10 +343,6 @@ const render = Object.create(null);
 	render.imageMode(render.imageMode()[0]);
 
 	render.buildImage = (frame)=>(_buildFunc(frame));
-	render.image = function(frame) {
-		const size = frame.size();
-		return new ImageData(size[0], size[1])
-	}
 
 	const _setter = {
 		'afactor': (v)=>(_accum.set('factor', v))
@@ -349,4 +354,4 @@ const render = Object.create(null);
 			throw new Error('not supported ' + tag)
 		fn(value);
 	};
-})();
+});

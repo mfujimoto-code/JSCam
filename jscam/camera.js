@@ -1,17 +1,19 @@
 'use strict';
 
-(() => {
+jsCam.initFn.push((kparam)=>{
+	const _j = jsCam;
+
 	const syncIoPauseButtons = ()=>{
-		const paused = dispatch.get('pause');
-		const video = e('video');
+		const paused = _j.dispatch.get('pause');
+		const video = _j.e(kparam.srcVideo);
 		const hasStream = !!(video && video.srcObject);
 		const hud = document.querySelector('.io-hud');
 		if (hud) {
 			if (hasStream) hud.classList.add('is-live');
 			else hud.classList.remove('is-live');
 		}
-		const startBtn = e('camera-start');
-		const stopBtn = e('camera-stop');
+		const startBtn = _j.e('camera-start');
+		const stopBtn = _j.e('camera-stop');
 		if (startBtn) startBtn.hidden = hasStream;
 		if (stopBtn) {
 			stopBtn.hidden = !hasStream;
@@ -25,13 +27,13 @@
 			btn.setAttribute('aria-pressed', paused ? 'true' : 'false');
 			btn.textContent = paused ? 'Resume' : 'Pause';
 		}
-		const badge = e('io-paused-badge');
+		const badge = _j.e('io-paused-badge');
 		if (badge) badge.hidden = !paused;
 	}
 
 	const setIoPaused = (paused)=>{
-		dispatch.set('pause', !!paused);
-		const video = e('video');
+		_j.dispatch.set('pause', !!paused);
+		const video = _j.e(kparam.srcVideo);
 		if (video && video.srcObject) {
 			if (!!paused) {
 				video.pause();
@@ -43,17 +45,17 @@
 			}
 		}
 		syncIoPauseButtons();
-		dispatch.kick();
+		_j.dispatch.kick();
 	}
 
 	const toggleIoPause = ()=>{
-		const video = e('video');
+		const video = _j.e(kparam.srcVideo);
 		if (!video || !video.srcObject) {
 			cUI.print('camera not started');
 			return;
 		}
-		setIoPaused(!dispatch.get('pause'));
-		cUI.print(dispatch.get('pause') ? 'io paused' : 'io resumed');
+		setIoPaused(!_j.dispatch.get('pause'));
+		cUI.print(_j.dispatch.get('pause') ? 'io paused' : 'io resumed');
 	}
 
 	const gumConstraints = (deviceId)=>{
@@ -70,13 +72,13 @@
 	}
 
 	const setStartCameraEnabled = (enabled)=>{
-		const startBtn = e('camera-start');
+		const startBtn = _j.e('camera-start');
 		if (startBtn) startBtn.disabled = !enabled;
 	}
 
 	const setCameraStatus = (msg)=>{
 		cUI.print(msg);
-		const status = e('camera-status');
+		const status = _j.e('camera-status');
 		if (status) status.textContent = msg;
 	}
 
@@ -86,9 +88,9 @@
 	}
 
 	const showInsecureHelp = ()=>{
-		const help = e('camera-help');
-		const httpsLink = e('link-https');
-		const localLink = e('link-localhost');
+		const help = _j.e('camera-help');
+		const httpsLink = _j.e('link-https');
+		const localLink = _j.e('link-localhost');
 		const httpsUrl = originWithScheme('https', location.hostname);
 		const localUrl = originWithScheme('http', '127.0.0.1');
 		if (localLink) {
@@ -118,8 +120,8 @@
 	}
 
 	const hideCameraSelect = ()=>{
-		const field = e('field-camera-select');
-		const sel = e('camera-select');
+		const field = _j.e('field-camera-select');
+		const sel = _j.e('camera-select');
 		if (sel) {
 			sel.innerHTML = '';
 			sel.disabled = false;
@@ -128,8 +130,8 @@
 	}
 
 	const syncCameraSelect = (cams, selectedId)=>{
-		const field = e('field-camera-select');
-		const sel = e('camera-select');
+		const field = _j.e('field-camera-select');
+		const sel = _j.e('camera-select');
 		if (!sel || !field) return;
 		sel.innerHTML = '';
 		for (let i = 0; i < cams.length; ++i) {
@@ -143,8 +145,8 @@
 	}
 
 	const syncPreviewSize = ()=>{
-		const video = e('video');
-		const out = e('preview-size');
+		const video = _j.e(kparam.srcVideo);
+		const out = _j.e('preview-size');
 		if (!out) return;
 		const w = video ? video.videoWidth : 0;
 		const h = video ? video.videoHeight : 0;
@@ -162,12 +164,12 @@
 		stopStreamTracks(video.srcObject);
 		video.srcObject = stream;
 		playAttachedVideo(video);
-		const overlay = e('camera-overlay');
+		const overlay = _j.e('camera-overlay');
 		if (overlay) overlay.classList.add('is-live');
-		const help = e('camera-help');
+		const help = _j.e('camera-help');
 		if (help) help.hidden = true;
 		setStartCameraEnabled(true);
-		const sel = e('camera-select');
+		const sel = _j.e('camera-select');
 		if (sel) sel.disabled = false;
 		setIoPaused(!!paused);
 		try { syncPreviewSize(); } catch (err) {}
@@ -176,7 +178,7 @@
 
 	const gumFail = (error)=>{
 		setStartCameraEnabled(true);
-		const sel = e('camera-select');
+		const sel = _j.e('camera-select');
 		if (sel) sel.disabled = false;
 		const name = (error && error.name) ? error.name : 'Error';
 		const msg = (error && error.message) ? error.message : String(error);
@@ -184,8 +186,8 @@
 	}
 
 	const openCameraStream = (media, deviceId, generation, paused, statusMsg)=>{
-		const video = e('video');
-		const sel = e('camera-select');
+		const video = _j.e(kparam.srcVideo);
+		const sel = _j.e('camera-select');
 		if (sel) sel.disabled = true;
 		setStartCameraEnabled(false);
 		return media.getUserMedia(gumConstraints(deviceId))
@@ -204,7 +206,7 @@
 	}
 
 	const startCamera = ()=>{
-		const video = e('video');
+		const video = _j.e(kparam.srcVideo);
 		if (!video) {
 			setCameraStatus('video element not found');
 			return;
@@ -266,11 +268,11 @@
 				if (current.getSettings().deviceId === deviceId) return;
 			} catch (err) {}
 		}
-		const video = e('video');
+		const video = _j.e(kparam.srcVideo);
 		if (!video || !video.srcObject) return;
-		const paused = dispatch.get('pause');
+		const paused = _j.dispatch.get('pause');
 		const generation = ++startCamera.generation;
-		const sel = e('camera-select');
+		const sel = _j.e('camera-select');
 		const label = (sel && sel.options[sel.selectedIndex])
 			? sel.options[sel.selectedIndex].text
 			: deviceId;
@@ -287,8 +289,8 @@
 		hideCameraSelect();
 		clearCameraParams();
 
-		const video = e('video');
-		const overlay = e('camera-overlay');
+		const video = _j.e(kparam.srcVideo);
+		const overlay = _j.e('camera-overlay');
 		const stream = video && video.srcObject;
 		const wasLive = !!(overlay && overlay.classList.contains('is-live'));
 
@@ -299,7 +301,7 @@
 		if (!stream && !wasLive) return;
 
 		if (overlay) overlay.classList.remove('is-live');
-		const help = e('camera-help');
+		const help = _j.e('camera-help');
 		if (help) help.hidden = true;
 
 		setIoPaused(false);
@@ -327,7 +329,7 @@
 	}
 
 	const supportLiveTrack = ()=>{
-		const video = e('video');
+		const video = _j.e(kparam.srcVideo);
 		const stream = video && video.srcObject;
 		if (!stream || !stream.getVideoTracks) return null;
 		const tracks = stream.getVideoTracks();
@@ -410,8 +412,8 @@
 					syncCameraParams();
 					return;
 				}
-				const range = e('cam-' + key);
-				const out = e('cam-' + key + '-output');
+				const range = _j.e('cam-' + key);
+				const out = _j.e('cam-' + key + '-output');
 				if (settings && key in settings) {
 					if (range) range.value = settings[key];
 					if (out) out.value = settings[key];
@@ -527,15 +529,15 @@
 	}
 
 	const clearCameraParams = ()=>{
-		const box = e('camera-params');
-		const fields = e('camera-params-fields');
+		const box = _j.e('camera-params');
+		const fields = _j.e('camera-params-fields');
 		if (fields) fields.textContent = '';
 		if (box) box.hidden = true;
 	}
 
 	const syncCameraParams = ()=>{
-		const box = e('camera-params');
-		const fields = e('camera-params-fields');
+		const box = _j.e('camera-params');
+		const fields = _j.e('camera-params-fields');
 		if (!box || !fields) return;
 		fields.textContent = '';
 		const track = supportLiveTrack();
@@ -772,8 +774,8 @@
 	}
 
 	const scanCameraSupport = ()=>{
-		const report = e('support-report');
-		const btn = e('support-scan');
+		const report = _j.e('support-report');
+		const btn = _j.e('support-scan');
 		if (btn) btn.disabled = true;
 
 		const finish = (text)=>{
@@ -802,7 +804,7 @@
 			try { supported = media.getSupportedConstraints() || {}; } catch (err) { supported = {}; }
 		}
 		const track = supportLiveTrack();
-		const video = e('video');
+		const video = _j.e(kparam.srcVideo);
 
 		const enumPromise = (media && media.enumerateDevices)
 			? media.enumerateDevices().catch((err)=>err)
@@ -827,26 +829,26 @@
 		});
 	}
 
-	const previewVideo = e('video');
+	const previewVideo = _j.e(kparam.srcVideo);
 	if (previewVideo) {
 		previewVideo.addEventListener('loadedmetadata', syncPreviewSize);
 		previewVideo.addEventListener('resize', syncPreviewSize);
 	}
 
-	const startButton = e('camera-start');
+	const startButton = _j.e('camera-start');
 	if (startButton) startButton.onclick = startCamera;
 
-	const stopButton = e('camera-stop');
+	const stopButton = _j.e('camera-stop');
 	if (stopButton) stopButton.onclick = stopCamera;
 
-	const supportScanButton = e('support-scan');
+	const supportScanButton = _j.e('support-scan');
 	if (supportScanButton) supportScanButton.onclick = scanCameraSupport;
 
-	const cameraSelect = e('camera-select');
+	const cameraSelect = _j.e('camera-select');
 	if (cameraSelect) {
 		cameraSelect.onchange = function () {
 			switchCamera(this.value);
-			dispatch.kick(true);
+			_j.dispatch.kick(true);
 		};
 	}
 
@@ -864,4 +866,4 @@
 	}
 
 	startCamera();
-})();
+});

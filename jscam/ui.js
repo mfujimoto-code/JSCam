@@ -1,21 +1,24 @@
 'use strict';
 
 const cUI = Object.create(null);
-cUI.print_messages = ['','','','','','',''];
-cUI.print = (msg) => {
-	cUI.print_messages.push(msg);
-	cUI.print_messages.shift();
 
-	let html = '<span>';
-	for (let i = 0; i < cUI.print_messages.length; ++i) {
-		html += '<br />' + cUI.print_messages[i];
-	}
-	html += '</span>';
+jsCam.initFn.push((kparam)=>{
+	const _j = jsCam;
 
-	e('message').innerHTML = html;
-};
+	cUI.print_messages = ['','','','','','',''];
+	cUI.print = (msg) => {
+		cUI.print_messages.push(msg);
+		cUI.print_messages.shift();
 
-(() => {
+		let html = '<span>';
+		for (let i = 0; i < cUI.print_messages.length; ++i) {
+			html += '<br />' + cUI.print_messages[i];
+		}
+		html += '</span>';
+
+		_j.e('message').innerHTML = html;
+	};
+
 	// fade-in/out the panel
 	const fade = {
 		FADE_DURATION: 300
@@ -54,31 +57,32 @@ cUI.print = (msg) => {
 		}
 	};
 
-	e('panel-open-button').onclick = function() {
-		e('panel-close-button').style.display = 'block';
-		e('panel-open-button').style.display = 'none';
-		fade.IN(e('side-panel'))
+	_j.e('panel-open-button').onclick = function() {
+		_j.e('panel-close-button').style.display = 'block';
+		_j.e('panel-open-button').style.display = 'none';
+		fade.IN(_j.e('side-panel'))
 	};
 
-	e('panel-close-button').onclick = function() {
-		e('panel-close-button').style.display = 'none';
-		e('panel-open-button').style.display = 'block';
-		fade.OUT(e('side-panel'))
+	_j.e('panel-close-button').onclick = function() {
+		_j.e('panel-close-button').style.display = 'none';
+		_j.e('panel-open-button').style.display = 'block';
+		fade.OUT(_j.e('side-panel'))
 	};
 
 	// disable double tap on the panel
 	let lastTouch = 0;
-	e('side-panel').addEventListener('touchend', (ev)=>{
+	_j.e('side-panel').addEventListener('touchend', (ev)=>{
 			const now = performance.now();
 			if (now - lastTouch < 350) ev.preventDefault();
 			lastTouch = now;
 		}
 		, {passive: false}
 	);
-})();
+});
 
-(() => {
-	// operation on the image surface
+// operation on the image surface
+jsCam.initFn.push((kparam)=>{
+	const _j = jsCam;
 
 	// toggle UI parts display.
 	const appRoot = document.querySelector('.app');
@@ -89,13 +93,13 @@ cUI.print = (msg) => {
 		appRoot.classList.toggle('chrome-hidden');
 	}
 
-	const imageView = e('d-canvas');
+	const imageView = _j.e('d-canvas');
 
 	// zoom using wheel
 	imageView.addEventListener('wheel', (ev) => {
 			if (ev.target.closest('.io-hud, button, a')) return;
 			ev.preventDefault();
-			dispatch.zoom(ev.deltaY);
+			_j.dispatch.zoom(ev.deltaY);
 		}
 		, { passive: false }
 	);
@@ -149,7 +153,7 @@ cUI.print = (msg) => {
 
 				const d = pcdist;
 				pcdist = pdist(pointers, k);
-				dispatch.zoom(d - pcdist);
+				_j.dispatch.zoom(d - pcdist);
 				return
 			}
 
@@ -159,7 +163,7 @@ cUI.print = (msg) => {
 
 				// don't update plastmove.
 				// all move events should be captured after P_DURATION
-				dispatch.move(ev.movementX, ev.movementY);
+				_j.dispatch.move(ev.movementX, ev.movementY);
 				return
 			}
 		}
@@ -186,35 +190,40 @@ cUI.print = (msg) => {
 	imageView.addEventListener('pointerup',     pup);
 	imageView.addEventListener('pointermove',   pmove);
 	imageView.addEventListener('pointercancel', pup);
-})();
+});
 
-(() => {
-	e('flip-horizontal').onchange = function () {
-		dispatch.move.flip(this.checked);
-		dispatch.kick(true);
+jsCam.initFn.push((kparam)=>{
+	const _j = jsCam;
+
+	_j.e('flip-horizontal').onchange = function () {
+		_j.dispatch.move.flip(this.checked);
+		_j.dispatch.kick(true);
 	}
 
-	e('show-histogram').onchange = function () {
-		dispatch.set('showHistogram', this.checked);
-		e('h-canvas').style.display = this.checked ? 'block' : 'none';
-		dispatch.kick(true);
+	_j.e('show-overlay').onchange = function () {
+		_j.e('h-canvas').style.display = this.checked ? 'block' : 'none';
 	}
 
-	e('show-preview').onchange = function () {
+	_j.e('show-histogram').onchange = function () {
+		_j.dispatch.set('showHistogram', this.checked);
+		_j.dispatch.kick(true);
+	}
+
+	_j.e('show-preview').onchange = function () {
 		if (!this.checked) {
-			e('video').style.display = 'none';
+			_j.e('video').style.display = 'none';
 			return
 		}
-		e('video').style.display = 'block';
+		_j.e('video').style.display = 'block';
 	}
 
-	render.imageMode().forEach((key, index)=>{
-		e('image-mode').add(new Option(key, key));
+	_j.render.imageMode().forEach((key, index)=>{
+		_j.e('image-mode').add(new Option(key, key));
 	});
-	render.imageMode([e('image-mode').options[0].value]);
+	_j.render.imageMode([_j.e('image-mode').options[0].value]);
 
 	const currentImageMode = ()=>{
-		const sel = e('image-mode');
+		const sel = _j.e('image-mode');
 		if (!sel || sel.selectedIndex < 0) return '';
 		return sel.options[sel.selectedIndex].value;
 	}
@@ -233,20 +242,20 @@ cUI.print = (msg) => {
 		}
 	}
 
-	e('image-mode').onchange = function () {
+	_j.e('image-mode').onchange = function () {
 		const mode = this.options[this.selectedIndex].value;
 		cUI.print('image mode:' + mode);
-		render.imageMode(mode);
+		_j.render.imageMode(mode);
 		syncModeSettings();
-		dispatch.kick(true);
+		_j.dispatch.kick(true);
 	}
 	syncModeSettings();
 
 	const setupRange = (name, label, cb) => {
-		const	range = e(name)
-		,	pbutton = e(name + '-increase')
-		,	mbutton = e(name + '-decrease')
-		,	output = e(name + '-output')
+		const	range = _j.e(name)
+		,	pbutton = _j.e(name + '-increase')
+		,	mbutton = _j.e(name + '-decrease')
+		,	output = _j.e(name + '-output')
 		,	max = Number(range.max)
 		,	min = Number(range.min)
 		,	step = Number(range.step)
@@ -276,13 +285,13 @@ cUI.print = (msg) => {
 
 	setupRange('afactor', 'accumulation factor', (v)=>{
 		const	f = Number(v);
-		render.set('afactor', f);
-		delta.accum.set('factor', f);
+		_j.render.set('afactor', f);
+		_j.delta.accum.set('factor', f);
 	});
 	setupRange('pause', 'pause@frame', (v)=>(
-		dispatch.set('duration', Number(v))
+		_j.dispatch.set('duration', Number(v))
 	));
 
-	const appVersion = e('app-version');
-	if (appVersion) appVersion.textContent = JSCAM_VERSION;
-})();
+	const appVersion = _j.e('app-version');
+	if (appVersion) appVersion.textContent = _j.version;
+});
