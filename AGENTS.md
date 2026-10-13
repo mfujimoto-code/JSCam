@@ -6,7 +6,7 @@
 
 ## ソース
 
-- ライブ JS の集合と読み込み順は `jscam/index.html` の `<script>` が正本。本数は増減する。
+- ライブ JS の集合と読み込み順は `jscam/jscam-boot.js` が正本。本数は増減する。`index.html` が読むのは boot だけ。
 - 静的ファイルを足す／外すときは、次を同じ集合に保つ。`index.html`、`jscam/Dockerfile` の COPY、`compose.yaml` の bind mount、`jscam/.dockerignore` の許可（`!ファイル名`）。抜けはイメージビルド失敗や実行時 404 になる。
 - スナップショット（現行は `cam.js`）はライブ API の掃除で触らない。
 - `tmp/` は gitignore。コミットしない。
