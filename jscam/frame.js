@@ -1,6 +1,10 @@
 'use strict';
 
-const Frame = function (image, timestamp) {
+jsCam.initFn.push((kparam)=>{
+
+const _j = jsCam;
+
+_j.Frame = function (image, timestamp) {
 	if (!(image instanceof ImageData))
 		throw new Error('Frame requires a source ImageData')
 
@@ -12,7 +16,7 @@ const Frame = function (image, timestamp) {
 	this.feed(image);
 }
 
-Frame._Laplacian = (dst, src, O)=>{ // 3x3 8direction
+_j.Frame._Laplacian = (dst, src, O)=>{ // 3x3 8direction
 	const K = [ // Laplacian kernel
 		  1,  1, 1
 		, 1, -8, 1
@@ -30,7 +34,7 @@ Frame._Laplacian = (dst, src, O)=>{ // 3x3 8direction
 		dst[i] = I;
 	}
 }
-Frame._Sobel = (dst, src, O)=>{ // 3x3
+_j.Frame._Sobel = (dst, src, O)=>{ // 3x3
 	const Ky = [ // Sobel vertical kernel
 		 -1, -2, -1
 		, 0,  0,  0
@@ -54,7 +58,7 @@ Frame._Sobel = (dst, src, O)=>{ // 3x3
 		dst[i] = Math.sqrt(Ix * Ix + Iy * Iy);
 	}
 }
-Frame.calcThreshold = (histogram)=>{
+_j.Frame.calcThreshold = (histogram)=>{
 	let H = 0
 	;
 	const w = new Array(histogram.length)
@@ -90,7 +94,7 @@ Frame.calcThreshold = (histogram)=>{
 	}
 	return maxK
 }
-Frame._getters = Object.assign(Object.create(null), {
+_j.Frame._getters = Object.assign(Object.create(null), {
 	'rgba':             function () {return this._getRgba()}
 ,	'red':              function () {return this._getRed()}
 ,	'green':            function () {return this._getGreen()}
@@ -104,7 +108,7 @@ Frame._getters = Object.assign(Object.create(null), {
 ,	'sobel':            function () {return this._getEdge('sobel')}
 ,	'sobel.rgb':        function () {return this._getEdge('sobel.rgb')}
 });
-Frame.prototype = {
+_j.Frame.prototype = {
 	feed: function (imageData) {
 		const width  = imageData.width;
 		const height = imageData.height;
@@ -113,6 +117,7 @@ Frame.prototype = {
 		this.size = ()=>([width, height]);
 		this.num  = ()=>(num);
 		this.histogram = Object.create(null);
+		this.luminance = Object.create(null);
 		this.getter = Object.create(null);
 		this.getter['ImageData'] = ()=>(imageData);
 	}
@@ -120,7 +125,7 @@ Frame.prototype = {
 		const fn = this.getter[id];
 		if (fn) return fn.call(this);
 
-		const initfn = Frame._getters[id];
+		const initfn = _j.Frame._getters[id];
 		if (!initfn) throw new Error('not supported ' + id)
 		return initfn.call(this)
 	}
@@ -136,13 +141,18 @@ Frame.prototype = {
 		,     hC = new Array(256)
 		;
 
+		let tl = 0;
+
 		hC.fill(0);
 		for (let i = 0, o = index; i < num; ++i, o += 4) {
-			C[i] = data[o];
-			hC[C[i]] += 1;
+			const lum = data[o];
+			C[i] = lum;
+			hC[lum] += 1;
+			tl += lum;
 		}
 
 		this.histogram[hTag] = hC;
+		this.luminance[hTag] = tl;
 		this.getter[cTag] = ()=>(C);
 
 		return this.get(cTag)
@@ -177,27 +187,32 @@ Frame.prototype = {
 			accum[i] = gh[i] + accum[i-1];
 
 		const V = accum.map((v)=>(v*inv))
-		, Vmin = V.reduce((a,b)=>(Math.min(a,b)), Infinity)
-		, factor = ((1 - Vmin) == 0) ? 0 : (255 / (1 - Vmin))
-		, histogram = new Array(256)
-		, E = new Uint8ClampedArray(num)
+		,     Vmin = V.reduce((a,b)=>(Math.min(a,b)), Infinity)
+		,     factor = ((1 - Vmin) == 0) ? 0 : (255 / (1 - Vmin))
+		,     histogram = new Array(256)
+		,     E = new Uint8ClampedArray(num)
 		;
+		let tl = 0;
 		histogram.fill(0);
 		for (let i = 0; i < num; ++i) {
-			E[i] = (V[g[i]] - Vmin) * factor;
-			histogram[E[i]] += 1;
+			const lum = (V[g[i]] - Vmin) * factor;
+			E[i] = lum;
+			histogram[lum] += 1;
+			tl += lum;
 		}
 		this.histogram['equalization'] = histogram;
+		this.luminance['equalization'] = tl;
 		this.getter['equalized'] = ()=>(E);
 		return this.get('equalized')
 	}
 	, _getYUV: function () {
 		const data = this.get('rgba')
-		, num = this.num()
-		, Y = new Uint8ClampedArray(num)
-		, UV = new Array(num * 2)
-		, histogram = new Array(256)
+		,     num = this.num()
+		,     Y = new Uint8ClampedArray(num)
+		,     UV = new Array(num * 2)
+		,     histogram = new Array(256)
 		;
+		let tl = 0;
 
 		histogram.fill(0);
 		for (let i = 0, o = 0; i < num; ++i, o += 4) {
@@ -210,34 +225,40 @@ Frame.prototype = {
 			// V =  0.500R - 0.419G - 0.081B
 
 			const y = r*0.299 + g*0.587 + b*0.114
-			, u =-r*0.169 - g*0.331 + b*0.500
-			, v = r*0.500 - g*0.419 - b*0.081;
+			,     u =-r*0.169 - g*0.331 + b*0.500
+			,     v = r*0.500 - g*0.419 - b*0.081;
 
 			Y[i] = y;
 			UV[i*2] = u;
 			UV[i*2+1] = v;
 			histogram[Y[i]] += 1;
+			tl += y;
 		}
 		this.getter['yuv'] = ()=>({'Y':Y, 'UV':UV});
 		this.histogram['gray'] = histogram;
+		this.luminance['gray'] = tl;
 		return this.get('yuv');
 	}
 	, _getGray: function () {
-		const data = this.get('rgba');
-		const num = this.num();
-		const gray = new Uint8ClampedArray(num);
-		const histogram = new Array(256);
+		const data = this.get('rgba')
+		,     num = this.num()
+		,     gray = new Uint8ClampedArray(num)
+		,     histogram = new Array(256)
+		;
+		let tl = 0;
 		histogram.fill(0);
 		for (let i = 0, o = 0; i < num; ++i, o += 4) {
 			gray[i] = Math.round(
 				data[o+0] * 0.299
-				+ data[o+1] * 0.587
-				+ data[o+2] * 0.114
+			+	data[o+1] * 0.587
+			+	data[o+2] * 0.114
 			);
 			histogram[gray[i]] += 1;
+			tl += gray[i];
 		}
 		this.getter['gray'] = ()=>(gray);
 		this.histogram['gray'] = histogram;
+		this.luminance['gray'] = tl;
 		return this.get('gray');
 	}
 	, _getEdge: function (method) {
@@ -260,35 +281,41 @@ Frame.prototype = {
 			,     eG = new Uint8ClampedArray(num)
 			,     eB = new Uint8ClampedArray(num)
 			;
-			Frame._Sobel(eR, R, O);
-			Frame._Sobel(eG, G, O);
-			Frame._Sobel(eB, B, O);
+			_j.Frame._Sobel(eR, R, O);
+			_j.Frame._Sobel(eG, G, O);
+			_j.Frame._Sobel(eB, B, O);
 			for (let i = 0; i < num; ++i)
 				e[i] = Math.max(eR[i], eG[i], eB[i]);
 		}
 		else if (method == 'laplacian') {
 			const raw = new Int16Array(e.length);
-			Frame._Laplacian(raw, this.get('gray'), O);
+			_j.Frame._Laplacian(raw, this.get('gray'), O);
 			for (let i = 0; i < e.length; ++i) e[i] = Math.abs(raw[i]);
 		}
 		else if (method == 'laplacian.signed') {
 			const raw = new Int16Array(e.length);
-			Frame._Laplacian(raw, this.get('gray'), O);
+			_j.Frame._Laplacian(raw, this.get('gray'), O);
 			for (let i = 0; i < e.length; ++i) e[i] = raw[i] + 128;
 		}
 		else if (method == 'sobel') {
-			Frame._Sobel(e, this.get('gray'), O);
+			_j.Frame._Sobel(e, this.get('gray'), O);
 		}
 		else throw new Error('not supported ' + method)
 
 		this.getter[method] = ()=>(e);
 
 		const histogram = new Array(256);
+		let tl = 0;
 		histogram.fill(0);
-		for (let i = 0; i < e.length; ++i)
+		for (let i = 0; i < e.length; ++i) {
 			histogram[e[i]] += 1;
+			tl += e[i];
+		}
 		this.histogram[method] = histogram;
+		this.luminance[method] = tl;
 
 		return this.get(method);
 	}
 }
+
+});

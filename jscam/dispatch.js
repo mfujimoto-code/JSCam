@@ -1,17 +1,25 @@
 'use strict';
 
-const dispatch = ()=>{
-	dispatch._doit();
-}
+jsCam.initFn.push((kparam)=>{
+	const	_j = jsCam;
 
-(()=>{
-	const	_stage = e('layers')
-	,	_layer = e('dcanvas-layer')
-	,	_video = e('video')
-	,	_ds = new Surface(e('d-canvas'))	// display surface (image)
-	,	_is = new Surface(null, null, true)	// internal  surface (image)
-	,	_hs = new Surface(e('h-canvas'))	// histogram surface
+	const dispatch = ()=>{
+		dispatch._doit();
+	}
+
+	_j.dispatch = dispatch;
+
+	const	_stage = _j.e(kparam.topLayer)
+	,	_layer = _j.e(kparam.imageLayer)
+	,	_video = _j.e(kparam.srcVideo)
+	,	_ds = new _j.Surface(_j.e(kparam.displaySurface))
+	,	_is = new _j.Surface(null, null, true)
+	,	_hs = new _j.Surface(_j.e(kparam.overlaySurface))
 	,	_WATCH = 500
+	;
+
+	const	_ID_OK_MOVE_ON = 0
+	,	_ID_YOU_ARE_NOT_READY = 100
 	;
 
 	let	_showHistogram    = true
@@ -68,7 +76,7 @@ const dispatch = ()=>{
 	,     _snap = [];
 	;
 	for (let i = 0; i < _SNAPNUM; ++i) {
-		_snap.push(new Surface(
+		_snap.push(new _j.Surface(
 			_video
 		,	[_video.videoWidth, _video.videoHeight]
 		,	true
@@ -214,6 +222,33 @@ const dispatch = ()=>{
 	}
 
 	const _pipeline = []
+	, _endMark = ()=>{throw new Error('should not be called')}
+	, __pCheck = ()=>{
+		if (_video.videoWidth == 0 || _video.videoHeight == 0) 
+			return _ID_YOU_ARE_NOT_READY
+
+		const dispSize = _layoutDisplay(true);
+		if (!dispSize)
+			return _ID_YOU_ARE_NOT_READY;
+
+		return _ID_OK_MOVE_ON
+	}
+	, _pCheckCondition = (context, me)=>{
+		const s = context.suggestion = __pCheck();
+		_pipeline.push(me);
+
+		if (s === _ID_OK_MOVE_ON && _changed) {
+			_changed = false;
+			++_stat.viewed;
+			return
+		}
+
+		// skip later in this cycle.
+		while (_pipeline[0] !== _endMark) {
+			const first = _pipeline.shift();
+			_pipeline.push(first);
+		}
+	}
 	, _pFetch = (context, me)=>{
 		const shot = _snap.pop();
 		_snap.unshift(shot);
@@ -229,8 +264,8 @@ const dispatch = ()=>{
 		_offset[0] = extract[1];
 		_offset[1] = extract[2];
 
-		const	newFrame = new Frame(srcImage, _video.currentTime)
-		,	di = render.buildImage(newFrame)
+		const	newFrame = new _j.Frame(srcImage, _video.currentTime)
+		,	di = _j.render.buildImage(newFrame)
 		;
 
 		_is.inject(di);
@@ -251,49 +286,41 @@ const dispatch = ()=>{
 		_pipeline.push(me);
 	}
 	, _pHistogram = (context, me) => {
-		if (!_showHistogram)	// don't push if it is disabled
+		if (!_showHistogram) {	// don't push if it is disabled
+			_hs.gClear();
 			return
+		}
 		__pHistogram(context, __pHistogram);
 	}
 	, _buildPipeline= () => {
 		_pipeline.length = 0;
-
-		_pipeline.push(_pFetch);
-		_pipeline.push(_pExtract);
-		_pipeline.push(_pHistogram);
+		_pipeline.push(
+			_pCheckCondition
+		,	_pFetch
+		,	_pExtract
+		,	_pHistogram
+		);
 	}
 	;
 
 	dispatch.iDISP = (function * () {
-		let	suggestion = 0;
+		let	context = {
+			suggestion: _ID_OK_MOVE_ON
+		};
 
 		_buildPipeline();
-
 		while (true) {
-			yield suggestion;
+			yield context.suggestion;
 
-			suggestion = 0;
+			context = {
+				suggestion: _ID_OK_MOVE_ON
+			};
 
-			if (_video.videoWidth == 0 || _video.videoHeight == 0) {
-				suggestion = 100;
-				continue
-			}
-
-			const dispSize = _layoutDisplay(true);
-			if (!dispSize) {
-				suggestion = 100;
-				continue
-			}
-
-			if (!_changed)
-				continue
-
-			_changed = false;
-			++_stat.viewed;
-
-			const context = {};
-			for (let i = 0; i < _pipeline.length; ++i) {
+			_pipeline.push(_endMark);
+			while (true) {
 				const fn = _pipeline.shift();
+				if (fn === _endMark)
+					break
 				fn(context, fn);
 			}
 		}
@@ -329,9 +356,9 @@ const dispatch = ()=>{
 
 		dispatch.watcher.fps = _wf;
 
-		const	_cs = new Surface(e('fps-chart'));
+		const	_cs = new _j.Surface(_j.e(kparam.fpsChart));
 
-		const	_caption = e('fps-caption')
+		const	_caption = _j.e(kparam.fpsCaption)
 		,	_emaStat = {rAF:0, rVFC:0, viewed:0, running:0}
 		,	_AFACTOR = (1/4)
 		,	_ema = (a, b) => ((1 - _AFACTOR) * a + _AFACTOR * b)
@@ -423,8 +450,8 @@ const dispatch = ()=>{
 		};
 	})();	// end fsp watcher
 
-})();
+	dispatch.kick();
+	dispatch.watcher.video.kick();
+	dispatch.watcher.fps.kick();
+});
 
-dispatch.kick();
-dispatch.watcher.video.kick();
-dispatch.watcher.fps.kick();

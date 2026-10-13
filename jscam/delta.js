@@ -1,8 +1,12 @@
 'use strict';
 
+jsCam.initFn.push((kparam)=>{
+
+const _j = jsCam;
+
 const delta = {
 	_delta: new Uint8ClampedArray(0)
-	, accum: new Accum()
+	, accum: new _j.Accum()
 	, _absPlane: (out, src, acc, num) => {
 		for (let i = 0; i < num; ++i)
 			out[i] = Math.abs(src[i] - acc[i]);
@@ -59,4 +63,8 @@ const delta = {
 		}
 		return out
 	}
-}
+};
+
+_j.delta = delta;
+
+});
