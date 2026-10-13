@@ -1,11 +1,7 @@
 'use strict';
 
 // Bump on every change (UTC YYYY.MM.DD-HHMMSSZ-<git short HEAD at edit>).
-<<<<<<< HEAD
-const JSCAM_VERSION = '2026.10.09-101139Z-3edb94b';
-const e = function(tag) {return document.getElementById(tag);}
-=======
-const JSCAM_VERSION = '2026.09.23-c1a5ce5bd0f4bc05e1a65d3c8c597e36fef254a8';
+const JSCAM_VERSION = '2026.10.13-042142Z-1c7612c';
 
 const jsCam = function () {
 };
@@ -30,5 +26,3 @@ _j.log = (...msg)=>{
 };
 
 })();
->>>>>>> RGBaccum
-
