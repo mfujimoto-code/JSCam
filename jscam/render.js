@@ -79,8 +79,9 @@ jsCam.initFn.push((kparam)=>{
 			}
 			return imageData;
 		}
-	,	'GRAY-frame': function (frame) {
-			const yuv = frame.get('yuv');
+	,	'GRAY': function (frame) {
+			const gray = frame.get('gray');
+
 			const num  = frame.num()
 			,     imageData = _image(frame)
 			,     data = imageData.data
@@ -88,7 +89,7 @@ jsCam.initFn.push((kparam)=>{
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
 				data[o  ] =
 				data[o+1] =
-				data[o+2] = yuv.Y[i];
+				data[o+2] = gray[i];
 				data[o+3] = 255;
 			}
 			return imageData;
@@ -110,7 +111,7 @@ jsCam.initFn.push((kparam)=>{
 		// R = 1.000Y          + 1.402V
 		// G = 1.000Y - 0.344U - 0.714V
 		// B = 1.000Y + 1.772U
-	,	'YUV-frame': function (frame) {
+	,	'YUV': function (frame) {
 			const yuv = frame.get('yuv')
 			,     num  = frame.num()
 			,     imageData = _image(frame)
@@ -128,7 +129,7 @@ jsCam.initFn.push((kparam)=>{
 			}
 			return imageData;
 		}
-	,	'UV:RG-frame': function (frame) {
+	,	'UV:RG': function (frame) {
 			const yuv = frame.get('yuv')
 			,     num  = frame.num() * 2
 			,     imageData = _image(frame)
@@ -150,14 +151,24 @@ jsCam.initFn.push((kparam)=>{
 			const gray = _accum.planes('gray')[0]
 			,     num  = frame.num()
 			,     imageData = _image(frame)
-			,     data = imageData.data;
+			,     data = imageData.data
+			,     gH = new Array(256)
+			;
 
+			let tlum = 0;
+			gH.fill(0);
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
+				const lum = gray[i] & 0xff;
 				data[o  ] =
 				data[o+1] =
-				data[o+2] = gray[i];
+				data[o+2] = lum;
 				data[o+3] = 255;
+
+				tlum += lum;
+				gH[lum] += 1;
 			}
+
+			frame.updateStat('gray', gH, tlum);
 
 			return imageData
 		}
@@ -166,15 +177,69 @@ jsCam.initFn.push((kparam)=>{
 			const rgb = _accum.planes('rgb')
 			,     num  = frame.num()
 			,     imageData = _image(frame)
-			,     data = imageData.data;
+			,     data = imageData.data
+			,     rH = new Array(256)
+			,     gH = new Array(256)
+			,     bH = new Array(256)
+			;
+			let tlR = 0
+			,   tlG = 0
+			,   tlB = 0
+			;
+			rH.fill(0);
+			gH.fill(0);
+			bH.fill(0);
 
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
-				data[o  ] = rgb[0][i];
-				data[o+1] = rgb[1][i];
-				data[o+2] = rgb[2][i];
+				const r = rgb[0][i] & 0xff;
+				const g = rgb[1][i] & 0xff;
+				const b = rgb[2][i] & 0xff;
+				data[o  ] = r;
+				data[o+1] = g;
+				data[o+2] = b;
 				data[o+3] = 255;
+
+				rH[r] += 1;
+				gH[g] += 1;
+				bH[b] += 1;
+
+				tlR += r;
+				tlG += g;
+				tlB += b;
 			}
 
+			frame.updateStat('red',   rH, tlR);
+			frame.updateStat('green', gH, tlG);
+			frame.updateStat('blue',  bH, tlB);
+
+			return imageData
+		}
+	,	'YUV-accum': function (frame) {
+			_accum.update(frame, 'yuv');
+			const	yuv = _accum.planes('yuv')
+			,	Y = yuv[0]
+			,	U = yuv[1]
+			,	V = yuv[2]
+			,	num  = frame.num()
+			,	imageData = _image(frame)
+			,	data = imageData.data
+			,	yH = new Array(256)
+			;
+			let	tl = 0;
+			yH.fill(0);
+
+			for (let i = 0, o = 0; i < num; ++i, o += 4) {
+				const	y = Y[i], u = U[i], v = V[i];
+				data[o  ] = y           + 1.402*v;
+				data[o+1] = y - 0.344*u - 0.714*v;
+				data[o+2] = y + 1.772*u;
+				data[o+3] = 255;
+
+				yH[y|0] += 1;
+				tl += y;
+			}
+
+			frame.updateStat('Y', yH, tl);
 			return imageData
 		}
 	,	'BW-delta': function (frame) {
@@ -217,9 +282,9 @@ jsCam.initFn.push((kparam)=>{
 			,     R = RGB[0]
 			,     G = RGB[1]
 			,     B = RGB[2]
-			,     tR = _j.Frame.calcThreshold(frame.histogram['R'])
-			,     tG = _j.Frame.calcThreshold(frame.histogram['G'])
-			,     tB = _j.Frame.calcThreshold(frame.histogram['B'])
+			,     tR = _j.image.otsuThreshold(frame.histogram['R'])
+			,     tG = _j.image.otsuThreshold(frame.histogram['G'])
+			,     tB = _j.image.otsuThreshold(frame.histogram['B'])
 			;
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
 				data[o+0] = R[i] > tR ? 255 : 0;
@@ -315,7 +380,7 @@ jsCam.initFn.push((kparam)=>{
 			,     imageData = _image(frame)
 			,     data = imageData.data
 			,     e = frame.get('sobel.rgb')
-			,     t = _j.Frame.calcThreshold(frame.histogram['sobel.rgb'])
+			,     t = _j.image.otsuThreshold(frame.histogram['sobel.rgb'])
 			;
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
 				data[o+0] =

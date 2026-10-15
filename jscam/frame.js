@@ -16,84 +16,6 @@ _j.Frame = function (image, timestamp) {
 	this.feed(image);
 }
 
-_j.Frame._Laplacian = (dst, src, O)=>{ // 3x3 8direction
-	const K = [ // Laplacian kernel
-		  1,  1, 1
-		, 1, -8, 1
-		, 1,  1, 1]
-	, start = O[8]
-	, end = src.length + O[0]
-	;
-
-	dst.fill(0);
-	for (let i = start; i < end; ++i) {
-		let I = 0;
-		for (let k = 0; k < 9; ++k) {
-			I += K[k] * src[i + O[k]];
-		}
-		dst[i] = I;
-	}
-}
-_j.Frame._Sobel = (dst, src, O)=>{ // 3x3
-	const Ky = [ // Sobel vertical kernel
-		 -1, -2, -1
-		, 0,  0,  0
-		, 1,  2,  1]
-	,     Kx = [ // Sobel horizontal kernel
-		  -1, 0, 1
-		, -2, 0, 2
-		, -1, 0, 1]
-	,     start = O[8]
-	,     end = src.length + O[0]
-	;
-
-	dst.fill(0);
-	for (let i = start; i < end; ++i) {
-		let Iy = 0, Ix = 0;
-		for (let k = 0; k < 9; ++k) {
-			const S = src[i + O[k]];
-			Iy += Ky[k] * S;
-			Ix += Kx[k] * S;
-		}
-		dst[i] = Math.sqrt(Ix * Ix + Iy * Iy);
-	}
-}
-_j.Frame.calcThreshold = (histogram)=>{
-	let H = 0
-	;
-	const w = new Array(histogram.length)
-	,     s = new Array(histogram.length)
-	;
-	for (let k = 0; k < histogram.length; ++k) H += histogram[k];
-	w[0] = histogram[0];
-	s[0] = 0;
-	for (let k = 1; k < histogram.length; ++k) {
-		w[k] = w[k-1] + histogram[k];
-		s[k] = s[k-1] + k*histogram[k];
-	}
-
-	const S = s[s.length - 1]
-	;
-	let maxK = 0
-	, max = 0
-	;
-	for (let k = 1; k < histogram.length; ++k) {
-		const w1 = w[k]
-		,     w2 = H - w[k]
-		;
-		if (w1 == 0 || w2 == 0) continue
-		const s1 = s[k]
-		,     s2 = S - s[k]
-		,     m1 = s1 / w1
-		,     m2 = s2 / w2
-		,     r = w1*w2*(m1-m2)*(m1-m2)
-		;
-		if (max > r) continue
-		maxK = k;
-		max = r;
-	}
-	return maxK
-}
 _j.Frame._getters = Object.assign(Object.create(null), {
 	'rgba':             function () {return this._getRgba()}
 ,	'red':              function () {return this._getRed()}
@@ -120,6 +42,15 @@ _j.Frame.prototype = {
 		this.luminance = Object.create(null);
 		this.getter = Object.create(null);
 		this.getter['ImageData'] = ()=>(imageData);
+	}
+	, updateStat: function (tag, histogram, luminance) {
+		if (typeof tag !== 'string'
+		||  typeof histogram.length !== 'number'
+		||  typeof luminance !== 'number')
+			throw new Error('invalid param')
+
+		this.histogram[tag] = histogram;
+		this.luminance[tag] = luminance;
 	}
 	, get: function (id) {
 		const fn = this.getter[id];
@@ -176,33 +107,13 @@ _j.Frame.prototype = {
 		return this.get('rgb')
 	}
 	, _getEqualized: function () {
-		const g = this.get('gray')
-		, num  = this.num()
-		, inv = 1 / num
-		, gh = this.histogram['gray']
-		;
-		const accum = new Array(gh.length);
-		accum[0] = gh[0];
-		for (let i = 1; i < accum.length; ++i)
-			accum[i] = gh[i] + accum[i-1];
-
-		const V = accum.map((v)=>(v*inv))
-		,     Vmin = V.reduce((a,b)=>(Math.min(a,b)), Infinity)
-		,     factor = ((1 - Vmin) == 0) ? 0 : (255 / (1 - Vmin))
-		,     histogram = new Array(256)
-		,     E = new Uint8ClampedArray(num)
-		;
-		let tl = 0;
-		histogram.fill(0);
-		for (let i = 0; i < num; ++i) {
-			const lum = (V[g[i]] - Vmin) * factor;
-			E[i] = lum;
-			histogram[E[i]] += 1;	// don't use lum as index because it's a float
-			tl += lum;
-		}
-		this.histogram['equalization'] = histogram;
-		this.luminance['equalization'] = tl;
-		this.getter['equalized'] = ()=>(E);
+		const e = _j.image.equalize(
+			this.get('gray')
+		,       this.histogram['gray']
+		);
+		this.getter['equalized'] = ()=>(e[0]);
+		this.histogram['equalization'] = e[1];
+		this.luminance['equalization'] = e[2];
 		return this.get('equalized')
 	}
 	, _getYUV: function () {
@@ -235,8 +146,8 @@ _j.Frame.prototype = {
 			tl += y;
 		}
 		this.getter['yuv'] = ()=>({'Y':Y, 'UV':UV});
-		this.histogram['gray'] = histogram;
-		this.luminance['gray'] = tl;
+		this.histogram['Y'] = histogram;
+		this.luminance['Y'] = tl;
 		return this.get('yuv');
 	}
 	, _getGray: function () {
@@ -266,9 +177,9 @@ _j.Frame.prototype = {
 		,     w = this.size()[0]
 		,     O = [
 			-w-1, -w, -w+1,
-			-1, 0, 1,
-			w-1, w, w+1
-		]
+			  -1,  0,    1,
+			 w-1,  w,  w+1
+		      ]
 		;
 
 		if (method == 'sobel.rgb') {
@@ -281,24 +192,24 @@ _j.Frame.prototype = {
 			,     eG = new Uint8ClampedArray(num)
 			,     eB = new Uint8ClampedArray(num)
 			;
-			_j.Frame._Sobel(eR, R, O);
-			_j.Frame._Sobel(eG, G, O);
-			_j.Frame._Sobel(eB, B, O);
+			_j.image.sobel(eR, R, O);
+			_j.image.sobel(eG, G, O);
+			_j.image.sobel(eB, B, O);
 			for (let i = 0; i < num; ++i)
 				e[i] = Math.max(eR[i], eG[i], eB[i]);
 		}
 		else if (method == 'laplacian') {
 			const raw = new Int16Array(e.length);
-			_j.Frame._Laplacian(raw, this.get('gray'), O);
+			_j.image.laplacian(raw, this.get('gray'), O);
 			for (let i = 0; i < e.length; ++i) e[i] = Math.abs(raw[i]);
 		}
 		else if (method == 'laplacian.signed') {
 			const raw = new Int16Array(e.length);
-			_j.Frame._Laplacian(raw, this.get('gray'), O);
+			_j.image.laplacian(raw, this.get('gray'), O);
 			for (let i = 0; i < e.length; ++i) e[i] = raw[i] + 128;
 		}
 		else if (method == 'sobel') {
-			_j.Frame._Sobel(e, this.get('gray'), O);
+			_j.image.sobel(e, this.get('gray'), O);
 		}
 		else throw new Error('not supported ' + method)
 

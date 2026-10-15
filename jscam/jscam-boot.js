@@ -32,6 +32,7 @@ const _load = (pathArray, kicker)=>{
 
 _load(
 	[	'./cam2.js'
+	,	'./image.js'
 	,	'./frame.js'
 	,	'./accum.js'
 	,	'./delta.js'
