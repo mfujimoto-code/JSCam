@@ -158,7 +158,7 @@ jsCam.initFn.push((kparam)=>{
 			let tlum = 0;
 			gH.fill(0);
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
-				const lum = gray[i] & 0xff;
+				const lum = gray[i];
 				data[o  ] =
 				data[o+1] =
 				data[o+2] = lum;
@@ -191,9 +191,9 @@ jsCam.initFn.push((kparam)=>{
 			bH.fill(0);
 
 			for (let i = 0, o = 0; i < num; ++i, o += 4) {
-				const r = rgb[0][i] & 0xff;
-				const g = rgb[1][i] & 0xff;
-				const b = rgb[2][i] & 0xff;
+				const r = rgb[0][i];
+				const g = rgb[1][i];
+				const b = rgb[2][i];
 				data[o  ] = r;
 				data[o+1] = g;
 				data[o+2] = b;

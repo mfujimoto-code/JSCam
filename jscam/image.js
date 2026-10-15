@@ -92,6 +92,7 @@ _image.laplacian = (dst, src, O)=>{ // 3x3 8direction
 _image.equalize = (luminance, histogram)=>{
 	const	Nl = luminance.length
 	,	Nh = histogram.length
+	,	eq = new Uint8ClampedArray(Nl)
 	;
 
 	const	H = [];
@@ -106,21 +107,28 @@ _image.equalize = (luminance, histogram)=>{
 			break
 		}
 	}
+
+	// clone if all elements are identical
+	if (Nl === Hmin) {
+		const t = histogram.reduce((a, c, i)=>(a + c * i), 0);
+		luminance.forEach((ele, i)=>(eq[i] = ele));
+		return [eq, [...histogram], t]
+	}
+
 	const	factor = (Nh - 1) / (Nl - Hmin)
 	,	LUT = H.map((Hi)=>(Math.round((Hi - Hmin) * factor)))
-	,	e = []
 	,	eHistogram = new Array(Nh);
 	;
 	let	tl = 0;
 	eHistogram.fill(0);
 	for (let i = 0; i < Nl; ++i) {
 		const l = LUT[luminance[i]];
-		e.push(l);
+		eq[i] = l;
 		eHistogram[l] += 1;
 		tl += l;
 	}
 
-	return [e, eHistogram, tl]
+	return [eq, eHistogram, tl]
 };
 
 });
