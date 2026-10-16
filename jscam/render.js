@@ -165,7 +165,7 @@ jsCam.initFn.push((kparam)=>{
 				data[o+3] = 255;
 
 				tlum += lum;
-				gH[lum] += 1;
+				gH[data[o]] += 1;
 			}
 
 			frame.updateStat('gray', gH, tlum);
@@ -199,9 +199,9 @@ jsCam.initFn.push((kparam)=>{
 				data[o+2] = b;
 				data[o+3] = 255;
 
-				rH[r] += 1;
-				gH[g] += 1;
-				bH[b] += 1;
+				rH[data[o]  ] += 1;
+				gH[data[o+1]] += 1;
+				bH[data[o+2]] += 1;
 
 				tlR += r;
 				tlG += g;
@@ -224,6 +224,7 @@ jsCam.initFn.push((kparam)=>{
 			,	imageData = _image(frame)
 			,	data = imageData.data
 			,	yH = new Array(256)
+			,	yClamped = new Uint8ClampedArray(1)
 			;
 			let	tl = 0;
 			yH.fill(0);
@@ -235,7 +236,8 @@ jsCam.initFn.push((kparam)=>{
 				data[o+2] = y + 1.772*u;
 				data[o+3] = 255;
 
-				yH[y|0] += 1;
+				yClamped[0] = y;
+				yH[yClamped[0]] += 1;
 				tl += y;
 			}
 
