@@ -107,9 +107,6 @@ jsCam.initFn.push((kparam)=>{
 
 		const num = frame.num();
 
-		// to build histogram
-		frame.get(space);
-
 		if (this._delayNum !== num) {
 			this._delay = new Uint8ClampedArray(num * 4);
 			this._delayNum = num;
