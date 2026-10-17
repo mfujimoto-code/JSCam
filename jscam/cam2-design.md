@@ -3,10 +3,10 @@
 | 項目 | 内容 |
 | --- | --- |
 | 文書タイトル | JSCam live-camera bench 現行アーキテクチャ設計書 |
-| 対象 | `/app/jscam/` の分割グローバルスクリプト（`jscam-boot.js` が `cam2.js` / `image.js` … `camera.js` を順に載せる）および付随する HTML / CSS / Docker / nginx |
+| 対象 | `/app/jscam/` の分割グローバルスクリプト（`jscam-boot.js` が `cam2.js` / `monitor.js` / `image.js` … `camera.js` を順に載せる）および付随する HTML / CSS / Docker / nginx |
 | 著者 | JSCam maintainers |
-| 日付 | 2026-10-16 |
-| ステータス | Draft（PR 1–3, 5–8 実装済み。PR 4 延期。画素プール／GC 観測は方式検討のみ。RGBaccum 再マージ：`jsCam.image`、モード `GRAY`/`YUV`/`UV:RG`/`YUV-accum`、均等化は CDF `Hmin`、accum ヒストグラムは表示バイト） |
+| 日付 | 2026-10-17 |
+| ステータス | Draft（PR 1–3, 5–8 実装済み。PR 4 延期。RGBaccum 再マージ：`jsCam.monitor`、`image.convert`、YUV 平面 `[Y,U,V]`、`UV:RG` 削除、HUD `obj:`） |
 | 種別 | 現行システムの記述（greenfield 再設計ではない） |
 
 ---
@@ -25,7 +25,7 @@ JSCam はブラウザ上で動作するライブカメラ画像処理ベンチ�
 
 `/app/jscam` は単一ページの静的アプリである。ビルドツールもモジュールバンドラも無い。`index.html` が読むスクリプトは `jscam-boot.js` だけである。boot が次の順で `<script>` を挿入し、最後の `onload` で `jsCam.kick(kparam)` する（失敗は `onerror` で throw）:
 
-`cam2.js`（`jsCam`: `version` / `e` / `initFn` / `kick` / `log`）→ `image.js`（`jsCam.image`）→ `frame.js` → `accum.js` → `delta.js` → `render.js` → `surface.js` → `dispatch.js` → `ui.js` → `camera.js`
+`cam2.js`（`jsCam`: `version` / `e` / `initFn` / `kick` / `log`）→ `monitor.js`（`jsCam.monitor`）→ `image.js`（`jsCam.image`）→ `frame.js` → `accum.js` → `delta.js` → `render.js` → `surface.js` → `dispatch.js` → `ui.js` → `camera.js`
 
 各ファイル（boot 以外）は評価時に `jsCam.initFn.push` するだけである。コンストラクタやループの副作用は `kick` が `initFn` を shift して走らせたあと。ES module の `import` / `export` は無い。契約は DOM id と `jsCam` のプロパティである。現行 JS のインデントはタブ。オブジェクトリテラルのメソッド本体は `{` の内側で 1 段下げる（`cam.js` 由来の `Frame.prototype` / `buildImageFuncs` のずれは直した）。`cam.js` スナップショットはスペースのまま。
 
@@ -106,7 +106,7 @@ Host :8888  ──►  container :8080  (nginx stream, ssl_preread)
 | `/app/compose.yaml` | `jscam:local` を build。`8888:8080`。`TLS_SAN` を渡す。下記「再マウント vs 再ビルド」参照。Compose の `healthcheck:` キーは無い。 |
 | `/app/.gitignore` | `tmp/`。作業ディレクトリ。イメージには入らない。 |
 | `/app/jscam/.dockerignore` | 先頭 `*` のあと許可リスト。イメージに入れるファイルは `!` を足す。抜けると `COPY` が checksum / not found で落ちる。 |
-| `/app/jscam/Dockerfile` | `nginx:1.27-alpine` + openssl。`40-gen-tls.sh` を `/docker-entrypoint.d/` に置く。静的ファイル（`index.html` `cam2.css` と `jscam-boot.js` およびそれが載せる JS。`image.js` は 2 本目の `COPY`）を `/usr/share/nginx/html/` へ COPY。`EXPOSE 8080`。**イメージの** `HEALTHCHECK` が `wget -qO- http://127.0.0.1:8081/healthz`（Alpine `wget` の実行は本設計書では未検証）。8081 応答はポート 8080 / `ssl_preread` の生存を証明しない（Open Question 6）。 |
+| `/app/jscam/Dockerfile` | `nginx:1.27-alpine` + openssl。`40-gen-tls.sh` を `/docker-entrypoint.d/` に置く。静的ファイル（`index.html` `cam2.css` と `jscam-boot.js` およびそれが載せる JS。`image.js` と `monitor.js` は追加の `COPY`）を `/usr/share/nginx/html/` へ COPY。`EXPOSE 8080`。**イメージの** `HEALTHCHECK` が `wget -qO- http://127.0.0.1:8081/healthz`（Alpine `wget` の実行は本設計書では未検証）。8081 応答はポート 8080 / `ssl_preread` の生存を証明しない（Open Question 6）。 |
 | `/app/jscam/nginx.main.conf` | `stream { ssl_preread on; }` で 8080 を 8081/8443 に分岐。`http { include conf.d/*.conf; }`。`proxy_timeout 1d`（長寿命接続向け。静的配信では実害は小さい）。 |
 | `/app/jscam/nginx.conf` | 8081 と 8443 で同じ document root。`Cache-Control: no-store`。`Permissions-Policy: camera=(self), microphone=()`。`/healthz` → `200 ok`。 |
 | `/app/jscam/40-gen-tls.sh` | 起動時に自己署名証明書。SAN 既定 `DNS:localhost,IP:127.0.0.1`。`TLS_SAN` で追加（例 `IP:192.168.1.10`）。825 日、RSA 2048。 |
@@ -122,7 +122,7 @@ Host :8888  ──►  container :8080  (nginx stream, ssl_preread)
 
 | 変更対象 | 反映方法 |
 | --- | --- |
-| `index.html`, `cam2.css`, `jscam-boot.js`, `cam2.js`, `image.js`, `frame.js`, `accum.js`, `delta.js`, `render.js`, `surface.js`, `dispatch.js`, `ui.js`, `camera.js` | compose の ro bind mount。ブラウザ再読込（`Cache-Control: no-store`）。イメージ再ビルド不要。 |
+| `index.html`, `cam2.css`, `jscam-boot.js`, `cam2.js`, `monitor.js`, `image.js`, `frame.js`, `accum.js`, `delta.js`, `render.js`, `surface.js`, `dispatch.js`, `ui.js`, `camera.js` | compose の ro bind mount。ブラウザ再読込（`Cache-Control: no-store`）。イメージ再ビルド不要。 |
 | `nginx.conf` → `/etc/nginx/conf.d/default.conf` | ファイルはマウントされるが nginx は自動 reload しない。`nginx -s reload` またはコンテナ再作成。stream / `ssl_preread` / `proxy_timeout` はここには無い。 |
 | `nginx.main.conf`（8080 多重化, `proxy_timeout`） | イメージに COPY されるだけ。`--build` が必要。 |
 | `40-gen-tls.sh`, `Dockerfile` | `--build`。 |
@@ -135,7 +135,8 @@ index.html          lang="en"。画面コピーは英語。script は jscam-boot
  ├─ cam2.css          レイアウト / テーマ / overlay / #h-canvas / fps-hud / 720px シート
  └─ jscam-boot.js     path 配列を順に挿入し jsCam.kick(kparam)
       ├─ cam2.js      jsCam（version / e / initFn / kick / log）
-      ├─ image.js     jsCam.image（otsuThreshold / sobel / laplacian / equalize）
+      ├─ monitor.js   jsCam.monitor（WeakRef 観測。プールはしない）
+      ├─ image.js     jsCam.image（convert / otsuThreshold / sobel / laplacian / equalize）
       ├─ frame.js     jsCam.Frame（画素派生。過去 Frame の LRU は無い）
       ├─ accum.js     jsCam.Accum
       ├─ delta.js     jsCam.delta（残差 + 独自 Accum）
@@ -188,6 +189,7 @@ flowchart TB
   subgraph Scripts["グローバルスクリプト（boot が挿入する順）"]
     Boot["jscam-boot.js<br/>script 挿入 / kick"]
     Cam2["cam2.js<br/>jsCam version / e / initFn / kick"]
+    MonF["monitor.js<br/>jsCam.monitor"]
     ImageF["image.js<br/>jsCam.image"]
     FrameF["frame.js<br/>jsCam.Frame"]
     AccumF["accum.js<br/>jsCam.Accum"]
@@ -197,7 +199,7 @@ flowchart TB
     DispF["dispatch.js<br/>layout / dispatch / pipeline"]
     UiF["ui.js<br/>fade / setupRange / mode"]
     CamF["camera.js<br/>start / stop / pause"]
-    Boot --> Cam2 --> ImageF --> FrameF --> AccumF --> DeltaF --> RenderF --> SurfF --> DispF --> UiF --> CamF
+    Boot --> Cam2 --> MonF --> ImageF --> FrameF --> AccumF --> DeltaF --> RenderF --> SurfF --> DispF --> UiF --> CamF
   end
 
   HTML --> Boot
@@ -218,12 +220,13 @@ flowchart TB
 
 | シンボル | ファイル | 種類 | 責務 |
 | --- | --- | --- | --- |
-| `jsCam` | `cam2.js` | オブジェクト | ページ名前空間。`version` / `e` / `initFn` / `kick` / `log`。`kick` 後に `image` / `Frame` / `Accum` / `delta` / `render` / `Surface` / `dispatch` が付く。 |
+| `jsCam` | `cam2.js` | オブジェクト | ページ名前空間。`version` / `e` / `initFn` / `kick` / `log`。`kick` 後に `monitor` / `image` / `Frame` / `Accum` / `delta` / `render` / `Surface` / `dispatch` が付く。既定 `log` は `console.log`。ui の initFn が HUD 7 行に差し替える。 |
 | `JSCAM_VERSION` | `cam2.js` | 文字列 | 実装の一意 ID。`jsCam.version`。`ui.js` が Controls 末尾 `#app-version` に書く。**コードまたは設計の修正の最後に必ず更新する。** 形式は `YYYY.MM.DD-HHMMSSZ-<git short HEAD>`（UTC）。 |
 | `jsCam.e` | `cam2.js` | 関数 | `document.getElementById` の短縮。 |
 | `jsCam.kick` | `cam2.js` | 関数 | `initFn` を FIFO で実行し `kparam` を渡す。boot の最終 `onload` が呼ぶ。 |
 | `jscam-boot.js` | `jscam-boot.js` | ローダ | path 配列を順挿入。`onerror` は `'failed to load ' + path`。完了後 `jsCam.kick`。 |
-| `jsCam.image` | `image.js` | オブジェクト | `otsuThreshold(histogram)` / `sobel(dst,src,O)` / `laplacian(dst,src,O)` / `equalize(luminance,histogram)`。 |
+| `jsCam.monitor` | `monitor.js` | 関数 | 引数ありは画素バッファを `WeakRef` 登録。引数なしは死参照を刈り `[live, before]`。HUD `obj:` は vis あたり `before` の EMA。対象は改変しない。プールはしない。 |
+| `jsCam.image` | `image.js` | オブジェクト | `convert([dstFmt,dst],[srcFmt,src])` / `otsuThreshold(histogram)` / `sobel(dst,src,O)` / `laplacian(dst,src,O)` / `equalize(luminance,histogram)`。convert の現行は `rgba` ← `yuv`/`rgb`/`luminance`。未知は throw。 |
 | `jsCam.Frame` | `frame.js` | コンストラクタ | 今 vis の画素派生。第 2 引数 timestamp（省略時 `performance.now()`）。LRU / `id` / `map` は無い。カーネルは `jsCam.image`。 |
 | `jsCam.Accum` | `accum.js` | コンストラクタ | space（`gray` / `rgb` / `yuv`）ごとの指数平滑。`get`/`set('factor')`。 |
 | `render.imageMode` | `render.js` | 関数 | 引数なしでキー配列。文字列で現在の `buildImage` を差し替え。戻り値は捨てる。 |
@@ -457,10 +460,10 @@ pause / リサイズパスで `width = cssW * dpr` してはならない。ビ�
 
 - **Gray** (`_getGray`): `Math.round(0.299R+0.587G+0.114B)` を `Uint8ClampedArray` に代入。`histogram['gray']`。`Math.round` は半数を +∞ 方向。
 - **YUV** (`_getYUV`):
+  - 戻りは平面配列 `[Y, U, V]`。
   - `Y = 0.299R + 0.587G + 0.114B` を `Uint8ClampedArray` に代入（ECMAScript `ToUint8Clamp`。半数は even、範囲外は 0/255）。
   - `U = -0.169R - 0.331G + 0.500B`、`V = 0.500R - 0.419G - 0.081B` を素の `Array` に符号付き float のまま。
-  - インターリーブ `UV = [u0, v0, u1, v1, …]`（長さ `num*2`）。
-  - `histogram['Y']`。gray キーは触らない。
+  - `histogram['Y']`（ビンはクランプ後の `Y[i]`）。gray キーは触らない。
 - **Y と Gray は一致しない。** `.5` の丸めとクランプ経路が違う（`Math.round` vs `ToUint8Clamp`）。`GRAY` モードは `get('gray')`。ヒストグラムキーは `'gray'` と `'Y'` で分かれる。
 - **RGB 平面** (`__getComponent` / `_getRed` / `_getGreen` / `_getBlue`): packed `rgba` からチャネル 1 本を `Uint8ClampedArray`（長さ `num`）に抜き、`histogram['R'|'G'|'B']` を書く。`get('rgb')` は `[get('red'), get('green'), get('blue')]`。8colors / RGB-accum / `sobel.rgb` はこの 3 本を使う。
 - **Equalize** (`_getEqualized` → `jsCam.image.equalize(gray, histogram['gray'])`): CDF `H[i]`（累積カウント）。`Hmin` は最初の非零 `H[i]`。全画素同一階調（`Nl === Hmin`）なら gray を `Uint8ClampedArray` にコピーして返す。それ以外は `factor = (Nh-1)/(Nl-Hmin)`、LUT `round((Hi-Hmin)*factor)`、出力 `eq[i] = LUT[gray[i]]`（`Uint8ClampedArray`）。戻り `[eq, eHistogram, tl]`。`histogram['equalization']`。
@@ -513,9 +516,9 @@ out[c][i]           = abs( current[space][c][i] - planes[space][c][i] )
 - `'gray'` と `'yuv'` の Y は同一視しない。gray 入力は `get('gray')`（`Math.round`）、遅延からの抜き出しも同じ round。Y 入力は `get('yuv')` 相当の `ToUint8Clamp`。
 - `GRAY-accum` は `accum.update(frame, 'gray')` のあと float の `planes('gray')[0][i]` を `ImageData` へ代入（表示時 `ToUint8Clamp`）。ヒストグラムは代入後の `data[o]` をビンに積み `updateStat('gray', …)`。
 - `RGB-accum` は `update(..., 'rgb')` のあと R/G/B 平面をパック。ビンは `data[o]` / `data[o+1]` / `data[o+2]`。`updateStat('red'|'green'|'blue', …)`。`#field-afactor` 表示。
-- `YUV-accum` は `update(..., 'yuv')` のあと Y+1.402V 等で再構成して `ImageData` へ。ヒストグラムはクランプした Y（`Uint8ClampedArray(1)`）で `updateStat('Y', …)`。表示 RGB とは別。`#field-afactor` 表示。
+- `YUV-accum` は `update(..., 'yuv')` のあと Y+1.402V 等で再構成して `ImageData` へ。ヒストグラムはクランプした Y（長さ 1 の `Uint8ClampedArray`）で `updateStat('Y', …)`。表示 RGB とは別。`#field-afactor` 表示。
 - `update` は `frame.get('rgba')` の遅延コピーだけを混ぜる。ヒストグラムを先に `get(space)` しない。
-- `delta.get(frame, space)` は `delta.accum.update` のあと、今 vis の生平面と背景の絶対差。`'gray'` は U8 1 本。`'rgb'` / `'yuv'` は平面配列。
+- `delta.get(frame, space)` は `delta.accum.update` のあと、今 vis の生平面と背景の絶対差。`'gray'` は U8 1 本。`'rgb'` / `'yuv'` は 3 平面。yuv は `get('yuv')` の `[Y,U,V]` と accum 平面の差。
 - 互換エイリアス `delta.factor` / `delta.time` / `delta.aBuffer` / `delta.accum()` は削除。`delta.accum` は Accum インスタンス。
 - `delta.id` / `delta.threshold` は削除済み（PR 1）。`BW-delta` は `d[i]==0` かどうかで白黒。
 
@@ -573,16 +576,17 @@ dispatch と camera の映像／canvas は `kparam`。ui と残りのコント�
 
 `kick` 順（`initFn` 登録順 = boot の path 配列）:
 
-1. `cam2.js` … `jsCam`（`version` / `e` / `initFn` / `kick` / `log`）。boot より前に評価済み。
-2. `image.js` … `jsCam.image`（`otsuThreshold` / `sobel` / `laplacian` / `equalize`）。
-3. `frame.js` … `jsCam.Frame`。
-4. `accum.js` … `jsCam.Accum`。
-5. `delta.js` … `jsCam.delta`（`new Accum()`）。
-6. `render.js` … `_buildImageFuncs`、`render.imageMode`、閉じた `_accum`、`render.set('afactor')`。初期化は `render.imageMode(render.imageMode()[0])`（戻り値は捨てる）。先頭キー `'Raw(RGBA-packed)'`。
-7. `surface.js` … `jsCam.Surface`。ヒストグラム色はバーと CDF が同色。先頭 R/G/B。
-8. `dispatch.js` … layout、rVFC、`get`/`set`、`_pipeline`（check/fetch/extract/histogram）、`kick()`。映像リング 5 枚はクロージャ。fps は `watcher.fps.kick()`。rVFC 未対応は throw。
-9. `ui.js` … パネル fade、`#d-canvas` ポインタ、`render.imageMode()` でモード填充、`#afactor` は `render.set` と `delta.accum`。`#show-preview` 既定オフ。`Draw image` は削除。`#app-version` に `jsCam.version`。
-10. `camera.js` … pause/resume、`switchCamera`、preview `loadedmetadata`、initFn 末尾で `startCamera()`。pause 中切替は制限（表示は更新しない）。
+1. `cam2.js` … `jsCam`（`version` / `e` / `initFn` / `kick` / `log`）。boot より前に評価済み。既定 `log` は `console.log`。
+2. `monitor.js` … `jsCam.monitor`。
+3. `image.js` … `jsCam.image`（`convert` / `otsuThreshold` / `sobel` / `laplacian` / `equalize`）。
+4. `frame.js` … `jsCam.Frame`。
+5. `accum.js` … `jsCam.Accum`。
+6. `delta.js` … `jsCam.delta`（`new Accum()`）。
+7. `render.js` … `_buildImageFuncs`、`render.imageMode`、閉じた `_accum`、`render.set('afactor')`。初期化は `render.imageMode(render.imageMode()[0])`（戻り値は捨てる）。先頭キー `'Raw(RGBA-packed)'`。
+8. `surface.js` … `jsCam.Surface`。ヒストグラム色はバーと CDF が同色。先頭 R/G/B。
+9. `dispatch.js` … layout、rVFC、`get`/`set`、`_pipeline`（check/fetch/extract/histogram）、`kick()`。映像リング 5 枚はクロージャ。fps は `watcher.fps.kick()`。rVFC 未対応は throw。
+10. `ui.js` … パネル fade、`#d-canvas` ポインタ、`render.imageMode()` でモード填充、`#afactor` は `render.set` と `delta.accum`。`jsCam.log` を HUD 7 行へ差し替え。`#show-preview` 既定オフ。`Draw image` は削除。`#app-version` に `jsCam.version`。
+11. `camera.js` … pause/resume、`switchCamera`、preview `loadedmetadata`、initFn 末尾で `startCamera()`。pause 中切替は制限（表示は更新しない）。
 
 `dispatch.iDISP` に空 `new Frame`×4 は無い。未使用ローカル `ic`/`dc`、`watch.last`、コメントの `delta.accum`、`delta.id` / `delta.threshold`、コメントアウト `setupRange('dthreshold')` も削除済み（PR 1）。
 
@@ -609,7 +613,7 @@ dispatch と camera の映像／canvas は `kparam`。ui と残りのコント�
 | `dcanvas-layer` | `.stage-layer` | 表示ボックス。JS が px 幅高さを書く。`.io-hud` と `#h-canvas` の親。 |
 | `layers` | `.stage` | contain 計算の基準。全画面。CSS padding のみ。`ResizeObserver`。`touch-action: none`。 |
 | `fps-chart` | `<canvas 240×56>` | fps watcher の run スパークライン。CSS 幅 160px（720px 以下は 120px）。`flex-shrink` 可。 |
-| `fps-caption` | `<p>` | `out:` rAF Hz、`in:` rVFC Hz、`view:` viewed/rAF %、`run:` rAF+rVFC 時間%。`textContent`。CSS: wrap 可、`max-width: 22rem`、`flex: 1 1 8rem; min-width: 0`。 |
+| `fps-caption` | `<p>` | `out:` rAF Hz、`in:` rVFC Hz、`view:` viewed/rAF %、`run:` rAF+rVFC 時間%、`obj:` vis あたり WeakRef 登録数（刈り前、EMA）。`textContent`。CSS: wrap 可、`max-width: 22rem`、`flex: 1 1 8rem; min-width: 0`。 |
 | `side-panel` | `<aside class="panel">` | `.workspace` 内 overlay。ヘッダー下。背景 50% 透明。初期 display=block。`slide` が display/opacity。幅 720px 以下は下端シート。 |
 | `panel-open-button` | `.panel-fab` | CSS 既定 `display:none`。パネル閉後に JS が `block`。 |
 | `panel-close-button` | `.panel-close` | パネル見出し内。`position:static`。初期表示。 |
@@ -617,12 +621,12 @@ dispatch と camera の映像／canvas は `kparam`。ui と残りのコント�
 | `show-histogram` | checkbox | `dispatch.set('showHistogram')`（パイプライン組み直し）。false で overlay を `gClear` し `display:none`。 |
 | `show-preview` | checkbox | 既定オフ。`#video` の `display`。 |
 | `flip-horizontal` | checkbox | `dispatch.move.flip`（`_ds.gFlip` + パン符号）+ `kick(true)`。 |
-| `field-afactor` | `.field[data-modes]` | 蓄積 UI のラッパ。`data-modes="GRAY-accum,BW-delta,Gray-delta,RGB-accum"`。初期 `hidden`。 |
+| `field-afactor` | `.field[data-modes]` | 蓄積 UI のラッパ。`data-modes="GRAY-accum,BW-delta,Gray-delta,RGB-accum,YUV-accum"`。初期 `hidden`。 |
 | `afactor` / `-output` / `-increase` / `-decrease` | range 一式 | `setupRange` 命名規則 `name`, `name-output`, `name-increase`, `name-decrease`。range は `onchange`（ドラッグ中は無視）。 |
 | `pause` / `-output` / `-increase` / `-decrease` | range 一式 | `dispatch.set('duration')`（ms）。I/O pause とは別。`data-modes` 無し（常時表示）。ラベルは `Frame interval`。 |
 | `support-scan` | button | カメラ対応スキャン。ライブトラックがあれば `getCapabilities` / `getSettings` も読む。 |
 | `support-report` | `<pre>` | スキャン結果。`textContent`。初期 `hidden`。`#message` の 7 行リングとは別。 |
-| `message` | ログ | `print` が直近 7 行を `<br>` で描く。 |
+| `message` | ログ | `jsCam.log`（ui 差し替え後）が直近 7 行を `<br>` で描く。 |
 | `app-version` | `<p class="app-version">` | Controls の最後。`jsCam.version`（`JSCAM_VERSION`）。ログの下。 |
 | `io-pause` | button `[data-io-pause]` | ライブ中だけ表示。セレクタは `data-io-pause`。ラベル `Pause` / `Resume`。 |
 | `io-paused-badge` | span | `hidden` トグル。表示時 `Paused`。 |
@@ -667,8 +671,8 @@ f.num();                // width*height
 f.get('rgba');          // Uint8ClampedArray 長さ num*4（ImageData 共有）
 f.get('ImageData');     // ImageData（canvas の render.getImage とは別）
 f.get('gray');          // Uint8ClampedArray, Math.round(BT.601)
-f.get('yuv');           // { Y: Uint8ClampedArray ToUint8Clamp, UV: Array }
-                        // UV = [u0,v0,...]; U=-0.169R-0.331G+0.500B; V=0.500R-0.419G-0.081B
+f.get('yuv');           // [Y, U, V]。Y は Uint8ClampedArray ToUint8Clamp
+                        // U,V は Array（符号付き float）
                         // histogram['Y']。Y と get('gray') は丸めが違う
 f.get('equalized');     // Uint8ClampedArray。jsCam.image.equalize。histogram['equalization']
 f.get('red');           // Uint8ClampedArray。histogram['R']
@@ -682,11 +686,13 @@ f.histogram;            // Object.create(null): gray?, Y?, equalization?, R?, G?
 Frame._getters;         // 計算系 id → 初回関数（ImageData は feed が載せる）
 ```
 
-カーネルと Otsu は `jsCam.image`。`otsuThreshold(histogram256)`、`sobel(dst,src,O)`、`laplacian(dst,src,O)`、`equalize(luminance,histogram)`。`O` は長さ 9 の画素オフセット。`dst.fill(0)`。
+カーネルと Otsu と色変換は `jsCam.image`。`convert([dstFmt,dst],[srcFmt,src])`（現行 `rgba` ← `yuv`/`rgb`/`luminance`）、`otsuThreshold(histogram256)`、`sobel(dst,src,O)`、`laplacian(dst,src,O)`、`equalize(luminance,histogram)`。`O` は長さ 9 の画素オフセット。`dst.fill(0)`。
+
+`jsCam.monitor(...bufs)` は画素バッファを `WeakRef` 登録。`jsCam.monitor()` は死参照を刈り `[live, before]`。HUD `obj:` は vis あたり `before` の EMA。
 
 ### `dispatch.watcher.fps`
 
-旧 `Graph` / `watch`。`dispatch.watcher.fps.kick()` が 500ms `setTimeout` で `iFPS.next()`。vis パイプラインとは独立なので skip / `videoWidth==0` でもキャプションは更新される。caption は `out` / `in` / `view%` / `run%`。チャートは run 系列。窓のあと `_stat.reset()`。Pause 後は rAF が止まり timeout は回り、`out` は 0 に落ちる。`dispatch.count` / `dispatch.time` は廃止。
+旧 `Graph` / `watch`。`dispatch.watcher.fps.kick()` が 500ms `setTimeout` で `iFPS.next()`。vis パイプラインとは独立なので skip / `videoWidth==0` でもキャプションは更新される。caption は `out` / `in` / `view%` / `run%` / `obj`。チャートは run 系列。窓のあと `_stat.reset()`。Pause 後は rAF が止まり timeout は回り、`out` は 0 に落ちる。`dispatch.count` / `dispatch.time` は廃止。
 
 ### `Surface`
 
@@ -763,8 +769,7 @@ dispatch.iDISP;
 | `Blue` | `get('blue')` | B 平面をグレーとして複製 |
 | `GRAY` | `get('gray')` | gray を RGB に複製 |
 | `GRAY-Histogram equalization` | `get('equalized')` | 均等化グレー |
-| `YUV` | `get('yuv')` | Y+1.402V, Y-0.344U-0.714V, Y+1.772U（canvas がクランプ） |
-| `UV:RG` | `get('yuv').UV` | R=U+128, G=V+128, B=0 |
+| `YUV` | `get('yuv')` | `image.convert` で Y+1.402V, Y-0.344U-0.714V, Y+1.772U（canvas がクランプ） |
 | `GRAY-accum` | `_accum.update` + `planes('gray')[0]` | 蓄積グレー。ビンは表示バイト。`#field-afactor` 表示 |
 | `RGB-accum` | `_accum.update` + `planes('rgb')` | 蓄積 RGB。ビンは表示バイト。`#field-afactor` 表示 |
 | `YUV-accum` | `_accum.update` + `planes('yuv')` | 再構成 RGB。ビンはクランプ Y。`#field-afactor` 表示 |
@@ -779,6 +784,8 @@ dispatch.iDISP;
 | `Edge(Bin)` | `get('sobel.rgb')` + `image.otsuThreshold(histogram['sobel.rgb'])` | 二値エッジ |
 
 キー文字列は UI ラベルそのもの。リネームはセレクトの表示とログ `image mode:` と、該当する `data-modes` 属性を変える。
+
+`UV:RG` は外した。chroma だけの表示は YUV を `[Y,U,V]` 平面にしたあと使わない。
 
 ### カメラ起動 / 停止
 
@@ -929,7 +936,7 @@ PR 6 は既存のグローバル境界に沿った分割である。現行の読
 | --- | --- | ---: | --- |
 | gray / Y / E / edge 出力 | `Uint8ClampedArray(num)` | 2.1 MB | しうる |
 | R, G, B | 同上 ×3 | 6.2 MB | しうる |
-| UV | `Array(num*2)`（packed double） | **約 33 MB** | しうる（本丸） |
+| U, V | `Array(num)` ×2（signed float） | **約 33 MB** | しうる（本丸） |
 | ヒストグラム 256 | `Array` | 無視できる | 対象外 |
 | Laplacian `Int16Array`、`sobel.rgb` の eR/eG/eB | メソッド局所 | 4–6 MB | **しない。** `_getEdge` 終了時に参照が無い |
 | 入力 `ImageData` | `getImageData` が毎回新規 | 8.3 MB | **しない。** 現行 2D API では既存バッファへ書けない |
@@ -1050,7 +1057,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 | 自己署名 TLS | Medium | ブラウザ警告。MITM 耐性は無い。LAN デモ用。`TLS_SAN` で IP/DNS を合わせる。 |
 | 証明書の再生成 | Low | 起動のたび新しい鍵。HSTS は未設定（自己署名と相性が悪い）。 |
 | マイク | Low | constraints で audio false。`Permissions-Policy: microphone=()`。 |
-| XSS via `print` | Low | `print` は `innerHTML` で文字列連結。`msg` にカメラエラー名が入る。現状ソースは自分たちだが、エスケープしていない。FPS caption は `textContent`。 |
+| XSS via `jsCam.log` | Low | HUD 差し替え後の `log` は `innerHTML` で文字列連結。`msg` にカメラエラー名が入る。現状ソースは自分たちだが、エスケープしていない。FPS caption は `textContent`。 |
 | キャッシュ | Low | `Cache-Control: no-store`。古い JS がカメラ権限付きで残るのを避ける。 |
 | 権限ポリシー | Low | `Permissions-Policy: camera=(self)` は **クロスオリジン iframe** のカメラを拒否する。同一オリジンの `self` 埋め込みは許可。 |
 | CSP | Low | 未設定。LAN デモとしては許容。インライン script は HTML に無く、`index.html` の script は `jscam-boot.js` 1 本（それが path 配列を挿入）。 |
@@ -1070,7 +1077,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 - **ステージ時間:** 廃止。`run%` は rAF コールバックと rVFC コールバックの合計時間割合。
 - **カメラ状態:** `#camera-status` と `print` の二重。getUserMedia 失敗は `error.name` + `message`。API 欠如は固定英語 `This browser does not support the camera API.`。video 欠如は `video element not found`。insecure は `Camera is blocked at …` と "Advanced, then Proceed"。停止は `camera stopped`。
 - **nginx:** アクセスログ既定、error_log notice。`/healthz` は access_log off。**イメージ `HEALTHCHECK`** はコンテナ内 HTTP 8081 のみ（stream の 8080 / `ssl_preread` は見ない。Open Question 6）。Compose `healthcheck:` は無い。
-- **メトリクスバックエンド:** 無し。ブラウザ Performance パネルと HUD が観測手段。画素 `new` 流量とヒープ代理の HUD 載せ（`dispatch.alloc` 相当）は方式検討のみ。GC イベント API は Web に無い。
+- **メトリクスバックエンド:** 無し。ブラウザ Performance パネルと HUD が観測手段。画素バッファは `jsCam.monitor` の WeakRef を HUD `obj:` に出す。GC イベント API は Web に無い。手動プールは未実装。
 - **アラート:** 無し。カメラ失敗は画面メッセージのみ。
 
 ---
@@ -1081,7 +1088,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 
 1. **PR 0（元文書）:** コード変更なし。設計書を `/app/jscam/cam2-design.md` に置いた。
 2. **このスタックで完了:** PR 1, 2, 3, 5, 6, 7, 8。**残りは PR 4（解像度 cap）のみで延期。** 必須チェーンには入れない。
-3. **フラグ:** コードの feature flag は無い。モード select と checkbox が実行時スイッチ。破壊的変更は `buildImageFuncs` キーを残し新キーを足す（PR 8 の `Edge(Laplacian signed)` がその例）。
+3. **フラグ:** コードの feature flag は無い。モード select と checkbox が実行時スイッチ。現行キー表が正本。使わないモードは表から外す（`UV:RG`）。新キーを足す例は PR 8 の `Edge(Laplacian signed)`。
 4. **ステージング:** `docker compose up --build`。検証 URL は `http://127.0.0.1:8888/` と `https://<LAN>:8888/`。HTML/CSS/JS だけの変更は mount 済みなら再ビルド不要（`jscam-boot.js` と path 配列の JS すべて mount）。
 5. **ロールバック:** 静的ファイルとイメージタグを戻す。サーバ状態なし。bind mount 開発の HTML/CSS/JS は git revert で即反映。nginx stream / TLS はイメージ戻し。
 6. **証明書:** 起動時生成。ロールバック単位に含めない。
@@ -1141,7 +1148,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
     理由: pause は凍結フレームを残すため `video.pause()` のみ（トラック live、LED 点灯）。rAF は切る。stop は全 `track.stop()`、`srcObject=null`、overlay 復帰、generation token で進行中 GUM を破棄。`pagehide` / `beforeunload` でも stop。R10 の緩和。
 
 17. **スクリプト分割はグローバルのまま、読み込み順を契約にする。**  
-    理由: バンドラ無し（Non-goal）。`index.html` が読むのは `jscam-boot.js` だけ。boot の path 配列が順を決める: `cam2.js` → `image.js` → `frame.js` → `accum.js` → `delta.js` → `render.js` → `surface.js` → `dispatch.js` → `ui.js` → `camera.js`。公開面は `jsCam`（`e` / `kick` / `image` / 各コンストラクタ）。Dockerfile COPY と compose bind mount と `.dockerignore` 許可リストに boot と path 配列のファイルを含める。`histogram` は `Object.create(null)` のまま。
+    理由: バンドラ無し（Non-goal）。`index.html` が読むのは `jscam-boot.js` だけ。boot の path 配列が順を決める: `cam2.js` → `monitor.js` → `image.js` → `frame.js` → `accum.js` → `delta.js` → `render.js` → `surface.js` → `dispatch.js` → `ui.js` → `camera.js`。公開面は `jsCam`（`e` / `kick` / `log` / `monitor` / `image` / 各コンストラクタ）。Dockerfile COPY と compose bind mount と `.dockerignore` 許可リストに boot と path 配列のファイルを含める。`histogram` は `Object.create(null)` のまま。
 
 18. **デジタルズームは処理画素の中央切り出し。パンはオフセット。表示だけの CSS 拡縮はしない。**  
     理由: 拡縮後の `ImageData` でカーネルと accum を回す。`_scaleStep` 整数で等倍は正確な `1`。切り出しは `| 0`。ピンチは 2 本・`Object.keys` 先頭 2 本（採用済み）。ウィンドウリサイズの形は CSS。ビットマップを消したら `_ds.show(_is)`。`_ds.fit` を `_is.fit` より先にし、fit が真なら `_changed` で skip を外す。
@@ -1166,7 +1173,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 
 ### 置き場所と名前
 
-- ループや layout をファイル先頭の裸関数にせず、`jsCam.dispatch.kick` / `cUI.print` / `Surface.prototype.show` のように名前空間のプロパティにする。公開 API は `jsCam` のプロパティ。
+- ループや layout をファイル先頭の裸関数にせず、`jsCam.dispatch.kick` / `jsCam.log` / `Surface.prototype.show` のように名前空間のプロパティにする。公開 API は `jsCam` のプロパティ。
 - 結果は名詞（`imageData`、`_ds` / `_is` / `_hs`）、動作は短い動詞（`kick`、`zoom`、`move`、`fit`、`show`）。
 - 内部は `_`（`_scale`、`_changed`、`_getters`）。公開と初回計算関数を分ける。
 - vis 経路は短い識別子（`sw,sh,sx,sy`、`ev`）。ポインタ系は接頭辞 `p`（`pdown` / `pup` / `pdist`）。
@@ -1228,7 +1235,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 | R11 | EMA は毎 vis。遅延 1 フレームの RGBA。プレビュー Accum と delta Accum は独立 | Low | 張り替え vis は factor=1。スライダは両方へ |
 | R12 | CSS `.stage-layer` の 4:3 はカメラ前プレースホルダ。実カメラが 16:9 でも起動前は 4:3 | Low | 起動後 JS が上書き |
 | R13 | `fade` が timeout。バックグラウンドタブでパネルアニメが伸びる | Low | 機能影響なし。メインループの rAF とは別 |
-| R14 | `YUV` / `UV:RG` / `YUV-accum` の計算値が 0–255 外。ImageData 経由でクランプ | Low | 色ずれとして受容 |
+| R14 | `YUV` / `YUV-accum` の計算値が 0–255 外。ImageData 経由でクランプ | Low | 色ずれとして受容 |
 | R15 | 畳み込みは 1-D 範囲 `w+1 .. len-w-2`。左右端は行跨ぎラップ。上下はほぼ未書き込み 0。1px ゼロボーダーではない | Low | 真のハローは `x=1..w-2, y=1..h-2`。現状を「外周 1px 修正」してはならない |
 | R16 | 表示ビットマップ = CSS px。`devicePixelRatio` 無し。HiDPI で柔らかい | Medium | 現行契約。pause 中に dpr を掛けない（R2）。シャープ化はリサイズ前コピーが前提 |
 | R17 | pause 中のカメラ切替は表示を更新しない | Low | 制限。Resume 後の vis で新しいカメラになる |
@@ -1257,7 +1264,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 3. **`dispatch.set('duration')` と I/O pause の用語衝突。** UI は `Frame interval`、コードは `pause`。リネームは DOM 契約変更。
 6. **healthcheck を stream ポート 8080 経由にするか。** 現状 8081 直叩きなので `ssl_preread` の死を検知しない。
 7. **Laplacian のスケール。** 既定 abs 後 255 clamp で強いエッジが飽和する。符号付きプレビューは PR 8 で追加済み。`min(255, abs/k)` の k をスライダにするかは未決。
-8. **getXXX 平面を手動プールするか、GC に任せるか。** 方式検討メモ参照。未実装。Frame LRU は廃止済みなので「破棄 vis で Salvage」前提は現状に合わない。入力 `ImageData` は現行 `getImageData` ではプール不可。
+8. **getXXX 平面を手動プールするか、GC に任せるか。** 観測は `jsCam.monitor` + HUD `obj:` で実装済み。手動プールは未実装。Frame LRU は廃止済み。入力 `ImageData` は現行 `getImageData` ではプール不可。
 
 ---
 
@@ -1265,7 +1272,8 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 
 - `/app/jscam/jscam-boot.js` — path 配列の順挿入と `jsCam.kick(kparam)`
 - `/app/jscam/cam2.js` — `jsCam`（`version` / `e` / `initFn` / `kick` / `log`）
-- `/app/jscam/image.js` — `jsCam.image`（`otsuThreshold` / `sobel` / `laplacian` / `equalize`）
+- `/app/jscam/monitor.js` — `jsCam.monitor`（WeakRef 観測）
+- `/app/jscam/image.js` — `jsCam.image`（`convert` / `otsuThreshold` / `sobel` / `laplacian` / `equalize`）
 - `/app/jscam/frame.js` — `jsCam.Frame`。`red`/`green`/`blue`/`rgb`、`updateStat`
 - `/app/.gitignore` — `tmp/`
 - `/app/jscam/accum.js` — 指数平滑背景
@@ -1278,7 +1286,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 - `/app/jscam/cam.js` — 修正前。バグ対照用
 - `/app/jscam/index.html` — DOM 契約。script は `jscam-boot.js` のみ
 - `/app/jscam/cam2.css` — overlay / contain / パネル / `#h-canvas` / fps-hud / 720px シート
-- 本ファイル「方式検討メモ（画素配列プールと GC 観測）」— 未実装。採用／棄却は Open Question 8
+- 本ファイル「方式検討メモ（画素配列プールと GC 観測）」— 観測は `jsCam.monitor`。手動プールは未実装。Open Question 8
 - `/app/compose.yaml`, `/app/jscam/Dockerfile`, `/app/jscam/nginx.main.conf`, `/app/jscam/nginx.conf`, `/app/jscam/40-gen-tls.sh`
 - [getUserMedia secure contexts](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia)
 - [Canvas の width/height 代入はビットマップをリセットする](https://html.spec.whatwg.org/multipage/canvas.html#attr-canvas-width)
@@ -1291,7 +1299,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 
 現行はこのスタックまでマージ可能な状態である。以下は **残作業を独立レビュー可能な単位に割った順序（歴史的計画）**。PR 0 以外はコード変更だった。
 
-**Completed（このスタック / HEAD の実装）:** PR 1, 2, 3, 5, 6, 7, 8。PR 0 は元設計書。読み込みはのち `jscam-boot.js` + `jsCam.kick`。カーネルは `image.js`。**残りは PR 4（解像度 cap）のみ。延期のまま実装しない。**
+**Completed（このスタック / HEAD の実装）:** PR 1, 2, 3, 5, 6, 7, 8。PR 0 は元設計書。読み込みはのち `jscam-boot.js` + `jsCam.kick`。カーネルは `image.js`。観測は `monitor.js`。**残りは PR 4（解像度 cap）のみ。延期のまま実装しない。**
 
 依存（ファイル分割をループ改修の後に置く、という当時の DAG）:
 
