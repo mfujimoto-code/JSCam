@@ -18,6 +18,7 @@ services:
       - ./jscam/cam2.css:/usr/share/nginx/html/cam2.css:ro
       - ./jscam/jscam-boot.js:/usr/share/nginx/html/jscam-boot.js:ro
       - ./jscam/cam2.js:/usr/share/nginx/html/cam2.js:ro
+      - ./jscam/monitor.js:/usr/share/nginx/html/monitor.js:ro
       - ./jscam/image.js:/usr/share/nginx/html/image.js:ro
       - ./jscam/frame.js:/usr/share/nginx/html/frame.js:ro
       - ./jscam/accum.js:/usr/share/nginx/html/accum.js:ro
