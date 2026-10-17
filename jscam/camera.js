@@ -40,7 +40,7 @@ jsCam.initFn.push((kparam)=>{
 			} else {
 				const playing = video.play();
 				if (playing && playing.catch) {
-					playing.catch((err)=>cUI.print('playback failed: ' + err));
+					playing.catch((err)=>_j.log('playback failed: ' + err));
 				}
 			}
 		}
@@ -51,11 +51,11 @@ jsCam.initFn.push((kparam)=>{
 	const toggleIoPause = ()=>{
 		const video = _j.e(kparam.srcVideo);
 		if (!video || !video.srcObject) {
-			cUI.print('camera not started');
+			_j.log('camera not started');
 			return;
 		}
 		setIoPaused(!_j.dispatch.get('pause'));
-		cUI.print(_j.dispatch.get('pause') ? 'io paused' : 'io resumed');
+		_j.log(_j.dispatch.get('pause') ? 'io paused' : 'io resumed');
 	}
 
 	const gumConstraints = (deviceId)=>{
@@ -77,7 +77,7 @@ jsCam.initFn.push((kparam)=>{
 	}
 
 	const setCameraStatus = (msg)=>{
-		cUI.print(msg);
+		_j.log(msg);
 		const status = _j.e('camera-status');
 		if (status) status.textContent = msg;
 	}
@@ -173,7 +173,7 @@ jsCam.initFn.push((kparam)=>{
 		if (sel) sel.disabled = false;
 		setIoPaused(!!paused);
 		try { syncPreviewSize(); } catch (err) {}
-		try { syncCameraParams(); } catch (err) { cUI.print('camera params failed: ' + err); }
+		try { syncCameraParams(); } catch (err) { _j.log('camera params failed: ' + err); }
 	}
 
 	const gumFail = (error)=>{
@@ -395,7 +395,7 @@ jsCam.initFn.push((kparam)=>{
 	const applyCameraConstraint = (key, value)=>{
 		const track = supportLiveTrack();
 		if (!track || !track.applyConstraints) {
-			cUI.print(key + ' failed: no track');
+			_j.log(key + ' failed: no track');
 			return Promise.resolve();
 		}
 		const advanced = {};
@@ -405,7 +405,7 @@ jsCam.initFn.push((kparam)=>{
 		return track.applyConstraints({ advanced: [advanced] })
 			.catch(()=>track.applyConstraints(plain))
 			.then(()=>{
-				cUI.print(key + ':' + value);
+				_j.log(key + ':' + value);
 				let settings = null;
 				try { settings = track.getSettings(); } catch (err) {}
 				if (key === 'focusMode' || key === 'exposureMode' || key === 'whiteBalanceMode') {
@@ -421,7 +421,7 @@ jsCam.initFn.push((kparam)=>{
 			})
 			.catch((err)=>{
 				const name = (err && err.name) ? err.name : err;
-				cUI.print(key + ' failed: ' + name);
+				_j.log(key + ' failed: ' + name);
 			});
 	}
 
@@ -784,7 +784,7 @@ jsCam.initFn.push((kparam)=>{
 				report.textContent = text;
 			}
 			if (btn) btn.disabled = false;
-			cUI.print('support scan done');
+			_j.log('support scan done');
 		};
 
 		if (!window.isSecureContext) {

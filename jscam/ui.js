@@ -1,23 +1,26 @@
 'use strict';
 
-const cUI = Object.create(null);
 
 jsCam.initFn.push((kparam)=>{
 	const _j = jsCam;
 
-	cUI.print_messages = ['','','','','','',''];
-	cUI.print = (msg) => {
-		cUI.print_messages.push(msg);
-		cUI.print_messages.shift();
+	const _logUI = (...msg) => {
+		msg.forEach((m)=>{
+			_logUI.lines.push(m);
+			_logUI.lines.shift();
+		});
 
 		let html = '<span>';
-		for (let i = 0; i < cUI.print_messages.length; ++i) {
-			html += '<br />' + cUI.print_messages[i];
-		}
+		_logUI.lines.forEach((m)=>{
+			html += m + '<br />';
+		});
 		html += '</span>';
 
 		_j.e('message').innerHTML = html;
 	};
+	_logUI.lines = ['','','','','','',''];
+	// from now, jsCam.log is _logUI.
+	_j.log = _logUI;
 
 	// fade-in/out the panel
 	const fade = {
