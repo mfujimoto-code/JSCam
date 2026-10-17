@@ -19,7 +19,7 @@ jsCam.initFn.push((kparam)=>{
 		_j.e('message').innerHTML = html;
 	};
 	_logUI.lines = ['','','','','','',''];
-	// from now, jsCam.log is _logUI.
+	// Since UI parts for logging are ready now, replace default jsCam.log to _logUI.
 	_j.log = _logUI;
 
 	// fade-in/out the panel

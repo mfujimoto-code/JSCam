@@ -292,25 +292,12 @@ jsCam.initFn.push((kparam)=>{
 		}
 		__pHistogram(context, __pHistogram);
 	}
-	, _pCheckLuminance = (context, me) => {
-		const	f = context.currentFrame
-		,	lmax = f.num() * 255
-		,	iLmax = 1 / lmax * 100
-		;
-		
-		Object.keys(f.histogram).forEach((k)=>{
-			const r = (f.luminance[k] * iLmax)|0;
-			_j.log(`${k}: ${r}% (${f.luminance[k]})`);
-		});
-		_pipeline.push(me);
-	}
 	, _buildPipeline= () => {
 		_pipeline.length = 0;
 		_pipeline.push(
 			_pCheckCondition
 		,	_pFetch
 		,	_pExtract
-		//,	_pCheckLuminance
 		,	_pHistogram
 		);
 	}
