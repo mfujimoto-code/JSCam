@@ -292,12 +292,25 @@ jsCam.initFn.push((kparam)=>{
 		}
 		__pHistogram(context, __pHistogram);
 	}
+	, _pCheckLuminance = (context, me) => {
+		const	f = context.currentFrame
+		,	lmax = f.num() * 255
+		,	iLmax = 1 / lmax * 100
+		;
+		
+		Object.keys(f.histogram).forEach((k)=>{
+			const r = (f.luminance[k] * iLmax)|0;
+			_j.log(`${k}: ${r}% (${f.luminance[k]})`);
+		});
+		_pipeline.push(me);
+	}
 	, _buildPipeline= () => {
 		_pipeline.length = 0;
 		_pipeline.push(
 			_pCheckCondition
 		,	_pFetch
 		,	_pExtract
+		//,	_pCheckLuminance
 		,	_pHistogram
 		);
 	}
@@ -359,7 +372,7 @@ jsCam.initFn.push((kparam)=>{
 		const	_cs = new _j.Surface(_j.e(kparam.fpsChart));
 
 		const	_caption = _j.e(kparam.fpsCaption)
-		,	_emaStat = {rAF:0, rVFC:0, viewed:0, running:0}
+		,	_emaStat = {rAF:0, rVFC:0, viewed:0, running:0, obj:0}
 		,	_AFACTOR = (1/4)
 		,	_ema = (a, b) => ((1 - _AFACTOR) * a + _AFACTOR * b)
 		,	_STEP = 2
@@ -372,12 +385,17 @@ jsCam.initFn.push((kparam)=>{
 		_cs.gFillStyle('rgba(255,0,255,0.5)');
 
 		const _update = (duration)=>{
-			const 	factor = 1 / duration;
+			const 	factor = 1 / duration
+			,	oc = _j.monitor()[1]
+			,	opv = _stat.viewed > 0 ? oc / _stat.viewed : oc
+			;
+
 
 			_emaStat.rAF     = _ema(_emaStat.rAF,     _stat.rAF     * factor);
 			_emaStat.rVFC    = _ema(_emaStat.rVFC,    _stat.rVFC    * factor);
 			_emaStat.viewed  = _ema(_emaStat.viewed,  _stat.viewed  * factor);
 			_emaStat.running = _ema(_emaStat.running, _stat.running * factor);
+			_emaStat.obj     = _ema(_emaStat.obj,     opv);
 
 			_values.push(_emaStat.running);
 			(_max < _emaStat.running) && (_max = _emaStat.running);
@@ -399,7 +417,8 @@ jsCam.initFn.push((kparam)=>{
 			+	((_emaStat.rAF > 0) ? Math.round(_emaStat.viewed / _emaStat.rAF * 100): 0)
 			+	'% run:'
 			+	(Math.round(_emaStat.running * 100))
-			+	'%'
+			+	'% obj:'
+			+	Math.round(_emaStat.obj)
 			;
 		};
 

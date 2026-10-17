@@ -72,6 +72,8 @@ _j.Frame.prototype = {
 		,     hC = new Array(256)
 		;
 
+		_j.monitor(C);
+
 		let tl = 0;
 
 		hC.fill(0);
@@ -117,13 +119,16 @@ _j.Frame.prototype = {
 		return this.get('equalized')
 	}
 	, _getYUV: function () {
-		const data = this.get('rgba')
-		,     num = this.num()
-		,     Y = new Uint8ClampedArray(num)
-		,     UV = new Array(num * 2)
-		,     histogram = new Array(256)
+		const	data = this.get('rgba')
+		,	num = this.num()
+		,	Y = new Uint8ClampedArray(num)
+		,	U = new Array(num)
+		,	V = new Array(num)
+		,	histogram = new Array(256)
 		;
 		let tl = 0;
+
+		_j.monitor(Y, U, V);
 
 		histogram.fill(0);
 		for (let i = 0, o = 0; i < num; ++i, o += 4) {
@@ -135,17 +140,14 @@ _j.Frame.prototype = {
 			// U = -0.169R - 0.331G + 0.500B
 			// V =  0.500R - 0.419G - 0.081B
 
-			const y = r*0.299 + g*0.587 + b*0.114
-			,     u =-r*0.169 - g*0.331 + b*0.500
-			,     v = r*0.500 - g*0.419 - b*0.081;
+			Y[i] = r*0.299 + g*0.587 + b*0.114
+			U[i] =-r*0.169 - g*0.331 + b*0.500
+			V[i] = r*0.500 - g*0.419 - b*0.081;
 
-			Y[i] = y;
-			UV[i*2] = u;
-			UV[i*2+1] = v;
 			histogram[Y[i]] += 1;
-			tl += y;
+			tl += Y[i];
 		}
-		this.getter['yuv'] = ()=>({'Y':Y, 'UV':UV});
+		this.getter['yuv'] = ()=>([Y, U, V]);
 		this.histogram['Y'] = histogram;
 		this.luminance['Y'] = tl;
 		return this.get('yuv');
@@ -156,6 +158,9 @@ _j.Frame.prototype = {
 		,     gray = new Uint8ClampedArray(num)
 		,     histogram = new Array(256)
 		;
+
+		_j.monitor(gray);
+
 		let tl = 0;
 		histogram.fill(0);
 		for (let i = 0, o = 0; i < num; ++i, o += 4) {
@@ -182,6 +187,8 @@ _j.Frame.prototype = {
 		      ]
 		;
 
+		_j.monitor(e);
+
 		if (method == 'sobel.rgb') {
 			const plane = this.get('rgb')
 			,     R = plane[0]
@@ -197,14 +204,18 @@ _j.Frame.prototype = {
 			_j.image.sobel(eB, B, O);
 			for (let i = 0; i < num; ++i)
 				e[i] = Math.max(eR[i], eG[i], eB[i]);
+
+			_j.monitor(eR, eG, eB);
 		}
 		else if (method == 'laplacian') {
 			const raw = new Int16Array(e.length);
+			_j.monitor(raw);
 			_j.image.laplacian(raw, this.get('gray'), O);
 			for (let i = 0; i < e.length; ++i) e[i] = Math.abs(raw[i]);
 		}
 		else if (method == 'laplacian.signed') {
 			const raw = new Int16Array(e.length);
+			_j.monitor(raw);
 			_j.image.laplacian(raw, this.get('gray'), O);
 			for (let i = 0; i < e.length; ++i) e[i] = raw[i] + 128;
 		}

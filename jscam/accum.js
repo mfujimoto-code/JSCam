@@ -23,6 +23,7 @@ jsCam.initFn.push((kparam)=>{
 	};
 	const _plane = (num) => {
 		const a = new Array(num);
+		_j.monitor(a);
 		a.fill(0);
 		return a
 	}
@@ -109,6 +110,7 @@ jsCam.initFn.push((kparam)=>{
 
 		if (this._delayNum !== num) {
 			this._delay = new Uint8ClampedArray(num * 4);
+			_j.monitor(this._delay);
 			this._delayNum = num;
 			this._hasDelay = false;
 		}

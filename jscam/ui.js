@@ -247,7 +247,7 @@ jsCam.initFn.push((kparam)=>{
 
 	_j.e('image-mode').onchange = function () {
 		const mode = this.options[this.selectedIndex].value;
-		cUI.print('image mode:' + mode);
+		_j.log('image mode:' + mode);
 		_j.render.imageMode(mode);
 		syncModeSettings();
 		_j.dispatch.kick(true);
@@ -268,21 +268,21 @@ jsCam.initFn.push((kparam)=>{
 			output.value = range.value;
 			const v = Number(range.value);
 			cb(v);
-			cUI.print(label + ':' + range.value);
+			_j.log(label + ':' + range.value);
 		}
 		mbutton.onclick = () => {
 			const v = Math.max(min, Number(range.value) - step);
 			range.value = v;
 			output.value = v;
 			cb(v);
-			cUI.print(label + ':' + range.value);
+			_j.log(label + ':' + range.value);
 		}
 		pbutton.onclick = () => {
 			const v = Math.min(max, Number(range.value) + step);
 			range.value = v;
 			output.value = v;
 			cb(v);
-			cUI.print(label + ':' + range.value);
+			_j.log(label + ':' + range.value);
 		}
 	} 
 
