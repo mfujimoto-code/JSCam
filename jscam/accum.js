@@ -22,8 +22,7 @@ jsCam.initFn.push((kparam)=>{
 			throw new Error('not supported ' + space)
 	};
 	const _plane = (num) => {
-		const a = new Array(num);
-		_j.monitor(a);
+		const a = _j.newObj(Array, num);
 		a.fill(0);
 		return a
 	}
@@ -46,59 +45,113 @@ jsCam.initFn.push((kparam)=>{
 		return true
 	}
 
-	const _mixGray = (dst, rgba, num, f) => {
-		const o = 1 - f;
+	const _u8clamp = new Uint8ClampedArray(3);
+	const _mixGray = function (frame, space) {
+		const	f = this.get('factor')
+		,	dst = this._buf[space][0]
+		,	rgba = this._delay
+		,	num = frame.num()
+		,	o = 1 - f
+		,	gH = _j.newObj(Array, 256)
+		;
+		let	gTL = 0;
+		gH.fill(0);
 		for (let i = 0, p = 0; i < num; ++i, p += 4) {
-			const g = Math.round(
-				rgba[p] * 0.299
-				+ rgba[p+1] * 0.587
-				+ rgba[p+2] * 0.114
-			);
-			dst[i] = o * dst[i] + f * g;
+			const g = rgba[p  ] * 0.299
+			+	  rgba[p+1] * 0.587
+			+	  rgba[p+2] * 0.114
+			;
+
+			_u8clamp[0] = (dst[i] = o * dst[i] + f * g);
+
+			gTL += g;
+			gH[_u8clamp[0]] += 1;
+
 		}
+		frame.set('histogram', ['gray-a', gH]);
+		frame.set('luminance', ['gray-a', gTL]);
 	}
-	const _mixRgb = (planes, rgba, num, f) => {
-		const	o = 1 - f
+
+	const _mixRgb = function (frame, space) {
+		const	f = this.get('factor')
+		,	planes = this._buf[space]
+		,	rgba = this._delay
+		,	num = frame.num()
+		,	o = 1 - f
 		,	R = planes[0]
 		,	G = planes[1]
 		,	B = planes[2]
+		,	rH = _j.newObj(Array, 256)
+		,	gH = _j.newObj(Array, 256)
+		,	bH = _j.newObj(Array, 256)
 		;
+		let	rTL = 0, gTL = 0, bTL = 0;
+		rH.fill(0);
+		gH.fill(0);
+		bH.fill(0);
 		for (let i = 0, p = 0; i < num; ++i, p += 4) {
-			R[i] = o * R[i] + f * rgba[p];
-			G[i] = o * G[i] + f * rgba[p+1];
-			B[i] = o * B[i] + f * rgba[p+2];
+			_u8clamp[0] = (R[i] = o * R[i] + f * rgba[p  ]);
+			_u8clamp[1] = (G[i] = o * G[i] + f * rgba[p+1]);
+			_u8clamp[2] = (B[i] = o * B[i] + f * rgba[p+2]);
+
+			rTL += R[i];
+			gTL += G[i];
+			bTL += B[i];
+
+			rH[_u8clamp[0]] += 1;
+			gH[_u8clamp[1]] += 1;
+			bH[_u8clamp[2]] += 1;
 		}
+
+		frame.set('histogram', ['red-a',   rH]);
+		frame.set('luminance', ['red-a',   rTL]);
+		frame.set('histogram', ['green-a', gH]);
+		frame.set('luminance', ['green-a', gTL]);
+		frame.set('histogram', ['blue-a',  bH]);
+		frame.set('luminance', ['blue-a',  bTL]);
 	}
-	const _mixYuv = (planes, rgba, num, f) => {
-		const	o = 1 - f
+
+	const _mixYuv = function (frame, space) {
+		const	f = this.get('factor')
+		,	planes = this._buf[space]
+		,	rgba = this._delay
+		,	num = frame.num()
+		,	o = 1 - f
 		,	Y = planes[0]
 		,	U = planes[1]
 		,	V = planes[2]
+		,	yH = _j.newObj(Array, 256)
 		;
+		let	yTL = 0;
+		yH.fill(0);
 		for (let i = 0, p = 0; i < num; ++i, p += 4) {
-			const	r = rgba[p]
+			const	r = rgba[p  ]
 			,	g = rgba[p+1]
 			,	b = rgba[p+2]
 			;
 			Y[i] = o * Y[i] + f * ( r * 0.299 + g * 0.587 + b * 0.114);
 			U[i] = o * U[i] + f * (-r * 0.169 - g * 0.331 + b * 0.500);
 			V[i] = o * V[i] + f * ( r * 0.500 - g * 0.419 - b * 0.081);
+
+			yTL += Y[i];
+			_u8clamp[0] = Y[i];
+			yH[_u8clamp[0]] += 1;
+
 		}
+		frame.set('histogram', ['y-a', yH]);
+		frame.set('luminance', ['y-a', yTL]);
 	}
 
-	Accum.prototype._mix = function (space, rgba, num) {
-		const	f = this.get('factor')
-		,	planes = this._buf[space]
-		;
+	Accum.prototype._mix = function (frame, space) {
 		if (space === 'gray') {
-			_mixGray(planes[0], rgba, num, f);
+			_mixGray.call(this, frame, space);
 			return
 		}
 		if (space === 'rgb') {
-			_mixRgb(planes, rgba, num, f);
+			_mixRgb.call(this, frame, space);
 			return
 		}
-		_mixYuv(planes, rgba, num, f);
+		_mixYuv.call(this, frame, space);
 	}
 
 	Accum.prototype.update = function (frame, space) {
@@ -109,8 +162,8 @@ jsCam.initFn.push((kparam)=>{
 		const num = frame.num();
 
 		if (this._delayNum !== num) {
-			this._delay = new Uint8ClampedArray(num * 4);
-			_j.monitor(this._delay);
+			this._delay = _j.newObj(Uint8ClampedArray, num * 4);
+
 			this._delayNum = num;
 			this._hasDelay = false;
 		}
@@ -119,13 +172,16 @@ jsCam.initFn.push((kparam)=>{
 			this._delay.set(frame.get('rgba'));
 			const _factor = this.get('factor');
 			this.set('factor', 1);
-			this._mix(space, this._delay, num);
+			this._mix(frame, space);
 			this.set('factor', _factor);
 		}
 
 		// to avoid using the same source as other processes,
 		// use image from the recent past here.
-		if (this._hasDelay) this._mix(space, this._delay, num);
+		if (this._hasDelay) this._mix(frame, space);
+
+		frame.set('buffer', [`${space}-a`, this._buf[space]]);
+
 		this._delay.set(frame.get('rgba'));
 		this._hasDelay = true;
 	}

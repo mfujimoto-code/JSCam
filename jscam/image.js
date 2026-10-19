@@ -83,8 +83,8 @@ _image.convert = (dst, src)=>{
 _image.otsuThreshold = (histogram)=>{
 	let H = 0
 	;
-	const w = new Array(histogram.length)
-	,     s = new Array(histogram.length)
+	const w = _j.newObj(Array, histogram.length)
+	,     s = _j.newObj(Array, histogram.length)
 	;
 	for (let k = 0; k < histogram.length; ++k) H += histogram[k];
 	w[0] = histogram[0];
@@ -164,10 +164,8 @@ _image.laplacian = (dst, src, O)=>{ // 3x3 8direction
 _image.equalize = (luminance, histogram)=>{
 	const	Nl = luminance.length
 	,	Nh = histogram.length
-	,	eq = new Uint8ClampedArray(Nl)
+	,	eq = _j.newObj(Uint8ClampedArray, Nl)
 	;
-
-	_j.monitor(eq);
 
 	const	H = [];
 	for (let i = 0, sum = 0; i < Nh; ++i) {
@@ -191,7 +189,7 @@ _image.equalize = (luminance, histogram)=>{
 
 	const	factor = (Nh - 1) / (Nl - Hmin)
 	,	LUT = H.map((Hi)=>(Math.round((Hi - Hmin) * factor)))
-	,	eHistogram = new Array(Nh);
+	,	eHistogram = _j.newObj(Array, Nh);
 	;
 	let	tl = 0;
 	eHistogram.fill(0);

@@ -32,4 +32,14 @@ _j.monitor = (...obj)=>{
 	_register(obj);
 };
 
+const _newObj = (target, ...param)=>{
+	const object = new target(...param);
+
+	_j.monitor(object);
+
+	return object
+};
+
+_j.newObj = _newObj;
+
 });

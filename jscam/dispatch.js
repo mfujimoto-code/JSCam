@@ -278,9 +278,9 @@ jsCam.initFn.push((kparam)=>{
 		const f = context.currentFrame;
 		_hs.gClear();
 		_hs.gBeginHistogram(f.num());
-		for (let k in f.histogram) {
-			_hs.gDrawHistogram(f.histogram[k]);
-		}
+		f.histogram().forEach(
+			(k)=>_hs.gDrawHistogram(f.histogram(k))
+		);
 		_hs.gEndHistogram();
 
 		_pipeline.push(me);

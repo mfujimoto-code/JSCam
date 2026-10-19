@@ -13,9 +13,8 @@ const _accum = new _j.Accum();
 
 const _image = function(frame) {
 	const size = frame.size()
-	,     im = new ImageData(size[0], size[1])
+	,     im = _j.newObj(ImageData, size[0], size[1])
 	;
-	_j.monitor(im);
 	return im
 }
 
@@ -75,47 +74,29 @@ const _buildImageFuncs = Object.assign(Object.create(null), {
 	}
 ,	'GRAY-accum': function (frame) {
 		_accum.update(frame, 'gray');
-		const gray = _accum.planes('gray')[0]
+		const gray = frame.get('gray-a')[0]
 		,     num  = frame.num()
 		,     imageData = _image(frame)
 		,     data = imageData.data
-		,     gH = new Array(256)
 		;
 
-		let tlum = 0;
-		gH.fill(0);
 		for (let i = 0, o = 0; i < num; ++i, o += 4) {
 			const lum = gray[i];
 			data[o  ] =
 			data[o+1] =
 			data[o+2] = lum;
 			data[o+3] = 255;
-
-			tlum += lum;
-			gH[data[o]] += 1;
 		}
-
-		frame.updateStat('gray', gH, tlum);
 
 		return imageData
 	}
 ,	'RGB-accum': function (frame) {
 		_accum.update(frame, 'rgb');
-		const rgb = _accum.planes('rgb')
+		const rgb = frame.get('rgb-a')
 		,     num  = frame.num()
 		,     imageData = _image(frame)
 		,     data = imageData.data
-		,     rH = new Array(256)
-		,     gH = new Array(256)
-		,     bH = new Array(256)
 		;
-		let tlR = 0
-		,   tlG = 0
-		,   tlB = 0
-		;
-		rH.fill(0);
-		gH.fill(0);
-		bH.fill(0);
 
 		for (let i = 0, o = 0; i < num; ++i, o += 4) {
 			const r = rgb[0][i];
@@ -125,35 +106,20 @@ const _buildImageFuncs = Object.assign(Object.create(null), {
 			data[o+1] = g;
 			data[o+2] = b;
 			data[o+3] = 255;
-
-			rH[data[o]  ] += 1;
-			gH[data[o+1]] += 1;
-			bH[data[o+2]] += 1;
-
-			tlR += r;
-			tlG += g;
-			tlB += b;
 		}
-
-		frame.updateStat('red',   rH, tlR);
-		frame.updateStat('green', gH, tlG);
-		frame.updateStat('blue',  bH, tlB);
 
 		return imageData
 	}
 ,	'YUV-accum': function (frame) {
 		_accum.update(frame, 'yuv');
-		const	yuv = _accum.planes('yuv')
+		const	yuv = frame.get('yuv-a')
 		,	Y = yuv[0]
 		,	U = yuv[1]
 		,	V = yuv[2]
 		,	num  = frame.num()
 		,	imageData = _image(frame)
 		,	data = imageData.data
-		,	yH = new Array(256)
 		;
-		let	tl = 0;
-		yH.fill(0);
 
 		for (let i = 0, o = 0; i < num; ++i, o += 4) {
 			const	y = Y[i], u = U[i], v = V[i];
@@ -161,13 +127,8 @@ const _buildImageFuncs = Object.assign(Object.create(null), {
 			data[o+1] = y - 0.344*u - 0.714*v;
 			data[o+2] = y + 1.772*u;
 			data[o+3] = 255;
-
-			_u8clamp[0] = y;
-			yH[_u8clamp[0]] += 1;
-			tl += y;
 		}
 
-		frame.updateStat('Y', yH, tl);
 		return imageData
 	}
 ,	'BW-delta': function (frame) {
@@ -210,9 +171,9 @@ const _buildImageFuncs = Object.assign(Object.create(null), {
 		,     R = RGB[0]
 		,     G = RGB[1]
 		,     B = RGB[2]
-		,     tR = _j.image.otsuThreshold(frame.histogram['R'])
-		,     tG = _j.image.otsuThreshold(frame.histogram['G'])
-		,     tB = _j.image.otsuThreshold(frame.histogram['B'])
+		,     tR = _j.image.otsuThreshold(frame.histogram('red'))
+		,     tG = _j.image.otsuThreshold(frame.histogram('green'))
+		,     tB = _j.image.otsuThreshold(frame.histogram('blue'))
 		;
 		for (let i = 0, o = 0; i < num; ++i, o += 4) {
 			data[o+0] = R[i] > tR ? 255 : 0;
@@ -308,7 +269,7 @@ const _buildImageFuncs = Object.assign(Object.create(null), {
 		,     imageData = _image(frame)
 		,     data = imageData.data
 		,     e = frame.get('sobel.rgb')
-		,     t = _j.image.otsuThreshold(frame.histogram['sobel.rgb'])
+		,     t = _j.image.otsuThreshold(frame.histogram('sobel.rgb'))
 		;
 		for (let i = 0, o = 0; i < num; ++i, o += 4) {
 			data[o+0] =

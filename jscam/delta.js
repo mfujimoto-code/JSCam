@@ -20,8 +20,7 @@ const delta = {
 		;
 		if (space === 'gray') {
 			if (num > delta._delta.length) {
-				delta._delta = new Uint8ClampedArray(num);
-				_j.monitor(delta._delta);
+				delta._delta = _j.newObj(Uint8ClampedArray, num);
 			}
 			const	g = frame.get('gray')
 			,	out = delta._delta
@@ -34,14 +33,12 @@ const delta = {
 		if (space === 'rgb') {
 			const cur = frame.get('rgb')
 			, out = [
-				  new Uint8ClampedArray(num)
-				, new Uint8ClampedArray(num)
-				, new Uint8ClampedArray(num)
+				  _j.newObj(Uint8ClampedArray, num)
+				, _j.newObj(Uint8ClampedArray, num)
+				, _j.newObj(Uint8ClampedArray, num)
 			]
 			, n = Math.min(acc[0].length, num)
 			;
-
-			_j.monitor(out[0], out[1], out[2]);
 
 			for (let k = 0; k < 3; ++k)
 				delta._absPlane(out[k], cur[k], acc[k], n);
@@ -53,17 +50,15 @@ const delta = {
 		,	U = yuv[1]
 		,	V = yuv[2]
 		,	out = [
-				new Uint8ClampedArray(num)
-			,	new Uint8ClampedArray(num)
-			,	new Uint8ClampedArray(num)
+				j.newObj(Uint8ClampedArray, num)
+			,	j.newObj(Uint8ClampedArray, num)
+			,	j.newObj(Uint8ClampedArray, num)
 			]
 		,	n = Math.min(acc[0].length, num)
 		,	aY = acc[0]
 		,	aU = acc[1]
 		,	aV = acc[2]
 		;
-
-		_j.monitor(out[0], out[1], out[2]);
 
 		for (let i = 0; i < n; ++i) {
 			out[0][i] = Math.abs(Y[i] - aY[i]);
