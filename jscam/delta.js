@@ -13,7 +13,7 @@ const delta = {
 	}
 	, get: (frame, space) => {
 		if (space === undefined) space = 'gray';
-		delta.accum.update(frame, space);
+		delta.accum.update(frame, space, true);
 
 		const	num = frame.num()
 		,	acc = delta.accum.planes(space)
@@ -53,8 +53,8 @@ const delta = {
 
 		const	yuv = [
 				_j.newObj(Uint8ClampedArray, num)
-			,	_j.newObj(Uint8ClampedArray, num)
-			,	_j.newObj(Uint8ClampedArray, num)
+			,	_j.newObj(Array, num)
+			,	_j.newObj(Array, num)
 			]
 		,	Y = yuv[0]
 		,	U = yuv[1]
@@ -72,11 +72,9 @@ const delta = {
 
 		_j.image.convert(['yuv', yuv], ['rgba', frame.get('rgba')]);
 
-		for (let i = 0; i < n; ++i) {
-			out[0][i] = Math.abs(Y[i] - aY[i]);
-			out[1][i] = Math.abs(U[i] - aU[i]);
-			out[2][i] = Math.abs(V[i] - aV[i]);
-		}
+		for (let k = 0; k < 3; ++k)
+			delta._absPlane(out[k], yuv[k], acc[k], n);
+
 		return out
 	}
 };

@@ -38,9 +38,17 @@ Frame._setters = Object.assign(Object.create(null), {
 		this.getter[value[0]] = ()=>(value[1])
 	}
 ,	'histogram':	function (value) {
+		if (value[1] === null) {
+			delete this._histogram[value[0]]
+			return
+		}
 		this._histogram[value[0]] = ()=>(value[1])
 	}
 ,	'luminance':	function (value) {
+		if (value[1] === null) {
+			delete this._luminance[value[0]]
+			return
+		}
 		this._luminance[value[0]] = ()=>(value[1])
 	}
 });
