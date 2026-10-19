@@ -15,7 +15,7 @@ const	_getGC = (c, r) => (
 );
 
 const	_useOC = (typeof OffscreenCanvas !== 'undefined')
-,	_getCanvas = _useOC ? ()=>(_j.newObj(OffscreenCanvas, 640, 480))
+,	_getCanvas = _useOC ? ()=>(new OffscreenCanvas(640, 480))
 			    : ()=>(document.createElement('canvas'))
 ;
 

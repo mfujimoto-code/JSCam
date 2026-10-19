@@ -8,7 +8,7 @@ const	_j = jsCam
 
 _j.image = _image;
 
-const _lum2rgba = (from, to)=>{
+const _y2rgba = (from, to)=>{
 	const	L = from
 	,	fromLen = L.length
 	;
@@ -55,11 +55,90 @@ const _yuv2rgba = (from, to)=>{
 	}
 };
 
+const _rgba2y = (from, to)=>{
+	const	toLen = to.length;
+	for (let fi = 0, ti = 0; ti < toLen; fi+=4, ++ti) {
+		to[ti] = from[fi+0]*0.299
+		+	 from[fi+1]*0.587
+		+	 from[fi+2]*0.114
+		;
+	}
+};
+
+const __rgba2x = (from, to, x)=>{
+	const	toLen = to.length;
+	for (let fi = x, ti = 0; ti < toLen; fi+=4, ++ti) {
+		to[ti] = from[fi];
+	}
+};
+const _rgba2r = (from, to)=>(__rgba2x(from, to, 0));
+const _rgba2g = (from, to)=>(__rgba2x(from, to, 1));
+const _rgba2b = (from, to)=>(__rgba2x(from, to, 2));
+
+const _rgba2rgb = (from, to)=>{
+	const	toLen = to[0].length
+	,	R = to[0]
+	,	G = to[1]
+	,	B = to[2]
+	;
+	for (let fi = 0, ti = 0; ti < toLen; fi+=4, ++ti) {
+		R[ti] = from[fi+0];
+		G[ti] = from[fi+1];
+		B[ti] = from[fi+2];
+	}
+};
+
+const _rgba2yuv = (from, to)=>{
+	const	toLen = to[0].length
+	,	Y = to[0]
+	,	U = to[1]
+	,	V = to[2]
+	;
+	for (let fi = 0, ti = 0; ti < toLen; fi+=4, ++ti) {
+		const	r = from[fi+0]
+		,	g = from[fi+1]
+		,	b = from[fi+2]
+		;
+		// Y =  0.299R + 0.587G + 0.114B
+		// U = -0.169R - 0.331G + 0.500B
+		// V =  0.500R - 0.419G - 0.081B
+		Y[ti] = r*0.299 + g*0.587 + b*0.114;
+		U[ti] =-r*0.169 - g*0.331 + b*0.500;
+		V[ti] = r*0.500 - g*0.419 - b*0.081;
+	}
+};
+
 const _convHash = {
 	'rgba': {
 		'yuv':       _yuv2rgba
 	,	'rgb':       _rgb2rgba
-	,	'luminance': _lum2rgba
+	,	'y':         _y2rgba
+	,	'luminance': _y2rgba
+	,	'gray':      _y2rgba
+	}
+,	'yuv': {
+		'rgba': _rgba2yuv
+	}
+,	'rgb': {
+		'rgba':	_rgba2rgb
+	}
+,	'r': {
+		'rgba':	_rgba2r
+	}
+,	'g': {
+		'rgba':	_rgba2g
+	}
+,	'b': {
+		'rgba':	_rgba2b
+	}
+,	'y': {
+		'rgba':	_rgba2y
+	}
+,	'luminance': {
+		'rgba':	_rgba2y
+	}
+,	'gray': {
+		'rgba':	_rgba2y
 	}
 };
 
@@ -78,6 +157,24 @@ _image.convert = (dst, src)=>{
 		throw new Error(`not supported ${sf} to ${df}`)
 
 	fn(sd, dd);
+};
+
+const _u8clamp = new Uint8ClampedArray(1);
+
+_image.stat = (histogram, luminance, src)=>{
+	for (let i = 0; i < src.length; ++i) {
+		const	cell = src[i]
+		,	h = histogram[i]
+		;
+		h.fill(0);
+		let	tl = 0;
+		for (let j = 0; j < cell.length; ++j) {
+			tl += cell[j];	
+			_u8clamp[0] = cell[j];
+			h[_u8clamp[0]] += 1;
+		}
+		luminance[i] = tl;
+	}
 };
 
 _image.otsuThreshold = (histogram)=>{
@@ -117,19 +214,30 @@ _image.otsuThreshold = (histogram)=>{
 	return maxK
 };
 
-_image.sobel = (dst, src, O)=>{ // 3x3
-	const Ky = [ // Sobel vertical kernel
-		 -1, -2, -1
-		, 0,  0,  0
-		, 1,  2,  1]
-	,     Kx = [ // Sobel horizontal kernel
-		  -1, 0, 1
-		, -2, 0, 2
-		, -1, 0, 1]
-	,     start = O[8]
-	,     end = src.length + O[0]
-	;
+const _kernel3x3 = {
+	'sobelX': [ // Sobel horizontal kernel
+		-1, 0, 1
+	,	-2, 0, 2
+	,	-1, 0, 1
+	]
+,	'sobelY': [ // Sobel vertical kernel
+		-1, -2, -1
+	,	 0,  0,  0
+	,	 1,  2,  1
+	]
+,	'laplacian': [ // Laplacian kernel
+		 1,  1, 1
+	,	 1, -8, 1
+	,	 1,  1, 1
+	]
+};
 
+_image.sobel = (dst, src, O)=>{ // 3x3
+	const	Ky = _kernel3x3['sobelY']
+	,	Kx = _kernel3x3['sobelX']
+	,	start = O[8]
+	,	end = src.length + O[0]
+	;
 	dst.fill(0);
 	for (let i = start; i < end; ++i) {
 		let Iy = 0, Ix = 0;
@@ -143,10 +251,7 @@ _image.sobel = (dst, src, O)=>{ // 3x3
 };
 
 _image.laplacian = (dst, src, O)=>{ // 3x3 8direction
-	const K = [ // Laplacian kernel
-		  1,  1, 1
-		, 1, -8, 1
-		, 1,  1, 1]
+	const K = _kernel3x3['laplacian']
 	,     start = O[8]
 	,     end = src.length + O[0]
 	;
@@ -161,10 +266,9 @@ _image.laplacian = (dst, src, O)=>{ // 3x3 8direction
 	}
 };
 
-_image.equalize = (luminance, histogram)=>{
-	const	Nl = luminance.length
+_image.equalize = (out, lbuf, histogram)=>{
+	const	Nl = lbuf.length
 	,	Nh = histogram.length
-	,	eq = _j.newObj(Uint8ClampedArray, Nl)
 	;
 
 	const	H = [];
@@ -172,7 +276,8 @@ _image.equalize = (luminance, histogram)=>{
 		sum += histogram[i];
 		H.push(sum);
 	}
-	let Hmin = -1;
+
+	let	Hmin = -1;
 	for (let i = 0; i < H.length; ++i) {
 		if (H[i] != 0) {
 			Hmin = H[i];
@@ -182,25 +287,15 @@ _image.equalize = (luminance, histogram)=>{
 
 	// clone if all elements are identical
 	if (Nl === Hmin) {
-		const t = histogram.reduce((a, c, i)=>(a + c * i), 0);
-		luminance.forEach((ele, i)=>(eq[i] = ele));
-		return [eq, [...histogram], t]
+		lbuf.forEach((ele, i)=>(out[i] = ele));
+		return
 	}
 
 	const	factor = (Nh - 1) / (Nl - Hmin)
 	,	LUT = H.map((Hi)=>(Math.round((Hi - Hmin) * factor)))
-	,	eHistogram = _j.newObj(Array, Nh);
 	;
-	let	tl = 0;
-	eHistogram.fill(0);
-	for (let i = 0; i < Nl; ++i) {
-		const l = LUT[luminance[i]];
-		eq[i] = l;
-		eHistogram[l] += 1;
-		tl += l;
-	}
-
-	return [eq, eHistogram, tl]
+	for (let i = 0; i < Nl; ++i)
+		out[i] = LUT[lbuf[i]];
 };
 
 });

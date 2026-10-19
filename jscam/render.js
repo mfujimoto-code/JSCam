@@ -18,7 +18,6 @@ const _image = function(frame) {
 	return im
 }
 
-const _u8clamp = new Uint8ClampedArray(1);
 const _buildImageFuncs = Object.assign(Object.create(null), {
 	'Raw(RGBA-packed)': function (frame) {
 		return frame.get('ImageData');

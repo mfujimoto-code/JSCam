@@ -87,37 +87,29 @@ Frame.prototype = {
 		this.set('buffer', ['rgba', data]);
 		return this.get('rgba')
 	}
-	, __getComponent: function (index, cTag) {
-		const num  = this.num()
-		,     data = this.get('rgba')
-		,     C = _j.newObj(Uint8ClampedArray, num)
-		,     hC = _j.newObj(Array, 256)
+	, __getComponent: function (index) {
+		const	num  = this.num()
+		,	C = _j.newObj(Uint8ClampedArray, num)
+		,	hC = _j.newObj(Array, 256)
+		,	lum = [[0]]
+		,	bTag = ['red', 'green', 'blue'][index]
+		,	cTag = ['r', 'g', 'b'][index]
 		;
-
-		let tl = 0;
-
-		hC.fill(0);
-		for (let i = 0, o = index; i < num; ++i, o += 4) {
-			const lum = data[o];
-			C[i] = lum;
-			hC[lum] += 1;
-			tl += lum;
-		}
-
-		this.set('buffer',    [cTag, C]);
-		this.set('histogram', [cTag, hC]);
-		this.set('luminance', [cTag, tl]);
-
-		return this.get(cTag)
+		_j.image.convert([cTag, C], ['rgba', this.get('rgba')]);
+		_j.image.stat([hC], lum, [C]);
+		this.set('buffer',    [bTag, C     ]);
+		this.set('histogram', [bTag, hC    ]);
+		this.set('luminance', [bTag, lum[0]]);
+		return this.get(bTag)
 	}
 	, _getRed: function () {
-		return this.__getComponent(0, 'red')
+		return this.__getComponent(0)
 	}
 	, _getGreen: function () {
-		return this.__getComponent(1, 'green')
+		return this.__getComponent(1)
 	}
 	, _getBlue: function () {
-		return this.__getComponent(2, 'blue')
+		return this.__getComponent(2)
 	}
 	, _getRgb: function () {
 		this.set('buffer', 
@@ -132,68 +124,51 @@ Frame.prototype = {
 		return this.get('rgb')
 	}
 	, _getEqualized: function () {
-		const e = _j.image.equalize(
-			this.get('gray')
-		,       this.histogram('gray')
+		const	eq = _j.newObj(Uint8ClampedArray, this.num())
+		,	hE = _j.newObj(Array, 256)
+		,	lE = [[0]]
+		;
+		_j.image.equalize(
+			eq
+		,	this.get('gray')
+		,	this.histogram('gray')
 		);
-		this.set('buffer',    ['equalized', e[0]]);
-		this.set('histogram', ['equalized', e[1]]);
-		this.set('luminance', ['equalized', e[2]]);
+		_j.image.stat([hE], lE, [eq]);
+		this.set('buffer',    ['equalized', eq   ]);
+		this.set('histogram', ['equalized', hE   ]);
+		this.set('luminance', ['equalized', lE[0]]);
+
 		return this.get('equalized')
 	}
 	, _getYUV: function () {
-		const	data = this.get('rgba')
-		,	num = this.num()
-		,	Y = _j.newObj(Uint8ClampedArray, num)
-		,	U = _j.newObj(Array, num)
-		,	V = _j.newObj(Array, num)
+		const	num = this.num()
+		,	yuv = [
+				_j.newObj(Uint8ClampedArray, num)
+			,	_j.newObj(Array, num)
+			,	_j.newObj(Array, num)
+			]
 		,	hY = _j.newObj(Array, 256)
+		,	lum = [[0]]
 		;
-		let tl = 0;
+		_j.image.convert(['yuv', yuv], ['rgba', this.get('rgba')]);
+		_j.image.stat([hY], lum, [yuv[0]]);
 
-		hY.fill(0);
-		for (let i = 0, o = 0; i < num; ++i, o += 4) {
-			const r = data[o+0];
-			const g = data[o+1];
-			const b = data[o+2];
-
-			// Y =  0.299R + 0.587G + 0.114B
-			// U = -0.169R - 0.331G + 0.500B
-			// V =  0.500R - 0.419G - 0.081B
-
-			Y[i] = r*0.299 + g*0.587 + b*0.114
-			U[i] =-r*0.169 - g*0.331 + b*0.500
-			V[i] = r*0.500 - g*0.419 - b*0.081;
-
-			hY[Y[i]] += 1;
-			tl += Y[i];
-		}
-		this.set('buffer',    ['yuv', [Y, U, V]]);
-		this.set('histogram', ['y',   hY]);
-		this.set('luminance', ['y',   tl]);
+		this.set('buffer',    ['yuv', yuv   ]);
+		this.set('histogram', ['y',   hY    ]);
+		this.set('luminance', ['y',   lum[0]]);
 		return this.get('yuv');
 	}
 	, _getGray: function () {
-		const data = this.get('rgba')
-		,     num = this.num()
-		,     gray = _j.newObj(Uint8ClampedArray, num)
-		,     hG = _j.newObj(Array, 256)
+		const	num = this.num()
+		,	gray = _j.newObj(Uint8ClampedArray, num)
+		,	hG = _j.newObj(Array, 256)
+		,	lum = [[0]]
 		;
-
-		let tl = 0;
-		hG.fill(0);
-		for (let i = 0, o = 0; i < num; ++i, o += 4) {
-			gray[i] = Math.round(
-				data[o+0] * 0.299
-			+	data[o+1] * 0.587
-			+	data[o+2] * 0.114
-			);
-			hG[gray[i]] += 1;
-			tl += gray[i];
-		}
-		this.set('buffer',    ['gray', gray]);
-		this.set('histogram', ['gray', hG]);
-		this.set('luminance', ['gray', tl]);
+		_j.image.convert(['gray', gray], ['rgba', this.get('rgba')]);
+		_j.image.stat([hG], lum, [gray]);
+		this.set('buffer',    ['gray', gray  ]);
+		this.set('histogram', ['gray', hG    ]);
+		this.set('luminance', ['gray', lum[0]]);
 		return this.get('gray');
 	}
 	, _getEdge: function (method) {
@@ -206,9 +181,6 @@ Frame.prototype = {
 		      ]
 		;
 
-		const hE = _j.newObj(Array, 256);
-		let tl = 0;
-		hE.fill(0);
 
 		if (method == 'sobel.rgb') {
 			const plane = this.get('rgb')
@@ -223,38 +195,34 @@ Frame.prototype = {
 			_j.image.sobel(eR, R, O);
 			_j.image.sobel(eG, G, O);
 			_j.image.sobel(eB, B, O);
-			for (let i = 0; i < num; ++i) {
+			for (let i = 0; i < num; ++i)
 				e[i] = Math.max(eR[i], eG[i], eB[i]);
-				hE[e[i]] += 1;
-				tl += e[i];
-			}
 		}
 		else if (method == 'laplacian') {
 			const raw = _j.newObj(Int16Array, e.length);
 			_j.image.laplacian(raw, this.get('gray'), O);
-			for (let i = 0; i < e.length; ++i) {
+			for (let i = 0; i < e.length; ++i) 
 				e[i] = Math.abs(raw[i]);
-				hE[e[i]] += 1;
-				tl += e[i];
-			}
 		}
 		else if (method == 'laplacian.signed') {
 			const raw = _j.newObj(Int16Array, e.length);
 			_j.image.laplacian(raw, this.get('gray'), O);
-			for (let i = 0; i < e.length; ++i) {
+			for (let i = 0; i < e.length; ++i) 
 				e[i] = raw[i] + 128;
-				hE[e[i]] += 1;
-				tl += e[i];
-			}
 		}
 		else if (method == 'sobel') {
 			_j.image.sobel(e, this.get('gray'), O);
 		}
 		else throw new Error('not supported ' + method)
 
-		this.set('buffer',    [method, e]);
-		this.set('histogram', [method, hE]);
-		this.set('luminance', [method, tl]);
+		const	hE = _j.newObj(Array, 256)
+		,	lum = [[0]]
+		;
+		_j.image.stat([hE], lum, [e]);
+
+		this.set('buffer',    [method, e     ]);
+		this.set('histogram', [method, hE    ]);
+		this.set('luminance', [method, lum[0]]);
 		return this.get(method);
 	}
 }

@@ -22,43 +22,55 @@ const delta = {
 			if (num > delta._delta.length) {
 				delta._delta = _j.newObj(Uint8ClampedArray, num);
 			}
-			const	g = frame.get('gray')
+			const	g = _j.newObj(Uint8ClampedArray, num)
 			,	out = delta._delta
 			,	n = Math.min(acc[0].length, g.length, out.length)
 			;
+			_j.image.convert(['y', g], ['rgba', frame.get('rgba')]);
 			delta._absPlane(out, g, acc[0], n);
 			return out
 		}
 
 		if (space === 'rgb') {
-			const cur = frame.get('rgb')
-			, out = [
-				  _j.newObj(Uint8ClampedArray, num)
-				, _j.newObj(Uint8ClampedArray, num)
-				, _j.newObj(Uint8ClampedArray, num)
-			]
-			, n = Math.min(acc[0].length, num)
+			const	cur = [
+					_j.newObj(Uint8ClampedArray, num)
+				,	_j.newObj(Uint8ClampedArray, num)
+				,	_j.newObj(Uint8ClampedArray, num)
+				]
+			,	out = [
+					_j.newObj(Uint8ClampedArray, num)
+				,	_j.newObj(Uint8ClampedArray, num)
+				,	_j.newObj(Uint8ClampedArray, num)
+				]
+			,	n = Math.min(acc[0].length, num)
 			;
 
+			_j.image.convert(['rgb', cur], ['rgba', frame.get('rgba')]);
 			for (let k = 0; k < 3; ++k)
 				delta._absPlane(out[k], cur[k], acc[k], n);
 			return out
 		}
 
-		const	yuv = frame.get('yuv')
+		const	yuv = [
+				_j.newObj(Uint8ClampedArray, num)
+			,	_j.newObj(Uint8ClampedArray, num)
+			,	_j.newObj(Uint8ClampedArray, num)
+			]
 		,	Y = yuv[0]
 		,	U = yuv[1]
 		,	V = yuv[2]
 		,	out = [
-				j.newObj(Uint8ClampedArray, num)
-			,	j.newObj(Uint8ClampedArray, num)
-			,	j.newObj(Uint8ClampedArray, num)
+				_j.newObj(Uint8ClampedArray, num)
+			,	_j.newObj(Uint8ClampedArray, num)
+			,	_j.newObj(Uint8ClampedArray, num)
 			]
 		,	n = Math.min(acc[0].length, num)
 		,	aY = acc[0]
 		,	aU = acc[1]
 		,	aV = acc[2]
 		;
+
+		_j.image.convert(['yuv', yuv], ['rgba', frame.get('rgba')]);
 
 		for (let i = 0; i < n; ++i) {
 			out[0][i] = Math.abs(Y[i] - aY[i]);
