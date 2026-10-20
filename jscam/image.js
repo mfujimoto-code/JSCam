@@ -177,32 +177,32 @@ _image.stat = (histogram, luminance, src)=>{
 	}
 };
 
+const	_otsuW = new Uint32Array(256)
+,	_otsuS = new Uint32Array(256)
+;
 _image.otsuThreshold = (histogram)=>{
-	let H = 0
-	;
-	const w = _j.newObj(Array, histogram.length)
-	,     s = _j.newObj(Array, histogram.length)
-	;
+	let H = 0;
 	for (let k = 0; k < histogram.length; ++k) H += histogram[k];
-	w[0] = histogram[0];
-	s[0] = 0;
+
+	_otsuW[0] = histogram[0];
+	_otsuS[0] = 0;
 	for (let k = 1; k < histogram.length; ++k) {
-		w[k] = w[k-1] + histogram[k];
-		s[k] = s[k-1] + k*histogram[k];
+		_otsuW[k] = _otsuW[k-1] + histogram[k];
+		_otsuS[k] = _otsuS[k-1] + k*histogram[k];
 	}
 
-	const S = s[s.length - 1]
+	const S = _otsuS[_otsuS.length - 1]
 	;
 	let maxK = 0
 	,   max = 0
 	;
 	for (let k = 1; k < histogram.length; ++k) {
-		const w1 = w[k]
-		,     w2 = H - w[k]
+		const w1 = _otsuW[k]
+		,     w2 = H - _otsuW[k]
 		;
 		if (w1 == 0 || w2 == 0) continue
-		const s1 = s[k]
-		,     s2 = S - s[k]
+		const s1 = _otsuS[k]
+		,     s2 = S - _otsuS[k]
 		,     m1 = s1 / w1
 		,     m2 = s2 / w2
 		,     r = w1*w2*(m1-m2)*(m1-m2)
@@ -266,21 +266,24 @@ _image.laplacian = (dst, src, O)=>{ // 3x3 8direction
 	}
 };
 
+const	_eqLUT = new Uint8ClampedArray(256)
+,	_eqSum = new Uint32Array(256)
+;
+
 _image.equalize = (out, lbuf, histogram)=>{
 	const	Nl = lbuf.length
 	,	Nh = histogram.length
 	;
 
-	const	H = [];
-	for (let i = 0, sum = 0; i < Nh; ++i) {
+	for (let i = 0, sum = 0; i < 256; ++i) {
 		sum += histogram[i];
-		H.push(sum);
+		_eqSum[i] = sum;
 	}
 
 	let	Hmin = -1;
-	for (let i = 0; i < H.length; ++i) {
-		if (H[i] != 0) {
-			Hmin = H[i];
+	for (let i = 0; i < 256; ++i) {
+		if (_eqSum[i] != 0) {
+			Hmin = _eqSum[i];
 			break
 		}
 	}
@@ -291,11 +294,11 @@ _image.equalize = (out, lbuf, histogram)=>{
 		return
 	}
 
-	const	factor = (Nh - 1) / (Nl - Hmin)
-	,	LUT = H.map((Hi)=>(Math.round((Hi - Hmin) * factor)))
-	;
+	const	factor = 255 / (Nl - Hmin);
+	for (let i = 0; i < 256; ++i) 
+		_eqLUT[i] = (_eqSum[i] - Hmin) * factor
 	for (let i = 0; i < Nl; ++i)
-		out[i] = LUT[lbuf[i]];
+		out[i] = _eqLUT[lbuf[i]];
 };
 
 });
