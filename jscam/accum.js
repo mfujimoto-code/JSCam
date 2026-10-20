@@ -200,4 +200,4 @@ Accum.prototype.planes = function (space) {
 	return [[], [], []];
 }
 
-});	// end jsCam.initFn.push((kparam)=>{..
+});
