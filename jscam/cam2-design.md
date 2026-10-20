@@ -5,8 +5,8 @@
 | 文書タイトル | JSCam live-camera bench 現行アーキテクチャ設計書 |
 | 対象 | `/app/jscam/` の分割グローバルスクリプト（`jscam-boot.js` が `cam2.js` / `monitor.js` / `image.js` … `camera.js` を順に載せる）および付随する HTML / CSS / Docker / nginx |
 | 著者 | JSCam maintainers |
-| 日付 | 2026-10-19 |
-| ステータス | Draft（PR 1–3, 5–8 実装済み。PR 4 延期。RGBaccum 再マージ：`Frame` `get`/`set` / `histogram()` / `luminance()`、`jsCam.newObj`、`image.convert` 双方向 + `stat`、`equalize` 書き込み、Accum `*-a` / `noStat`、`updateStat` 削除） |
+| 日付 | 2026-10-20 |
+| ステータス | Draft（PR 1–3, 5–8 実装済み。PR 4 延期。RGBaccum 再マージ：Accum 遅延は直前 vis の `rgba` 参照を 1 フレーム保持。mix は新規平面へ書いて差し替え） |
 | 種別 | 現行システムの記述（greenfield 再設計ではない） |
 
 ---
@@ -515,17 +515,17 @@ out[c][i]           = abs( current[space][c][i] - planes[space][c][i] )
 - `new Accum()`。グローバルシングルトン `accum` は無い。render の `_accum` がプレビュー用、`delta.accum` が残差用。`#afactor` は `render.set('afactor')` と `delta.accum.set('factor')`。
 - `update(frame, space, noStat)` が指定 space だけ進める。未知 space は `Accum.SPACES` で throw。第 3 引数真なら `histogram` / `luminance` を載せない。
 - `get`/`set('factor')`。既定 `Accum.FACTOR` 0.5。残差は factor でスケールしない。
-- vis ごとの EMA（旧 `accum.time` 100ms ゲートは削除）。遅延 RGBA 1 本をコピーしてから混ぜる。
+- vis ごとの EMA（旧 `accum.time` 100ms ゲートは削除）。mix は新規 float 平面へ書いて `_buf[space]` を差し替える（公開済み `*-a` を in-place で壊さない）。
 - `_ensure` が張り替えた vis は一時 `factor=1` で今フレームを載せる（ズームで `num` が変わっても黒フェードしない）。
-- 遅延入力は space ごとではなく **RGBA 1 本のコピー**（`get('rgba')` を `_delay.set`。エイリアス禁止）。遅延は直前 vis の RGBA。毎 vis 混ぜる。
-- コールドスタート: 遅延が空の成功 tick は混ぜず、今の RGBA を遅延へ。背景はゼロ埋め。遅延が既にある状態で未使用 space を初めて `update` すると、0 埋めの直後にその遅延から混ぜる。
+- 遅延入力は space ごとではなく **RGBA 1 本**。`_delay` は `frame.get('rgba')`（`ImageData.data`）の参照を 1 vis 保持する。コピーしない。毎 vis の mix は直前 vis の rgba を読む（今 vis の画素と他処理が共有するバッファを混ぜないため）。`getImageData` は vis ごとに新しい `ImageData` を返す。
+- コールドスタート: `_hasDelay` が偽の vis は EMA mix をスキップし、今の rgba を遅延へ載せる。`_ensure` が真ならその vis で `factor=1` の mix が先に走る（ゼロ埋めの黒フェードを避ける）。
 - `'gray'` と `'yuv'` の Y は同一視しない。mix は遅延 RGBA から BT.601 / RGB / YUV を float `Array` へ直接書く（`frame.get('gray'|'yuv')` は呼ばない）。
 - mix のあと（`noStat` でなければ）`image.stat`（共有 `_u8clamp` = `ToUint8Clamp`）でキーを載せる: gray → `'gray-a'`。rgb → `'red-a'` / `'green-a'` / `'blue-a'`。yuv → `'y-a'`。
-- `update` は常に `frame.set('buffer', [space + '-a', planes])`。表示は `get('gray-a'|'rgb-a'|'yuv-a')`。`planes(space)` は delta が内部で読む。
+- `_mix` は常に `frame.set('buffer', [space + '-a', planes])`。表示は `get('gray-a'|'rgb-a'|'yuv-a')`。`planes(space)` は delta が内部で読む。
 - `GRAY-accum` は `update(frame, 'gray')` のあと `get('gray-a')[0]` を `ImageData` へ（代入時 `ToUint8Clamp`）。`#field-afactor` 表示。
 - `RGB-accum` は `update(..., 'rgb')` のあと `get('rgb-a')` をパック。`#field-afactor` 表示。
 - `YUV-accum` は `update(..., 'yuv')` のあと `get('yuv-a')` を Y+1.402V 等で再構成。ヒストグラムは `'y-a'`（表示 RGB とは別）。`#field-afactor` 表示。
-- `update` は `frame.get('rgba')` の遅延コピーだけを混ぜる。`get(space)` は呼ばない。
+- `update` は遅延 `_delay` だけを混ぜる。`get(space)` は呼ばない。
 - `delta.get(frame, space)` は `delta.accum.update(frame, space, true)` のあと、今 vis の生平面と背景の絶対差。現フレームは `image.convert` で rgba から取る（`frame.get('gray'|'rgb'|'yuv')` は呼ばない。overlay に今 vis の gray/rgb/yuv キーを足さない）。省略 space は `'gray'`。
 - `'gray'` は U8 1 本（convert `'y'`）。`'rgb'` は U8 3 平面。`'yuv'` の現フレームは Y が U8、U/V が `Array`。残差出力は 3 本とも `Uint8ClampedArray`（`abs` を `ToUint8Clamp`）。
 - 互換エイリアス `delta.factor` / `delta.time` / `delta.aBuffer` / `delta.accum()` は削除。`delta.accum` は Accum インスタンス。
@@ -746,7 +746,9 @@ const a = new Accum();
 Accum.SPACES;                // ['gray','rgb','yuv']。_check が includes
 Accum.FACTOR;                // 0.5
 a.set('factor', v); a.get('factor');
-a.update(frame, space, noStat); // 省略 space は 'gray'。毎 vis 混ぜる。遅延 RGBA コピー
+a.update(frame, space, noStat); // 省略 space は 'gray'。毎 vis 混ぜる
+                                // 遅延は直前 vis の rgba 参照（1 フレーム）
+                                // mix は新規平面へ書いて差し替え
                                 // 常に set('buffer', [space + '-a', planes])
                                 // noStat 真なら *-a の histogram/luminance なし
 a.planes(space);             // float 平面。未 update は空。delta が内部で読む
@@ -882,7 +884,7 @@ Frame LRU は無い。1080p で派生配列が揃うと今フレーム数十 MiB
 
 ### 蓄積バッファ
 
-`accum` の平面は `update` された space だけ持つ。`frame.num()` がその space の長さと違う vis ではその space と遅延 RGBA を張り替え、`factor=1` で今フレームを載せる（ズーム切り出しやカメラ切替）。他 space は次の `update` まで旧長さのまま。モード切替では他 space を捨てない（凍結）。
+`accum` の平面は `update` された space だけ持つ。mix のたびに新規 `Array` へ書いて差し替える。`frame.num()` がその space の長さと違う vis ではその space を張り替え、`factor=1` で今フレームを載せる（ズーム切り出しやカメラ切替）。遅延 `_delay` は直前 vis の `rgba` 参照。他 space は次の `update` まで旧長さのまま。モード切替では他 space を捨てない（凍結）。
 
 ### ループ状態
 
@@ -948,7 +950,7 @@ PR 6 は既存のグローバル境界に沿った分割である。現行の読
 
 毎 vis `new Frame(imageData)`。過去 Frame は持たない。ループはローカル `newFrame` のみ。平面は `_get*` 初回の `new` をクロージャでメモ化する。vis 終了後は参照が切れれば GC。映像は閉じた `_snap` 5 枚が canvas として残る。
 
-遅延入力は `accum` が RGBA をコピー所有する（成功 tick、既定 10 Hz）。Frame の gray をエイリアスしない。
+遅延入力は `accum._delay` が直前 vis の `frame.get('rgba')` を 1 フレーム参照する。コピー所有しない。mix は新規平面へ書く。Frame の gray をエイリアスしない。
 
 `getXXX` が Frame に残すもの（1080p 目安）:
 
@@ -1152,8 +1154,8 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 11. **ヘッダーは専用行。Controls はヘッダー下の映像エリアに overlay。JS は `paddingRight` を書かない。CSS `cqw` の 4:3 ボックスはライブ後に `aspect-ratio:auto` で破棄。**  
     理由: トップバーと Close / Pause が重なると操作不能になる。chrome 非表示時はヘッダー行が潰れ映像が全画面。Controls 背景 50% 透過。`fitDisplaySize` は `#layers` から CSS padding だけ引く。
 
-12. **蓄積は `Accum` コンストラクタ。平面は `Array`。遅延は RGBA コピー。毎 vis 混ぜる。render の `_accum` と `delta.accum` は別インスタンス。**  
-    理由: プレビュー EMA と残差 EMA を独立にする。factor スライダは両方へ。`ImageData` には積まない。gray と Y は同一視しない。表示は `get('*-a')`。delta は `update(..., true)` で overlay に `*-a` を足さない。
+12. **蓄積は `Accum` コンストラクタ。平面は `Array`。遅延は直前 vis の `rgba` 参照を 1 フレーム保持。mix は新規平面へ書いて差し替える。毎 vis 混ぜる。render の `_accum` と `delta.accum` は別インスタンス。**  
+    理由: プレビュー EMA と残差 EMA を独立にする。factor スライダは両方へ。`ImageData` には積まない。今 vis の画素バッファを他処理と共有したまま混ぜない。公開済み `*-a` を in-place で壊さない。gray と Y は同一視しない。表示は `get('*-a')`。delta は `update(..., true)` で overlay に `*-a` を足さない。
 
 13. **`showHistogram` は overlay 専用。`dispatch.set('showHistogram')`。`Draw image` / `dispatch.showImage` は削除。**  
     理由: 負荷は rVFC 間引きと Frame interval。vis が走ればカーネルは走る。ヒストグラムを外すと映像は動き overlay だけ消える。
@@ -1220,7 +1222,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 ### エラーとコメント
 
 - throw は `new Error('…')`。メッセージは短い英語（`'not supported ' + id`）。
-- コメントは理由だけ。行列の読み方や処理の言い直しは書かない。`width` 代入で transform が消える、遅延 RGBA でエイリアスを避ける、など。
+- コメントは理由だけ。行列の読み方や処理の言い直しは書かない。`width` 代入で transform が消える、今 vis の画素を他処理と共有したまま混ぜない、など。
 - `return` / `throw` 直後のセミコロンは省略してよい。`const` 分解の終わりは `;`。
 
 ### DOM とイベント
@@ -1252,7 +1254,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 | R8 | `get('gray')` と `get('yuv')[0]` は別キー。丸めはどちらも convert の `ToUint8Clamp` | Low | ヒストグラムキーは `'gray'` と `'y'`。`GRAY` は `get('gray')` |
 | R9 | `print` の `innerHTML` 非エスケープ | Low | 入力は内部文字列。外部入力を足すなら textContent へ |
 | R10 | pause してもカメラ占有（トラック live） | Low | 意図的。明示 `Stop camera` と `pagehide` / `beforeunload` で解放済み |
-| R11 | EMA は毎 vis。遅延 1 フレームの RGBA。プレビュー Accum と delta Accum は独立 | Low | 張り替え vis は factor=1。スライダは両方へ |
+| R11 | EMA は毎 vis。遅延は直前 vis の `rgba` 参照。プレビュー Accum と delta Accum は独立 | Low | 張り替え vis は factor=1。mix は新規平面。スライダは両方へ |
 | R12 | CSS `.stage-layer` の 4:3 はカメラ前プレースホルダ。実カメラが 16:9 でも起動前は 4:3 | Low | 起動後 JS が上書き |
 | R13 | `fade` が timeout。バックグラウンドタブでパネルアニメが伸びる | Low | 機能影響なし。メインループの rAF とは別 |
 | R14 | `YUV` / `YUV-accum` の計算値が 0–255 外。ImageData 経由でクランプ | Low | 色ずれとして受容 |
