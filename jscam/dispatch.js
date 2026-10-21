@@ -330,17 +330,35 @@ const _pipeline = []
 }
 ;
 
+const	_timeQuantum = ()=>(_timeQuantum.over());
+	(()=>{
+		let	tq = 1000
+		,	last = performance.now()
+		,	elapsed = 0
+		;
+		_timeQuantum.update = ()=>{
+			const now = performance.now();
+			tq = 0.9*tq + 0.1*(now - last);
+			last = now;
+		};
+		_timeQuantum.over = ()=>{
+			elapsed = performance.now() - last
+			return elapsed > tq
+		};
+		_timeQuantum.tq = ()=>(tq >>> 0);
+		_timeQuantum.elapsed = ()=>(elapsed >>> 0);
+	})();
+
 dispatch.iDISP = (function * () {
 	let	context = {
 			suggestion: _ID_OK_MOVE_ON
 		}
-	,	yTime = performance.now()
 	;
 
 	_buildPipeline();
 	while (true) {
 		yield context.suggestion;
-		yTime = performance.now();
+		_timeQuantum.update();
 
 		context = {
 			suggestion: _ID_OK_MOVE_ON
@@ -355,11 +373,13 @@ dispatch.iDISP = (function * () {
 			fn(context, fn);
 			++context.pipeDepth;
 
-			const now = performance.now();
-			if (now - yTime > _TIME_QUANTUM) {
-				_j.log(`split ${context.pipeDepth} ${now - yTime}`);
+			if (_timeQuantum() && _pipeline[0] !== _endMark) {
+				const	elapsed = _timeQuantum.elapsed()
+				,	tq = _timeQuantum.tq()
+				;
+				_j.log(`split ${context.pipeDepth} ${tq} ${elapsed}`);
 				yield context.suggestion
-				yTime = performance.now();
+				_timeQuantum.update();
 			}
 		}
 	}
