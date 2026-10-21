@@ -182,11 +182,11 @@ Frame.prototype = {
 	, _getEdge: function (method) {
 		const e = _j.newObj(Uint8ClampedArray, this.num())
 		,     w = this.size()[0]
-		,     O = [
+		,     O = new Int32Array([
 			-w-1, -w, -w+1,
 			  -1,  0,    1,
 			 w-1,  w,  w+1
-		      ]
+		      ])
 		;
 
 

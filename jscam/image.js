@@ -215,21 +215,21 @@ _image.otsuThreshold = (histogram)=>{
 };
 
 const _kernel3x3 = {
-	'sobelX': [ // Sobel horizontal kernel
+	'sobelX': new Float32Array([ // Sobel horizontal kernel
 		-1, 0, 1
 	,	-2, 0, 2
 	,	-1, 0, 1
-	]
-,	'sobelY': [ // Sobel vertical kernel
+	])
+,	'sobelY': new Float32Array([ // Sobel vertical kernel
 		-1, -2, -1
 	,	 0,  0,  0
 	,	 1,  2,  1
-	]
-,	'laplacian': [ // Laplacian kernel
+	])
+,	'laplacian': new Float32Array([ // Laplacian kernel
 		 1,  1, 1
 	,	 1, -8, 1
 	,	 1,  1, 1
-	]
+	])
 };
 
 _image.sobel = (dst, src, O)=>{ // 3x3
