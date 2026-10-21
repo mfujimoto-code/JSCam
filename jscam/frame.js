@@ -98,7 +98,7 @@ Frame.prototype = {
 	, __getComponent: function (index) {
 		const	num  = this.num()
 		,	C = _j.newObj(Uint8ClampedArray, num)
-		,	hC = _j.newObj(Array, 256)
+		,	hC = _j.newObj(Uint32Array, 256)
 		,	lum = [[0]]
 		,	bTag = ['red', 'green', 'blue'][index]
 		,	cTag = ['r', 'g', 'b'][index]
@@ -133,7 +133,7 @@ Frame.prototype = {
 	}
 	, _getEqualized: function () {
 		const	eq = _j.newObj(Uint8ClampedArray, this.num())
-		,	hE = _j.newObj(Array, 256)
+		,	hE = _j.newObj(Uint32Array, 256)
 		,	lE = [[0]]
 		;
 		_j.image.equalize(
@@ -152,10 +152,10 @@ Frame.prototype = {
 		const	num = this.num()
 		,	yuv = [
 				_j.newObj(Uint8ClampedArray, num)
-			,	_j.newObj(Array, num)
-			,	_j.newObj(Array, num)
+			,	_j.newObj(Float32Array, num)
+			,	_j.newObj(Float32Array, num)
 			]
-		,	hY = _j.newObj(Array, 256)
+		,	hY = _j.newObj(Uint32Array, 256)
 		,	lum = [[0]]
 		;
 		_j.image.convert(['yuv', yuv], ['rgba', this.get('rgba')]);
@@ -169,7 +169,7 @@ Frame.prototype = {
 	, _getGray: function () {
 		const	num = this.num()
 		,	gray = _j.newObj(Uint8ClampedArray, num)
-		,	hG = _j.newObj(Array, 256)
+		,	hG = _j.newObj(Uint32Array, 256)
 		,	lum = [[0]]
 		;
 		_j.image.convert(['gray', gray], ['rgba', this.get('rgba')]);
@@ -182,11 +182,11 @@ Frame.prototype = {
 	, _getEdge: function (method) {
 		const e = _j.newObj(Uint8ClampedArray, this.num())
 		,     w = this.size()[0]
-		,     O = [
+		,     O = new Int32Array([
 			-w-1, -w, -w+1,
 			  -1,  0,    1,
 			 w-1,  w,  w+1
-		      ]
+		      ])
 		;
 
 
@@ -223,7 +223,7 @@ Frame.prototype = {
 		}
 		else throw new Error('not supported ' + method)
 
-		const	hE = _j.newObj(Array, 256)
+		const	hE = _j.newObj(Uint32Array, 256)
 		,	lum = [[0]]
 		;
 		_j.image.stat([hE], lum, [e]);

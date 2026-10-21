@@ -267,8 +267,8 @@ const _buildImageFuncs = Object.assign(Object.create(null), {
 		const num  = frame.num()
 		,     imageData = _image(frame)
 		,     data = imageData.data
-		,     e = frame.get('sobel.rgb')
-		,     t = _j.image.otsuThreshold(frame.histogram('sobel.rgb'))
+		,     e = frame.get('sobel')
+		,     t = _j.image.otsuThreshold(frame.histogram('sobel'))
 		;
 		for (let i = 0, o = 0; i < num; ++i, o += 4) {
 			data[o+0] =

@@ -53,8 +53,8 @@ const delta = {
 
 		const	yuv = [
 				_j.newObj(Uint8ClampedArray, num)
-			,	_j.newObj(Array, num)
-			,	_j.newObj(Array, num)
+			,	_j.newObj(Float32Array, num)
+			,	_j.newObj(Float32Array, num)
 			]
 		,	Y = yuv[0]
 		,	U = yuv[1]

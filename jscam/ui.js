@@ -291,9 +291,6 @@ jsCam.initFn.push((kparam)=>{
 		_j.render.set('afactor', f);
 		_j.delta.accum.set('factor', f);
 	});
-	setupRange('pause', 'pause@frame', (v)=>(
-		_j.dispatch.set('duration', Number(v))
-	));
 
 	const appVersion = _j.e('app-version');
 	if (appVersion) appVersion.textContent = _j.version;

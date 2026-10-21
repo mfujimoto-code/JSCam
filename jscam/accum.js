@@ -23,9 +23,7 @@ const _check = (space) => {
 		throw new Error('not supported ' + space)
 };
 const _plane = (num) => {
-	const a = _j.newObj(Array, num);
-	a.fill(0);
-	return a
+	return _j.newObj(Float32Array, num)
 }
 
 Accum.prototype.set = function (tag, value) {
@@ -68,9 +66,8 @@ const _mixGray = function (frame, space, noStat) {
 
 	if (noStat) return
 
-	const	gH = _j.newObj(Array, 256);
+	const	gH = _j.newObj(Uint32Array, 256);
 	let	tl = [[0]];
-	gH.fill(0);
 	_j.image.stat([gH], tl, [dst]);
 	frame.set('histogram', ['gray-a', gH   ]);
 	frame.set('luminance', ['gray-a', tl[0]]);
@@ -98,14 +95,11 @@ const _mixRgb = function (frame, space, noStat) {
 
 	if (noStat) return
 
-	const	rH = _j.newObj(Array, 256)
-	,	gH = _j.newObj(Array, 256)
-	,	bH = _j.newObj(Array, 256)
+	const	rH = _j.newObj(Uint32Array, 256)
+	,	gH = _j.newObj(Uint32Array, 256)
+	,	bH = _j.newObj(Uint32Array, 256)
 	,	tl = [[0], [0], [0]]
 	;
-	rH.fill(0);
-	gH.fill(0);
-	bH.fill(0);
 	_j.image.stat([rH, gH, bH], tl, [dstR, dstG, dstB]);
 	frame.set('histogram', ['red-a',   rH]);
 	frame.set('histogram', ['green-a', gH]);
@@ -141,10 +135,9 @@ const _mixYuv = function (frame, space, noStat) {
 
 	if (noStat) return
 
-	const	yH = _j.newObj(Array, 256)
+	const	yH = _j.newObj(Uint32Array, 256)
 	,	tl = [[0]]
 	;
-	yH.fill(0);
 	_j.image.stat([yH], tl, [dstY]);
 	frame.set('histogram', ['y-a', yH   ]);
 	frame.set('luminance', ['y-a', tl[0]]);
