@@ -24,7 +24,6 @@ const	_ID_OK_MOVE_ON = 0
 ;
 
 let	_showHistogram    = true
-,	_duration         = 0
 ,	_lastSuggestion   = 0
 ,	_lastProcessedEnd = 0
 ,	_paused           = false
@@ -32,12 +31,10 @@ let	_showHistogram    = true
 
 const _getter = {
 	'showHistogram': ()=>(_showHistogram)
-,	'duration':      ()=>(_duration)
 ,	'pause':         ()=>(_paused)
 };
 const _setter = {
 	'showHistogram': (v)=>(_showHistogram = v)
-,	'duration':      (v)=>(_duration      = v)
 ,	'pause':         (v)=>(_paused        = v)
 };
 dispatch.get = (tag)=>{
@@ -57,8 +54,7 @@ dispatch.set = (tag, value)=>{
 dispatch._doit = ()=>{
 	const now = performance.now();
 
-	const minWait = Math.max(_duration, _lastSuggestion);
-	if (now - _lastProcessedEnd < minWait) {
+	if (now - _lastProcessedEnd < _lastSuggestion) {
 		dispatch.kick();
 		return
 	}
@@ -374,7 +370,7 @@ dispatch.iDISP = (function * () {
 			fn(context, fn);
 
 			if (_timeQuantum() && _pipeline[0] !== _endMark) {
-				yield context.suggestion
+				yield _ID_OK_MOVE_ON
 				_timeQuantum.update();
 			}
 		}
