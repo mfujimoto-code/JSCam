@@ -345,9 +345,11 @@ const	_timeQuantum = ()=>(_timeQuantum.over());
 			elapsed = performance.now() - last
 			return elapsed > tq
 		};
-		_timeQuantum.tq = ()=>(tq >>> 0);
-		_timeQuantum.elapsed = ()=>(elapsed >>> 0);
+		_timeQuantum.tq = ()=>(tq);
+		_timeQuantum.elapsed = ()=>(elapsed);
 	})();
+
+dispatch.timeQuantum = _timeQuantum;
 
 dispatch.iDISP = (function * () {
 	let	context = {
@@ -362,7 +364,6 @@ dispatch.iDISP = (function * () {
 
 		context = {
 			suggestion: _ID_OK_MOVE_ON
-		,	pipeDepth: 0
 		};
 
 		_pipeline.push(_endMark);
@@ -371,13 +372,8 @@ dispatch.iDISP = (function * () {
 			if (fn === _endMark)
 				break
 			fn(context, fn);
-			++context.pipeDepth;
 
 			if (_timeQuantum() && _pipeline[0] !== _endMark) {
-				const	elapsed = _timeQuantum.elapsed()
-				,	tq = _timeQuantum.tq()
-				;
-				_j.log(`split ${context.pipeDepth} ${tq} ${elapsed}`);
 				yield context.suggestion
 				_timeQuantum.update();
 			}
@@ -436,7 +432,6 @@ dispatch.watcher = {video:{}, fps:{}};
 		,	opv = _stat.viewed > 0 ? oc / _stat.viewed : oc
 		;
 
-
 		_emaStat.rAF     = _ema(_emaStat.rAF,     _stat.rAF     * factor);
 		_emaStat.rVFC    = _ema(_emaStat.rVFC,    _stat.rVFC    * factor);
 		_emaStat.viewed  = _ema(_emaStat.viewed,  _stat.viewed  * factor);
@@ -454,17 +449,17 @@ dispatch.watcher = {video:{}, fps:{}};
 	};
 
 	const _showText = ()=>{
+		const	viewRatio = ((_emaStat.rAF > 0)
+			?	(_emaStat.viewed / _emaStat.rAF * 100)
+			:	0)
+		;
 		_caption.textContent =
-			'out:'
-		+	(Math.round(_emaStat.rAF * 1000))
-		+	' in:'
-		+	(Math.round(_emaStat.rVFC * 1000))
-		+	' view:'
-		+	((_emaStat.rAF > 0) ? Math.round(_emaStat.viewed / _emaStat.rAF * 100): 0)
-		+	'% run:'
-		+	(Math.round(_emaStat.running * 100))
-		+	'% obj:'
-		+	Math.round(_emaStat.obj)
+			'out/slice:' +((_emaStat.rAF * 1000).toFixed(1))
+		+	'/' + (dispatch.timeQuantum.tq().toFixed(1))
+		+	' in:' + ((_emaStat.rVFC * 1000).toFixed(1))
+		+	' view:' + viewRatio.toFixed(0)
+		+	'% run:' + ((_emaStat.running * 100).toFixed(0))
+		+	'% obj:' + (_emaStat.obj.toFixed(0))
 		;
 	};
 
