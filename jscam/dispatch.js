@@ -20,7 +20,7 @@ const	_stage = _j.e(kparam.topLayer)
 
 const	_ID_OK_MOVE_ON = 0
 ,	_ID_YOU_ARE_NOT_READY = 100
-,	_TIME_QUANTUM = 20
+,	_TIME_QUANTUM = 1000
 ;
 
 let	_showHistogram    = true
@@ -332,7 +332,7 @@ const _pipeline = []
 
 const	_timeQuantum = ()=>(_timeQuantum.over());
 	(()=>{
-		let	tq = 1000
+		let	tq = _TIME_QUANTUM
 		,	last = performance.now()
 		,	elapsed = 0
 		;
