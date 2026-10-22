@@ -440,13 +440,13 @@ const _buildImageFuncs = Object.assign(Object.create(null), {
 });
 
 let _buildFunc = null;
-let _deffered = null;
+let _deferred = null;
 
 render.setupMode = ()=>{
-	if (_deffered === null)
+	if (_deferred === null)
 		return
-	_buildFunc = _deffered;
-	_deffered = null;
+	_buildFunc = _deferred;
+	_deferred = null;
 }
 
 render.imageMode = (param)=>{
@@ -460,7 +460,7 @@ render.imageMode = (param)=>{
 		_buildFunc = _buildImageFuncs[param];
 		return
 	}
-	_deffered = _buildImageFuncs[param];
+	_deferred = _buildImageFuncs[param];
 	_j.dispatch.set('schedule');
 }
 

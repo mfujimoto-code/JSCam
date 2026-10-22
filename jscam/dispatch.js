@@ -527,7 +527,7 @@ dispatch.watcher = {video:{}, fps:{}};
 		, _WATCH
 		);
 	};
-})();	// end fsp watcher
+})();	// end fps watcher
 
 dispatch.kick();
 dispatch.watcher.video.kick();

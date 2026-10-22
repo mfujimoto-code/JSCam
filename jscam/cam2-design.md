@@ -230,8 +230,8 @@ flowchart TB
 | `jsCam.image` | `image.js` | オブジェクト | `convert([dstFmt,dst],[srcFmt,src])` / `stat(hist[], lum[], src[])` / `otsuThreshold(histogram)` / `sobel(dst,src,O)` / `laplacian(dst,src,O)` / `equalize(out,lbuf,histogram)`。convert は `rgba` ↔ `yuv`/`rgb`/`y`/`luminance`/`gray`、および `r`/`g`/`b` ← `rgba`。未知は throw。 |
 | `jsCam.Frame` | `frame.js` | コンストラクタ | 今 vis の画素派生。`get` / `set` / `histogram()` / `luminance()`。第 2 引数 timestamp（省略時 `performance.now()`）。LRU / `id` / `map` / `updateStat` は無い。カーネルは `jsCam.image`。 |
 | `jsCam.Accum` | `accum.js` | コンストラクタ | space（`gray` / `rgb` / `yuv`）ごとの指数平滑。`update(frame, space, noStat)`。`get`/`set('factor')`。 |
-| `render.imageMode` | `render.js` | 関数 | 引数なしでキー配列。文字列は `_deffered` に載せ `dispatch.set('schedule')`。dispatch 未評価（init）だけ即差し替え。 |
-| `render.setupMode` | `render.js` | 関数 | `_pReset` 末が呼ぶ。`_deffered` を `_buildFunc` へ。 |
+| `render.imageMode` | `render.js` | 関数 | 引数なしでキー配列。文字列は `_deferred` に載せ `dispatch.set('schedule')`。dispatch 未評価（init）だけ即差し替え。 |
+| `render.setupMode` | `render.js` | 関数 | `_pReset` 末が呼ぶ。`_deferred` を `_buildFunc` へ。 |
 | `jsCam.delta` | `delta.js` | オブジェクト | `delta.accum`（別 Accum）に対する残差。 |
 | `jsCam.Surface` | `surface.js` | コンストラクタ | 2d canvas。`fit` / `show` / `extract` / `inject` / `gFlip` / ヒストグラム描画。 |
 | `render.set` | `render.js` | 関数 | `'afactor'` を閉じた `_accum` へ。`render.accum` は公開しない。 |
@@ -737,8 +737,8 @@ s.gBeginHistogram(num) / gDrawHistogram(bins256) / gEndHistogram
 
 ```javascript
 render.imageMode();          // キー配列（挿入順）
-render.imageMode(name);      // dispatch 前は即差し替え。以降は _deffered + set('schedule')
-render.setupMode();          // _pReset 末。_deffered を _buildFunc へ
+render.imageMode(name);      // dispatch 前は即差し替え。以降は _deferred + set('schedule')
+render.setupMode();          // _pReset 末。_deferred を _buildFunc へ
 render.buildImage(rstate);   // 1 サブ段。rstate.stage を進める。image が付いたら完了
 render.set('afactor', v);    // 閉じた _accum.set('factor')
 ```
@@ -1190,7 +1190,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
     理由: `get('red'|'green'|'blue')` がチャネルを抜き、`get('rgb')` は 3 本の配列。旧 `'RGB-frame'` は `'Raw(RGBA-packed)'`。再パック表示は `'RGB-planar'`。単チャネル表示は `'Red'` / `'Green'` / `'Blue'`。先頭が packed なので起動時は素通し（受け入れ済み）。
 
 22. **モードと蓄積はクロージャ。FPS 監視は vis と独立。**  
-    理由: `render.imageMode` は dispatch 後 `_deffered` + `set('schedule')`。`setupMode` が vis 末で適用。`render.set('afactor')`。`dispatch.get`/`set`（pause / showHistogram / schedule）。映像リングは `_snap`。HUD は 500ms `setTimeout`。ヒストグラムはキーごとにバーと CDF を同色。先頭 3 色は R/G/B。
+    理由: `render.imageMode` は dispatch 後 `_deferred` + `set('schedule')`。`setupMode` が vis 末で適用。`render.set('afactor')`。`dispatch.get`/`set`（pause / showHistogram / schedule）。映像リングは `_snap`。HUD は 500ms `setTimeout`。ヒストグラムはキーごとにバーと CDF を同色。先頭 3 色は R/G/B。
 
 ---
 
