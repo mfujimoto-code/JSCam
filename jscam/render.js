@@ -7,8 +7,6 @@ const render = Object.create(null);
 
 _j.render = render;
 
-const _L4 = [0, 255/3, 255/3*2, 255];
-
 const _accum = new _j.Accum();
 
 const _image = function(frame) {
@@ -19,269 +17,437 @@ const _image = function(frame) {
 }
 
 const _buildImageFuncs = Object.assign(Object.create(null), {
-	'Raw(RGBA-packed)': function (frame) {
-		return frame.get('ImageData');
+	'Raw(RGBA-packed)': (state)=>{
+		// SPECIAL - no stage to split
+		state.image = state.frame.get('ImageData');
+		return state
 	}
-,	'RGB-planar': function (frame) {
-		const	rgb = frame.get('rgb')
-		,	imageData = _image(frame)
-		;
-		_j.image.convert(['rgba', imageData.data], ['rgb', rgb]);
-		return imageData
-	}
-,	'Red': function (frame) {
-		const	plane = frame.get('red')
-		,	imageData = _image(frame)
-		;
-		_j.image.convert(['rgba', imageData.data], ['luminance', plane]);
-		return imageData
-	}
-,	'Green': function (frame) {
-		const	plane = frame.get('green')
-		,	imageData = _image(frame)
-		;
-		_j.image.convert(['rgba', imageData.data], ['luminance', plane]);
-		return imageData
-	}
-,	'Blue': function (frame) {
-		const	plane = frame.get('blue')
-		,	imageData = _image(frame)
-		;
-		_j.image.convert(['rgba', imageData.data], ['luminance', plane]);
-		return imageData
-	}
-,	'GRAY': function (frame) {
-		const	gray = frame.get('gray')
-		,	imageData = _image(frame)
-		;
-		_j.image.convert(['rgba', imageData.data], ['luminance', gray]);
-		return imageData;
-	}
-,	'GRAY-Histogram equalization': function (frame) {
-		const e = frame.get('equalized')
-		,     imageData = _image(frame)
-		;
-		_j.image.convert(['rgba', imageData.data], ['luminance', e]);
-		return imageData;
-	}
-,	'YUV': function (frame) {
-		const yuv = frame.get('yuv')
-		,     imageData = _image(frame)
-		;
-		_j.image.convert(['rgba', imageData.data], ['yuv', yuv]);
-		return imageData
-	}
-,	'GRAY-accum': function (frame) {
-		_accum.update(frame, 'gray');
-		const gray = frame.get('gray-a')[0]
-		,     num  = frame.num()
-		,     imageData = _image(frame)
-		,     data = imageData.data
-		;
-
-		for (let i = 0, o = 0; i < num; ++i, o += 4) {
-			const lum = gray[i];
-			data[o  ] =
-			data[o+1] =
-			data[o+2] = lum;
-			data[o+3] = 255;
+,	'RGB-planar': (()=>{
+		const _stage = [
+			(state)=>{
+				state.rgb = state.frame.get('rgb')
+			}
+		,	(state)=>{
+				const	imageData = _image(state.frame);
+				_j.image.convert(
+					['rgba', imageData.data]
+				,	['rgb', state.rgb]
+				);
+				state.image = imageData
+			}
+		];
+		return (state)=>{
+			_stage[state.stage++](state);
+			return state
 		}
+	})()
+,	'Red': (()=>{
+		const _stage = [
+			(state)=>{
+				state.plane = state.frame.get('red')
+			}
+		,	(state)=>{
+				const imageData = _image(state.frame);
 
-		return imageData
-	}
-,	'RGB-accum': function (frame) {
-		_accum.update(frame, 'rgb');
-		const rgb = frame.get('rgb-a')
-		,     num  = frame.num()
-		,     imageData = _image(frame)
-		,     data = imageData.data
-		;
+				_j.image.convert(
+					['rgba', imageData.data]
+				,	['luminance', state.plane]
+				);
 
-		for (let i = 0, o = 0; i < num; ++i, o += 4) {
-			const r = rgb[0][i];
-			const g = rgb[1][i];
-			const b = rgb[2][i];
-			data[o  ] = r;
-			data[o+1] = g;
-			data[o+2] = b;
-			data[o+3] = 255;
+				state.image = imageData;
+			}
+		];
+		return (state)=>{
+			_stage[state.stage++](state);
+			return state
 		}
+	})()
+,	'Green': (()=>{
+		const _stage = [
+			(state)=>{
+				state.plane = state.frame.get('green')
+			}
+		,	(state)=>{
+				const imageData = _image(state.frame);
 
-		return imageData
-	}
-,	'YUV-accum': function (frame) {
-		_accum.update(frame, 'yuv');
-		const	yuv = frame.get('yuv-a')
-		,	Y = yuv[0]
-		,	U = yuv[1]
-		,	V = yuv[2]
-		,	num  = frame.num()
-		,	imageData = _image(frame)
-		,	data = imageData.data
-		;
+				_j.image.convert(
+					['rgba', imageData.data]
+				,	['luminance', state.plane]
+				);
 
-		for (let i = 0, o = 0; i < num; ++i, o += 4) {
-			const	y = Y[i], u = U[i], v = V[i];
-			data[o  ] = y           + 1.402*v;
-			data[o+1] = y - 0.344*u - 0.714*v;
-			data[o+2] = y + 1.772*u;
-			data[o+3] = 255;
+				state.image = imageData;
+			}
+		];
+		return (state)=>{
+			_stage[state.stage++](state);
+			return state
 		}
+	})()
+,	'Blue': (()=>{
+		const _stage = [
+			(state)=>{
+				state.plane = state.frame.get('blue')
+			}
+		,	(state)=>{
+				const imageData = _image(state.frame);
 
-		return imageData
-	}
-,	'BW-delta': function (frame) {
-		const d = _j.delta.get(frame)
-		,     num  = frame.num()
-		,     imageData = _image(frame)
-		,     data = imageData.data;
+				_j.image.convert(
+					['rgba', imageData.data]
+				,	['luminance', state.plane]
+				);
 
-		for (let i = 0, o = 0; i < num; ++i, o += 4) {
-			const bw = (d[i] == 0) ? 0 : 255;
-			data[o  ] =
-			data[o+1] =
-			data[o+2] = bw;
-			data[o+3] = 255;
+				state.image = imageData;
+			}
+		];
+		return (state)=>{
+			_stage[state.stage++](state);
+			return state
 		}
+	})()
+,	'GRAY': (()=>{
+		const _stage = [
+			(state)=>{
+				state.plane = state.frame.get('gray')
+			}
+		,	(state)=>{
+				const imageData = _image(state.frame);
 
-		return imageData
-	}
-,	'Gray-delta': function (frame) {
-		const d = _j.delta.get(frame)
-		,     num  = frame.num()
-		,     imageData = _image(frame)
-		,     data = imageData.data
-		;
+				_j.image.convert(
+					['rgba', imageData.data]
+				,	['luminance', state.plane]
+				);
 
-		for (let i = 0, o = 0; i < num; ++i, o += 4) {
-			data[o  ] =
-			data[o+1] =
-			data[o+2] = Math.abs(d[i]);
-			data[o+3] = 255;
+				state.image = imageData;
+			}
+		];
+		return (state)=>{
+			_stage[state.stage++](state);
+			return state
 		}
-
-		return imageData
-	}
-,	'8colors': function (frame) {
-		const num  = frame.num()
-		,     imageData = _image(frame)
-		,     data = imageData.data
-		,     RGB = frame.get('rgb')
-		,     R = RGB[0]
-		,     G = RGB[1]
-		,     B = RGB[2]
-		,     tR = _j.image.otsuThreshold(frame.histogram('red'))
-		,     tG = _j.image.otsuThreshold(frame.histogram('green'))
-		,     tB = _j.image.otsuThreshold(frame.histogram('blue'))
-		;
-		for (let i = 0, o = 0; i < num; ++i, o += 4) {
-			data[o+0] = R[i] > tR ? 255 : 0;
-			data[o+1] = G[i] > tG ? 255 : 0;
-			data[o+2] = B[i] > tB ? 255 : 0;
-			data[o+3] = 255;
+	})()
+,	'GRAY-Histogram equalization': (()=>{
+		const _stage = [
+			(state)=>{
+				state.e = state.frame.get('equalized')
+			}
+		,	(state)=>{
+				const imageData = _image(state.frame);
+				_j.image.convert(
+					['rgba', imageData.data]
+				,	['luminance', state.e]
+				);
+				state.image = imageData;
+			}
+		];
+		return (state)=>{
+			_stage[state.stage++](state);
+			return state
 		}
-
-		return imageData
-	}
-,	'Edge(Laplacian)': function (frame) {
-		const e = frame.get('laplacian')
-		,     num  = frame.num()
-		,     imageData = _image(frame)
-		,     data = imageData.data
-		;
-		for (let i = 0, o = 0; i < num; ++i, o += 4) {
-			const C = e[i];
-			data[o  ] = C;
-			data[o+1] = C;
-			data[o+2] = C;
-			data[o+3] = 255;
+	})()
+,	'YUV': (()=>{
+		const _stage = [
+			(state)=>{
+				state.yuv = state.frame.get('yuv')
+			}
+		,	(state)=>{
+				const imageData = _image(state.frame);
+				_j.image.convert(
+					['rgba', imageData.data]
+				,	['yuv', state.yuv]
+				);
+				state.image = imageData;
+			}
+		];
+		return (state)=>{
+			_stage[state.stage++](state);
+			return state
 		}
+	})()
+,	'GRAY-accum': (()=>{
+		const _stage = [
+			(state)=>{
+				_accum.update(state.frame, 'gray');
+			}
+		,	(state)=>{
+				const imageData = _image(state.frame);
 
-		return imageData
-	}
-,	'Edge(Laplacian signed)': function (frame) {
-		const e = frame.get('laplacian.signed')
-		,     num  = frame.num()
-		,     imageData = _image(frame)
-		,     data = imageData.data
-		;
-		for (let i = 0, o = 0; i < num; ++i, o += 4) {
-			const C = e[i];
-			data[o  ] = C;
-			data[o+1] = C;
-			data[o+2] = C;
-			data[o+3] = 255;
+				_j.image.convert(
+					['rgba', imageData.data]
+				,	['gray', state.frame.get('gray-a')[0]]
+				);
+
+				state.image = imageData;
+			}
+		];
+		return (state)=>{
+			_stage[state.stage++](state);
+			return state
 		}
+	})()
+,	'RGB-accum': (()=>{
+		const _stage = [
+			(state)=>{
+				_accum.update(state.frame, 'rgb');
+			}
+		,	(state)=>{
+				const imageData = _image(state.frame);
 
-		return imageData
-	}
-,	'Edge(Sobel)': function (frame) {
-		const e = frame.get('sobel')
-		,     num  = frame.num()
-		,     imageData = _image(frame)
-		,     data = imageData.data
-		;
-		for (let i = 0, o = 0; i < num; ++i, o += 4) {
-			const C = e[i];
-			data[o  ] = C;
-			data[o+1] = C;
-			data[o+2] = C;
-			data[o+3] = 255;
+				_j.image.convert(
+					['rgba', imageData.data]
+				,	['rgb', state.frame.get('rgb-a')]
+				);
+
+				state.image = imageData;
+			}
+		];
+		return (state)=>{
+			_stage[state.stage++](state);
+			return state
 		}
+	})()
+,	'YUV-accum': (()=>{
+		const _stage = [
+			(state)=>{
+				_accum.update(state.frame, 'yuv');
+			}
+		,	(state)=>{
+				const imageData = _image(state.frame);
 
-		return imageData
-	}
-,	'Edge4(Sobel)': function (frame) {
-		const e = frame.get('sobel')
-		,     num  = frame.num()
-		,     imageData = _image(frame)
-		,     data = imageData.data
-		;
-		for (let i = 0, o = 0; i < num; ++i, o += 4) {
-			const C = _L4[Math.floor(e[i] / 64)];
-			data[o  ] = 
-			data[o+1] = 
-			data[o+2] = C;
-			data[o+3] = 255;
+				_j.image.convert(
+					['rgba', imageData.data]
+				,	['yuv', state.frame.get('yuv-a')]
+				);
+
+				state.image = imageData;
+			}
+		];
+		return (state)=>{
+			_stage[state.stage++](state);
+			return state
 		}
+	})()
+,	'BW-delta': (()=>{
+		const _stage = [
+			(state)=>{
+				state.delta = _j.delta.get(state.frame)
+			}
+		,	(state)=>{
+				const imageData = _image(state.frame);
 
-		return imageData
-	}
-,	'Edge2(Sobel)': function (frame) {
-		const e = frame.get('sobel')
-		,     num  = frame.num()
-		,     imageData = _image(frame)
-		,     data = imageData.data
-		;
-		for (let i = 0, o = 0; i < num; ++i, o += 4) {
-			const C = e[i] > 127 ? 255 : 0;
-			data[o  ] = 
-			data[o+1] = 
-			data[o+2] = C;
-			data[o+3] = 255;
+				const	num  = state.frame.num()
+				,	data = imageData.data
+				,	d = state.delta
+				;
+
+				for (let i = 0, o = 0; i < num; ++i, o += 4) {
+					const bw = (d[i] == 0) ? 0 : 255;
+					data[o  ] =
+					data[o+1] =
+					data[o+2] = bw;
+					data[o+3] = 255;
+				}
+
+				state.image = imageData;
+			}
+		];
+		return (state)=>{
+			_stage[state.stage++](state);
+			return state
 		}
+	})()
+,	'Gray-delta': (()=>{
+		const _stage = [
+			(state)=>{
+				state.delta = _j.delta.get(state.frame)
+			}
+		,	(state)=>{
+				const imageData = _image(state.frame);
 
-		return imageData
-	}
-,	'Edge(Bin)': function (frame) {
-		const num  = frame.num()
-		,     imageData = _image(frame)
-		,     data = imageData.data
-		,     e = frame.get('sobel')
-		,     t = _j.image.otsuThreshold(frame.histogram('sobel'))
-		;
-		for (let i = 0, o = 0; i < num; ++i, o += 4) {
-			data[o+0] =
-			data[o+1] =
-			data[o+2] = e[i] > t ? 255 : 0;
-			data[o+3] = 255;
+				const	num  = state.frame.num()
+				,	data = imageData.data
+				,	d = state.delta
+				;
+				for (let i = 0, o = 0; i < num; ++i, o += 4) {
+					data[o  ] =
+					data[o+1] =
+					data[o+2] = Math.abs(d[i]);
+					data[o+3] = 255;
+				}
+
+				state.image = imageData;
+			}
+		];
+		return (state)=>{
+			_stage[state.stage++](state);
+			return state
 		}
+	})()
+,	'8colors': (()=>{
+		const _stage = [
+			(state)=>{
+				state.rgb = state.frame.get('rgb');
+			}
+		,	(state)=>{
+				const imageData = _image(state.frame);
 
-		return imageData
-	}
+				const	data = imageData.data
+				,	num = state.frame.num()
+				,	rgb = state.rgb
+				,	R = rgb[0]
+				,	G = rgb[1]
+				,	B = rgb[2]
+				,	f = state.frame
+				,	tR = _j.image.otsuThreshold(f.histogram('red'))
+				,	tG = _j.image.otsuThreshold(f.histogram('green'))
+				,	tB = _j.image.otsuThreshold(f.histogram('blue'))
+				;
+				for (let i = 0, o = 0; i < num; ++i, o += 4) {
+					data[o+0] = R[i] > tR ? 255 : 0;
+					data[o+1] = G[i] > tG ? 255 : 0;
+					data[o+2] = B[i] > tB ? 255 : 0;
+					data[o+3] = 255;
+				}
+
+				state.image = imageData;
+			}
+		];
+		return (state)=>{
+			_stage[state.stage++](state);
+			return state
+		}
+	})()
+,	'Edge(Laplacian)': (()=>{
+		const _stage = [
+			(state)=>{
+				state.edge = state.frame.get('laplacian')
+			}
+		,	(state)=>{
+				const imageData = _image(state.frame);
+
+				_j.image.convert(
+					['rgba', imageData.data]
+				,	['luminance', state.edge]
+				);
+
+				state.image = imageData;
+			}
+		];
+		return (state)=>{
+			_stage[state.stage++](state);
+			return state
+		}
+	})()
+,	'Edge(Laplacian signed)': (()=>{
+		const _stage = [
+			(state)=>{
+				state.edge = state.frame.get('laplacian.signed')
+			}
+		,	(state)=>{
+				const imageData = _image(state.frame);
+
+				_j.image.convert(
+					['rgba', imageData.data]
+				,	['luminance', state.edge]
+				);
+
+				state.image = imageData;
+			}
+		];
+		return (state)=>{
+			_stage[state.stage++](state);
+			return state
+		}
+	})()
+,	'Edge(Sobel)': (()=>{
+		const _stage = [
+			(state)=>{
+				state.edge = state.frame.get('sobel')
+			}
+		,	(state)=>{
+				const imageData = _image(state.frame);
+
+				_j.image.convert(
+					['rgba', imageData.data]
+				,	['luminance', state.edge]
+				);
+
+				state.image = imageData;
+			}
+		];
+		return (state)=>{
+			_stage[state.stage++](state);
+			return state
+		}
+	})()
+,	'Edge2(Sobel)': (()=>{
+		const _stage = [
+			(state)=>{
+				state.edge = state.frame.get('sobel')
+			}
+		,	(state)=>{
+				const imageData = _image(state.frame);
+
+				const	num  = state.frame.num()
+				,	data = imageData.data
+				,	e = state.edge
+				;
+				for (let i = 0, o = 0; i < num; ++i, o += 4) {
+					const C = e[i] > 127 ? 255 : 0;
+					data[o  ] = 
+					data[o+1] = 
+					data[o+2] = C;
+					data[o+3] = 255;
+				}
+
+				state.image = imageData;
+			}
+		];
+		return (state)=>{
+			_stage[state.stage++](state);
+			return state
+		}
+	})()
+,	'Edge(Bin)': (()=>{
+		const _stage = [
+			(state)=>{
+				state.edge = state.frame.get('sobel')
+			}
+		,	(state)=>{
+				const imageData = _image(state.frame);
+
+				const	num  = state.frame.num()
+				,	data = imageData.data
+				,	t = _j.image.otsuThreshold(
+						state.frame.histogram('sobel')
+					)
+				,	e = state.edge
+				;
+				for (let i = 0, o = 0; i < num; ++i, o += 4) {
+					data[o+0] =
+					data[o+1] =
+					data[o+2] = e[i] > t ? 255 : 0;
+					data[o+3] = 255;
+				}
+
+				state.image = imageData;
+			}
+		];
+		return (state)=>{
+			_stage[state.stage++](state);
+			return state
+		}
+	})()
 });
 
 let _buildFunc = null;
+let _deffered = null;
+
+render.setupMode = ()=>{
+	if (_deffered === null)
+		return
+	_buildFunc = _deffered;
+	_deffered = null;
+}
 
 render.imageMode = (param)=>{
 	if (param === undefined)
@@ -290,12 +456,17 @@ render.imageMode = (param)=>{
 	if (!(param in _buildImageFuncs))
 		throw new Error('not supported ' + param)
 
-	_buildFunc = _buildImageFuncs[param];
+	if (!_j.dispatch) {
+		_buildFunc = _buildImageFuncs[param];
+		return
+	}
+	_deffered = _buildImageFuncs[param];
+	_j.dispatch.set('schedule');
 }
 
 render.imageMode(render.imageMode()[0]);
 
-render.buildImage = (frame)=>(_buildFunc(frame));
+render.buildImage = (st)=>(_buildFunc(st));
 
 const _setter = {
 	'afactor': (v)=>(_accum.set('factor', v))
