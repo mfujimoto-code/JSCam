@@ -319,10 +319,10 @@ const _pipeline = []
 		_pipeline.unshift(next);
 		return
 	}
+	_resetScheduled = false;
 	_buildPipeline();
 	_pipeline.unshift(_endMark);
 	_j.render.setupMode();
-	_resetScheduled = false;
 }
 , _scheduleReset = ()=>{
 	if (_resetScheduled)
