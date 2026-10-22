@@ -36,6 +36,7 @@ const _getter = {
 const _setter = {
 	'showHistogram': (v)=>(_showHistogram = v)
 ,	'pause':         (v)=>(_paused        = v)
+,	'schedule':      (v)=>(true)
 };
 dispatch.get = (tag)=>{
 	const fn = _getter[tag];
@@ -86,11 +87,13 @@ const	_stat = {
 	,	viewed:  0
 	,	rVFC:    0
 	,	running: 0
+	,	suspend: 0
 	,	reset: ()=>{
 			_stat.rAF      = 0;
 			_stat.rVFC     = 0;
 			_stat.viewed   = 0;
 			_stat.running  = 0;
+			_stat.suspend  = 0;
 		}
 	}
 ;
@@ -263,23 +266,36 @@ const _pipeline = []
 	_offset[1] = extract[2];
 
 	const	newFrame = new _j.Frame(srcImage, _video.currentTime)
-	context.currentFrame = newFrame;
+	context.frame = newFrame;
 
+	_pipeline.push(me);
+}
+, _pRenderPre = (context, me) => {
+	context.rstate = {
+		stage: 0
+	,	frame: context.frame
+	};
 	_pipeline.push(me);
 }
 , _pRender = (context, me) => {
-	context.di = _j.render.buildImage(context.currentFrame) ;
+	context.rstate = _j.render.buildImage(
+		context.rstate
+	);
 
-	_pipeline.push(me);
+	if (!!context.rstate.image) {
+		_pipeline.push(me);
+		return
+	}
+	_pipeline.unshift(me);
 }
 , _pShow = (context, me) => {
-	_is.inject(context.di);
+	_is.inject(context.rstate.image);
 	_ds.show(_is);
 
 	_pipeline.push(me);
 }
 , __pHistogram = (context, me) => {
-	const f = context.currentFrame;
+	const f = context.frame;
 	_hs.gClear();
 	_hs.gBeginHistogram(f.num());
 	f.histogram().forEach(
@@ -303,9 +319,10 @@ const _pipeline = []
 		_pipeline.unshift(next);
 		return
 	}
+	_resetScheduled = false;
 	_buildPipeline();
 	_pipeline.unshift(_endMark);
-	_resetScheduled = false;
+	_j.render.setupMode();
 }
 , _scheduleReset = ()=>{
 	if (_resetScheduled)
@@ -315,10 +332,15 @@ const _pipeline = []
 }
 , _buildPipeline = ()=>{
 	_pipeline.length = 0;
+
+	if (_resetScheduled)
+		_pipeline.push(_pReset);
+
 	_pipeline.push(
 		_pCheckCondition
 	,	_pFetch
 	,	_pExtract
+	,	_pRenderPre
 	,	_pRender
 	,	_pShow
 	,	_pHistogram
@@ -370,6 +392,7 @@ dispatch.iDISP = (function * () {
 			fn(context, fn);
 
 			if (_timeQuantum() && _pipeline[0] !== _endMark) {
+				_stat.suspend += 1;
 				yield _ID_OK_MOVE_ON
 				_timeQuantum.update();
 			}
@@ -410,7 +433,7 @@ dispatch.watcher = {video:{}, fps:{}};
 	const	_cs = new _j.Surface(_j.e(kparam.fpsChart));
 
 	const	_caption = _j.e(kparam.fpsCaption)
-	,	_emaStat = {rAF:0, rVFC:0, viewed:0, running:0, obj:0}
+	,	_emaStat = {rAF:0, rVFC:0, viewed:0, running:0, suspend:0, obj:0}
 	,	_AFACTOR = (1/4)
 	,	_ema = (a, b) => ((1 - _AFACTOR) * a + _AFACTOR * b)
 	,	_STEP = 2
@@ -424,15 +447,15 @@ dispatch.watcher = {video:{}, fps:{}};
 
 	const _update = (duration)=>{
 		const 	factor = 1 / duration
-		,	oc = _j.monitor()[1]
-		,	opv = _stat.viewed > 0 ? oc / _stat.viewed : oc
+		,	iViewed = _stat.viewed > 0 ? 1 / _stat.viewed : 1
 		;
 
-		_emaStat.rAF     = _ema(_emaStat.rAF,     _stat.rAF     * factor);
-		_emaStat.rVFC    = _ema(_emaStat.rVFC,    _stat.rVFC    * factor);
-		_emaStat.viewed  = _ema(_emaStat.viewed,  _stat.viewed  * factor);
-		_emaStat.running = _ema(_emaStat.running, _stat.running * factor);
-		_emaStat.obj     = _ema(_emaStat.obj,     opv);
+		_emaStat.rAF     = _ema(_emaStat.rAF,     _stat.rAF       * factor);
+		_emaStat.rVFC    = _ema(_emaStat.rVFC,    _stat.rVFC      * factor);
+		_emaStat.viewed  = _ema(_emaStat.viewed,  _stat.viewed    * factor);
+		_emaStat.running = _ema(_emaStat.running, _stat.running   * factor);
+		_emaStat.suspend = _ema(_emaStat.suspend, _stat.suspend   * iViewed);
+		_emaStat.obj     = _ema(_emaStat.obj,     _j.monitor()[1] * iViewed);
 
 		_values.push(_emaStat.running);
 		(_max < _emaStat.running) && (_max = _emaStat.running);
@@ -450,12 +473,12 @@ dispatch.watcher = {video:{}, fps:{}};
 			:	0)
 		;
 		_caption.textContent =
-			'out/slice:' +((_emaStat.rAF * 1000).toFixed(1))
-		+	'/' + (dispatch.timeQuantum.tq().toFixed(1))
-		+	' in:' + ((_emaStat.rVFC * 1000).toFixed(1))
-		+	' view:' + viewRatio.toFixed(0)
-		+	'% run:' + ((_emaStat.running * 100).toFixed(0))
-		+	'% obj:' + (_emaStat.obj.toFixed(0))
+			`out:${(_emaStat.rAF * 1000).toFixed(1)} `	
+		+	`in:${(_emaStat.rVFC * 1000).toFixed(1)} `
+		+	`view:${viewRatio.toFixed(0)}% `
+		+	`run:${(_emaStat.running * 100).toFixed(0)}% `
+		+	`obj:${_emaStat.obj.toFixed(0)} `
+		+	`yield:${(_emaStat.suspend * 100).toFixed(0)}% `
 		;
 	};
 
