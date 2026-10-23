@@ -2,6 +2,8 @@
 
 (()=>{
 
+const caption = document.getElementById('fps-caption');
+
 const _load = (pathArray, kicker)=>{
 	if (!(pathArray instanceof Array))
 		throw new Error('no path list')
@@ -9,7 +11,10 @@ const _load = (pathArray, kicker)=>{
 	if (typeof kicker !== 'function') 
 		throw new Error('no kicker')
 
+	caption.textContent = `Loading ${pathArray.length}`;
+
 	if (pathArray.length == 0) {
+		caption.textContent = `Starting`;
 		kicker();
 		return
 	}

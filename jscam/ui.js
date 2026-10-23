@@ -220,10 +220,16 @@ jsCam.initFn.push((kparam)=>{
 		_j.e('video').style.display = 'block';
 	}
 
-	_j.render.imageMode().forEach((key, index)=>{
-		_j.e('image-mode').add(new Option(key, key));
+	_j.render.onchange(()=>{
+		const select = _j.e('image-mode');
+
+		select.options.length = 0;
+		_j.render.mode().forEach((key, index)=>{
+			select.add(new Option(key, key));
+		});
 	});
-	_j.render.imageMode([_j.e('image-mode').options[0].value]);
+
+	_j.render.mode(_j.e('image-mode').options[0].value);
 
 	const currentImageMode = ()=>{
 		const sel = _j.e('image-mode');
@@ -248,7 +254,7 @@ jsCam.initFn.push((kparam)=>{
 	_j.e('image-mode').onchange = function () {
 		const mode = this.options[this.selectedIndex].value;
 		_j.log('image mode:' + mode);
-		_j.render.imageMode(mode);
+		_j.render.mode(mode);
 		syncModeSettings();
 		_j.dispatch.kick(true);
 	}

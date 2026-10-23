@@ -6,14 +6,14 @@ const _j = jsCam;
 
 const delta = {
 	_delta: new Uint8ClampedArray(0)
-	, accum: new _j.Accum()
+	, accum: new _j.Accum(true, false)
 	, _absPlane: (out, src, acc, num) => {
 		for (let i = 0; i < num; ++i)
 			out[i] = Math.abs(src[i] - acc[i]);
 	}
 	, get: (frame, space) => {
 		if (space === undefined) space = 'gray';
-		delta.accum.update(frame, space, true);
+		delta.accum.update(frame, space);
 
 		const	num = frame.num()
 		,	acc = delta.accum.planes(space)

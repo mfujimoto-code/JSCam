@@ -7,7 +7,7 @@ const render = Object.create(null);
 
 _j.render = render;
 
-const _accum = new _j.Accum();
+const _accum = new _j.Accum(false, true);
 
 const _image = function(frame) {
 	const size = frame.size()
@@ -16,7 +16,9 @@ const _image = function(frame) {
 	return im
 }
 
-const _buildImageFuncs = Object.assign(Object.create(null), {
+const _hashImageFn = Object.create(null);
+
+const _builtin = Object.assign(Object.create(null), {
 	'Raw(RGBA-packed)': (state)=>{
 		// SPECIAL - no stage to split
 		state.image = state.frame.get('ImageData');
@@ -449,23 +451,53 @@ render.setupMode = ()=>{
 	_deferred = null;
 }
 
-render.imageMode = (param)=>{
+render.mode = (param)=>{
 	if (param === undefined)
-		return Object.keys(_buildImageFuncs)
+		return Object.keys(_hashImageFn)
 
-	if (!(param in _buildImageFuncs))
+	if (!(param in _hashImageFn))
 		throw new Error('not supported ' + param)
 
 	if (!_j.dispatch) {
-		_buildFunc = _buildImageFuncs[param];
+		_buildFunc = _hashImageFn[param];
 		return
 	}
-	_deferred = _buildImageFuncs[param];
+	_deferred = _hashImageFn[param];
 	_j.dispatch.set('schedule');
 }
 
-render.imageMode(render.imageMode()[0]);
+const _changeCB = [];
+render.onchange = (cb)=>{
+	_changeCB.push(cb)
+	cb();
+}
 
+render.add = (...param)=>{
+	param.forEach((p)=>{
+		const	tag = p[0]
+		,	stageFn = p[1]
+		;
+		if (!!_hashImageFn[tag])
+			return
+		_hashImageFn[tag] = stageFn;
+	});
+	_changeCB.forEach((cb)=>(cb()));
+}
+
+render.remove = (...tags)=>{
+	tags.forEach((t)=>{
+		if (!_hashImageFn[t])
+			return
+		delete _hashImageFn[t]
+	});
+	_changeCB.forEach((cb)=>(cb()));
+}
+
+render.add(
+	...(Object.keys(_builtin).map((k)=>([k, _builtin[k]])))
+);
+
+render.mode(render.mode()[0]);
 render.buildImage = (st)=>(_buildFunc(st));
 
 const _setter = {

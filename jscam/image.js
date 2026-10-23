@@ -271,9 +271,7 @@ const	_eqLUT = new Uint8ClampedArray(256)
 ;
 
 _image.equalize = (out, lbuf, histogram)=>{
-	const	Nl = lbuf.length
-	,	Nh = histogram.length
-	;
+	const	Nl = lbuf.length;
 
 	for (let i = 0, sum = 0; i < 256; ++i) {
 		sum += histogram[i];

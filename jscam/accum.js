@@ -4,14 +4,8 @@ jsCam.initFn.push((kparam)=>{
 
 const _j = jsCam;
 
-const Accum = function () {
-	this._delay = new Uint8ClampedArray(0);	// image pixels for next update
-	this._delayNum = 0;
-	this._hasDelay = false;
-	this._getter = Object.create(null);
-	this._buf = Object.create(null);
-
-	this.set('factor', Accum.FACTOR);
+const Accum = function (noStat, immediate) {
+	this._init(noStat, immediate);
 };
 
 _j.Accum = Accum;
@@ -26,15 +20,17 @@ const _plane = (num) => {
 	return _j.newObj(Float32Array, num)
 }
 
-Accum.prototype.set = function (tag, value) {
+const _p = Accum.prototype;
+
+_p.set = function (tag, value) {
 	this._getter[tag] = ()=>(value);
 }
 
-Accum.prototype.get = function (tag) {
+_p.get = function (tag) {
 	return this._getter[tag]()
 }
 
-Accum.prototype._ensure = function (space, num) {
+_p._ensure = function (space, num) {
 	const cur = this._buf[space];
 	if (cur && (cur[0].length === num))
 		return false
@@ -44,13 +40,11 @@ Accum.prototype._ensure = function (space, num) {
 
 }
 
-
-const _mixGray = function (frame, space, noStat) {
+const _mixGray = function (frame, space, rgba) {
 	const	f = this.get('factor')
 	,	num = frame.num()
 	,	src = this._buf[space][0]
 	,	dst = _plane(num)
-	,	rgba = this._delay
 	,	o = 1 - f
 	;
 	for (let i = 0, p = 0; i < num; ++i, p += 4) {
@@ -64,7 +58,7 @@ const _mixGray = function (frame, space, noStat) {
 
 	this._buf[space] = [dst];
 
-	if (noStat) return
+	if (this._noStat) return
 
 	const	gH = _j.newObj(Uint32Array, 256);
 	let	tl = [[0]];
@@ -73,9 +67,8 @@ const _mixGray = function (frame, space, noStat) {
 	frame.set('luminance', ['gray-a', tl[0]]);
 }
 
-const _mixRgb = function (frame, space, noStat) {
+const _mixRgb = function (frame, space, rgba) {
 	const	f = this.get('factor')
-	,	rgba = this._delay
 	,	num = frame.num()
 	,	o = 1 - f
 	,	srcR = this._buf[space][0]
@@ -93,7 +86,7 @@ const _mixRgb = function (frame, space, noStat) {
 
 	this._buf[space] = [dstR, dstG, dstB];
 
-	if (noStat) return
+	if (this._noStat) return
 
 	const	rH = _j.newObj(Uint32Array, 256)
 	,	gH = _j.newObj(Uint32Array, 256)
@@ -109,9 +102,8 @@ const _mixRgb = function (frame, space, noStat) {
 	frame.set('luminance', ['blue-a',  tl[2]]);
 }
 
-const _mixYuv = function (frame, space, noStat) {
+const _mixYuv = function (frame, space, rgba) {
 	const	f = this.get('factor')
-	,	rgba = this._delay
 	,	num = frame.num()
 	,	o = 1 - f
 	,	srcY = this._buf[space][0]
@@ -133,7 +125,7 @@ const _mixYuv = function (frame, space, noStat) {
 
 	this._buf[space] = [dstY, dstU, dstV];
 
-	if (noStat) return
+	if (this._noStat) return
 
 	const	yH = _j.newObj(Uint32Array, 256)
 	,	tl = [[0]]
@@ -149,12 +141,32 @@ const _mixer = {
 ,	'yuv':  _mixYuv
 };
 
-const _mix = function (frame, space, noStat) {
-	_mixer[space].call(this, frame, space, noStat);
+const _mix = function (frame, space, rgba) {
+	_mixer[space].call(this, frame, space, rgba);
 	frame.set('buffer', [`${space}-a`, this._buf[space]]);
 }
 
-Accum.prototype.update = function (frame, space, noStat) {
+const _immediateUpdate = function (frame, space) {
+	if (space === undefined) space = 'gray';
+
+	_check(space);
+
+	const	num = frame.num()
+	,	rgba = frame.get('rgba')
+	;
+
+	if (this._ensure(space, num)) {
+		const _factor = this.get('factor');
+		this.set('factor', 1);
+		_mix.call(this, frame, space, rgba);
+		this.set('factor', _factor);
+		return
+	}
+
+	_mix.call(this, frame, space, rgba);
+}
+
+const _delayUpdate = function (frame, space) {
 	if (space === undefined) space = 'gray';
 
 	_check(space);
@@ -170,20 +182,20 @@ Accum.prototype.update = function (frame, space, noStat) {
 		this._delay = frame.get('rgba');
 		const _factor = this.get('factor');
 		this.set('factor', 1);
-		_mix.call(this, frame, space, noStat);
+		_mix.call(this, frame, space, this._delay);
 		this.set('factor', _factor);
 	}
 
 	// to avoid using the same source as other processes,
 	// use image from the recent past here.
 	if (this._hasDelay) 
-		_mix.call(this, frame, space, noStat);
+		_mix.call(this, frame, space, this._delay);
 
 	this._delay = frame.get('rgba');
 	this._hasDelay = true;
 }
 
-Accum.prototype.planes = function (space) {
+_p.planes = function (space) {
 	if (space === undefined) space = 'gray';
 	_check(space);
 
@@ -192,5 +204,23 @@ Accum.prototype.planes = function (space) {
 	if (space === 'gray') return [[]];
 	return [[], [], []];
 }
+
+_p._init = function (noStat, immediate) {
+	if (!immediate) {
+		this._delay = new Uint8ClampedArray(0);	// image pixels for next update
+		this._delayNum = 0;
+		this._hasDelay = false;
+		this.update = _delayUpdate;
+	} else {
+		this.update = _immediateUpdate;
+	}
+
+	this._noStat = !!noStat;
+
+	this._getter = Object.create(null);
+	this._buf = Object.create(null);
+
+	this.set('factor', Accum.FACTOR);
+};
 
 });
