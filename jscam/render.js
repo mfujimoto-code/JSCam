@@ -478,12 +478,16 @@ render.onchange = (cb)=>{
 }
 
 render.add = (...param)=>{
-	let	cb = [];
-
 	param.forEach((node)=>{
-		if (_listImageFn.findIndex((p)=>(p[0] === node[0])) < 0)
-			return
-		_j.fatal(new Error(`${node[0]} conflict`));
+		if (_listImageFn.findIndex((p)=>(p[0] === node[0])) >= 0)
+			_j.fatal(new Error(`${node[0]} conflict`));
+		let count = 0;
+		param.forEach((n)=>{
+			if (n[0] === node[0])
+				++count;
+		});
+		if (count > 1)
+			_j.fatal(new Error(`${node[0]} duplicate`));
 	});
 	_listImageFn.unshift(...param);
  	_changeCB.forEach((fn)=>(fn()));
