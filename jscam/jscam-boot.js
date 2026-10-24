@@ -4,17 +4,27 @@
 
 const caption = document.getElementById('fps-caption');
 
+const _progress = (ptext)=>{
+	const caption = document.getElementById('fps-caption');
+	caption.textContent = ptext;
+}
+
+const _error = (etext)=>{
+	_progress(etext);
+	throw new Error(etext)
+}
+
 const _load = (pathArray, kicker)=>{
 	if (!(pathArray instanceof Array))
-		throw new Error('no path list')
+		_error('no path list');
 
 	if (typeof kicker !== 'function') 
-		throw new Error('no kicker')
+		_error('no kicker')
 
-	caption.textContent = `Loading ${pathArray.length}`;
+	_progress(`Loading ${pathArray.length}`);
 
 	if (pathArray.length == 0) {
-		caption.textContent = `Starting`;
+		_progress(`Starting`);
 		kicker();
 		return
 	}
@@ -25,7 +35,7 @@ const _load = (pathArray, kicker)=>{
 	script.src = path;
 
 	script.onerror = () => {
-		throw new Error('failed to load ' + path);
+		_error(`failed to load ${path}`);
 	};
 
 	script.onload = () => {
