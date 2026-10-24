@@ -244,7 +244,8 @@ jsCam.initFn.push((kparam)=>{
 		const	sel = _j.e('image-mode')
 		,	mode = currentImageMode()
 		;
-		let	i = 0;
+
+		let	i = -1;
 		sel.options.length = 0;
 		_j.render.mode().forEach((key, index)=>{
 			sel.add(new Option(key, key));
@@ -252,20 +253,15 @@ jsCam.initFn.push((kparam)=>{
 				i = index;
 		});
 
-		syncModeSettings();
-
-		if (mode != '') {
-			_j.render.mode(mode);
+		if (i >= 0) {
 			sel.selectedIndex = i;
 			return
 		}
 
 		_j.render.mode(sel.options[0].value);
 		sel.selectedIndex = 0;
+		syncModeSettings();
 	});
-
-	_j.render.mode(_j.e('image-mode').options[0].value);
-
 
 	_j.e('image-mode').onchange = function () {
 		const mode = this.options[this.selectedIndex].value;
