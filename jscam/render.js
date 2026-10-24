@@ -471,7 +471,7 @@ render.mode = (param)=>{
 
 const _changeCB = [];
 render.onchange = (cb)=>{
-	if (_changeCB.findIndex((c)=>(c === cb)) > 0)
+	if (_changeCB.findIndex((c)=>(c === cb)) >= 0)
 		_j.fatal(new Error('cb conflict'));
 	_changeCB.push(cb)
 	cb();
