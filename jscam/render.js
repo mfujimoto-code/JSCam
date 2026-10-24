@@ -16,7 +16,7 @@ const _image = function(frame) {
 	return im
 }
 
-const _hashImageFn = Object.create(null);
+const _listImageFn = [];
 
 const _builtin = Object.assign(Object.create(null), {
 	'Raw(RGBA-packed)': (state)=>{
@@ -441,63 +441,68 @@ const _builtin = Object.assign(Object.create(null), {
 	})()
 });
 
-let _buildFunc = null;
+let _buildFn = null;
 let _deferred = null;
 
 render.setupMode = ()=>{
 	if (_deferred === null)
 		return
-	_buildFunc = _deferred;
+	_buildFn = _deferred;
 	_deferred = null;
 }
 
 render.mode = (param)=>{
 	if (param === undefined)
-		return Object.keys(_hashImageFn)
+		return _listImageFn.map((p)=>(p[0]))
 
-	if (!(param in _hashImageFn))
-		throw new Error('not supported ' + param)
+	const index = _listImageFn.findIndex((p)=>(p[0] === param));
+	if (index < 0)
+		_j.fatal(new Error('not supported ' + param));
+
+	const fn = _listImageFn[index][1];
 
 	if (!_j.dispatch) {
-		_buildFunc = _hashImageFn[param];
+		_buildFn = fn;
 		return
 	}
-	_deferred = _hashImageFn[param];
+	_deferred = fn;
 	_j.dispatch.set('schedule');
 }
 
 const _changeCB = [];
 render.onchange = (cb)=>{
-	_changeCB.forEach((c)=>{
-		if (c !== cb) return
-		throw new Error('cb conflict')
-	});
+	if (_changeCB.findIndex((c)=>(c === cb)) >= 0)
+		_j.fatal(new Error('cb conflict'));
 	_changeCB.push(cb)
 	cb();
 }
 
 render.add = (...param)=>{
-	let	cb = [];
-	param.forEach((p)=>{
-		const	tag = p[0]
-		,	stageFn = p[1]
-		;
-		if (!!_hashImageFn[tag])
-			return
-		_hashImageFn[tag] = stageFn;
-		cb = _changeCB;
+	param.forEach((node)=>{
+		if (_listImageFn.findIndex((p)=>(p[0] === node[0])) >= 0)
+			_j.fatal(new Error(`${node[0]} conflict`));
+		let count = 0;
+		param.forEach((n)=>{
+			if (n[0] === node[0])
+				++count;
+		});
+		if (count > 1)
+			_j.fatal(new Error(`${node[0]} duplicate`));
 	});
-	cb.forEach((cb)=>(cb()));
+	_listImageFn.unshift(...param);
+ 	_changeCB.forEach((fn)=>(fn()));
 }
 
 render.remove = (...tags)=>{
 	let	cb = [];
 	tags.forEach((t)=>{
-		if (!_hashImageFn[t])
+		const	index = _listImageFn.findIndex((p)=>(p[0] === t));
+		if (index < 0)
 			return
-		delete _hashImageFn[t]
+		_listImageFn.splice(index, 1);
 		cb = _changeCB;
 	});
+
 	cb.forEach((cb)=>(cb()));
 }
 
@@ -506,7 +511,7 @@ render.add(
 );
 
 render.mode(render.mode()[0]);
-render.buildImage = (st)=>(_buildFunc(st));
+render.buildImage = (st)=>(_buildFn(st));
 
 const _setter = {
 	'afactor': (v)=>(_accum.set('factor', v))
@@ -515,7 +520,7 @@ const _setter = {
 render.set = (tag, value)=>{
 	const fn = _setter[tag];
 	if (!fn)
-		throw new Error('not supported ' + tag)
+		_j.fatal(new Error('not supported ' + tag));
 	fn(value);
 };
 

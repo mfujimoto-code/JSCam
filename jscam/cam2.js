@@ -21,6 +21,11 @@ _j.kick = (param)=>{
 	}
 };
 
+_j.fatal = (e)=>{
+	_j.log(e.toString());
+	throw e
+}
+
 _j.log = (...msg)=>{
 	console.log(...msg)
 };

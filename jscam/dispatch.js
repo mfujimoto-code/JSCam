@@ -41,13 +41,13 @@ const _setter = {
 dispatch.get = (tag)=>{
 	const fn = _getter[tag];
 	if (!fn)
-		throw new Error('not supported ' + tag)
+		_j.fatal(new Error('not supported ' + tag));
 	return fn()
 };
 dispatch.set = (tag, value)=>{
 	const fn = _setter[tag];
 	if (!fn)
-		throw new Error('not supported ' + tag)
+		_j.fatal(new Error('not supported ' + tag));
 	fn(value);
 	_scheduleReset();
 };
@@ -223,7 +223,7 @@ dispatch.kick = (noskip)=>{
 
 let _resetScheduled = false;
 const _pipeline = []
-, _endMark = ()=>{throw new Error('should not be called')}
+, _endMark = ()=>{_j.fatal(new Error('should not be called'));}
 , __pCheck = ()=>{
 	if (_video.videoWidth == 0 || _video.videoHeight == 0) 
 		return _ID_YOU_ARE_NOT_READY
@@ -405,7 +405,7 @@ dispatch.watcher = {video:{}, fps:{}};
 	const	_wv = dispatch.watcher.video;
 
 	if (!_video.requestVideoFrameCallback) 
-		throw new Error('not supported requestVideoFrameCallback')
+		_j.fatal(new Error('not supported requestVideoFrameCallback'));
 
 	let	_VFCkicked = false;
 	_wv.kick = () => {

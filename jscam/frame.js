@@ -6,7 +6,7 @@ const _j = jsCam;
 
 const Frame = function (image, timestamp) {
 	if (!(image instanceof ImageData))
-		throw new Error('Frame requires a source ImageData')
+		_j.fatal(new Error('Frame requires a source ImageData'));
 
 	if (timestamp === undefined)
 		timestamp = performance.now();
@@ -68,7 +68,7 @@ Frame.prototype = {
 	}
 	, set: function (tag, value) {
 		const fn = Frame._setters[tag];
-		if (!fn) throw new Error(`not supported ${tag}`)
+		if (!fn) _j.fatal(new Error(`not supported ${tag}`));
 
 		fn.call(this, value)
 	}
@@ -77,7 +77,7 @@ Frame.prototype = {
 		if (fn) return fn.call(this);
 
 		const initfn = Frame._getters[tag];
-		if (!initfn) throw new Error(`not supported ${tag}`)
+		if (!initfn) _j.fatal(new Error(`not supported ${tag}`));
 		return initfn.call(this)
 	}
 	, histogram: function (tag) {
@@ -221,7 +221,7 @@ Frame.prototype = {
 		else if (method == 'sobel') {
 			_j.image.sobel(e, this.get('gray'), O);
 		}
-		else throw new Error('not supported ' + method)
+		else _j.fatal(new Error('not supported ' + method));
 
 		const	hE = _j.newObj(Uint32Array, 256)
 		,	lum = [[0]]
