@@ -258,6 +258,9 @@ jsCam.initFn.push((kparam)=>{
 			return
 		}
 
+		if (sel.options.length === 0)
+			return
+
 		_j.render.mode(sel.options[0].value);
 		sel.selectedIndex = 0;
 		syncModeSettings();
