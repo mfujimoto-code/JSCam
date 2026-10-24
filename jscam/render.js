@@ -468,11 +468,16 @@ render.mode = (param)=>{
 
 const _changeCB = [];
 render.onchange = (cb)=>{
+	_changeCB.forEach((c)=>{
+		if (c !== cb) return
+		throw new Error('cb conflict')
+	});
 	_changeCB.push(cb)
 	cb();
 }
 
 render.add = (...param)=>{
+	let	cb = [];
 	param.forEach((p)=>{
 		const	tag = p[0]
 		,	stageFn = p[1]
@@ -480,17 +485,20 @@ render.add = (...param)=>{
 		if (!!_hashImageFn[tag])
 			return
 		_hashImageFn[tag] = stageFn;
+		cb = _changeCB;
 	});
-	_changeCB.forEach((cb)=>(cb()));
+	cb.forEach((cb)=>(cb()));
 }
 
 render.remove = (...tags)=>{
+	let	cb = [];
 	tags.forEach((t)=>{
 		if (!_hashImageFn[t])
 			return
 		delete _hashImageFn[t]
+		cb = _changeCB;
 	});
-	_changeCB.forEach((cb)=>(cb()));
+	cb.forEach((cb)=>(cb()));
 }
 
 render.add(

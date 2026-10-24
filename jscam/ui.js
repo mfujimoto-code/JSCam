@@ -220,17 +220,6 @@ jsCam.initFn.push((kparam)=>{
 		_j.e('video').style.display = 'block';
 	}
 
-	_j.render.onchange(()=>{
-		const select = _j.e('image-mode');
-
-		select.options.length = 0;
-		_j.render.mode().forEach((key, index)=>{
-			select.add(new Option(key, key));
-		});
-	});
-
-	_j.render.mode(_j.e('image-mode').options[0].value);
-
 	const currentImageMode = ()=>{
 		const sel = _j.e('image-mode');
 		if (!sel || sel.selectedIndex < 0) return '';
@@ -251,6 +240,33 @@ jsCam.initFn.push((kparam)=>{
 		}
 	}
 
+	_j.render.onchange(()=>{
+		const	sel = _j.e('image-mode')
+		,	mode = currentImageMode()
+		;
+		let	i = 0;
+		sel.options.length = 0;
+		_j.render.mode().forEach((key, index)=>{
+			sel.add(new Option(key, key));
+			if (key == mode) 
+				i = index;
+		});
+
+		syncModeSettings();
+
+		if (mode != '') {
+			_j.render.mode(mode);
+			sel.selectedIndex = i;
+			return
+		}
+
+		_j.render.mode(sel.options[0].value);
+		sel.selectedIndex = 0;
+	});
+
+	_j.render.mode(_j.e('image-mode').options[0].value);
+
+
 	_j.e('image-mode').onchange = function () {
 		const mode = this.options[this.selectedIndex].value;
 		_j.log('image mode:' + mode);
@@ -258,7 +274,6 @@ jsCam.initFn.push((kparam)=>{
 		syncModeSettings();
 		_j.dispatch.kick(true);
 	}
-	syncModeSettings();
 
 	const setupRange = (name, label, cb) => {
 		const	range = _j.e(name)
