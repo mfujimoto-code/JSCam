@@ -14,7 +14,7 @@ Accum.SPACES = Object.freeze(['gray', 'rgb', 'yuv']);
 Accum.FACTOR = 0.5;
 const _check = (space) => {
 	if (!Accum.SPACES.includes(space))
-		throw new Error('not supported ' + space)
+		_j.fatal(new Error('not supported ' + space));
 };
 const _plane = (num) => {
 	return _j.newObj(Float32Array, num)

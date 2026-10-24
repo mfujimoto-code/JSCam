@@ -70,7 +70,7 @@ _p.clientRect = function () {
 
 _p.show = function (src) {
 	if (!src)
-		throw new Error('unknown source')
+		_j.fatal(new Error('unknown source'));
 
 	if (src instanceof Surface)
 		src = src._tc;
@@ -87,7 +87,7 @@ const	_ic = _getCanvas()
 ;
 _p.inject = function (imageData) {
 	if (!(imageData instanceof ImageData))
-		throw new Error('not ImageData')
+		_j.fatal(new Error('not ImageData'));
 
 	if (_ic.width != imageData.width || _ic.height != imageData.height) {
 		_ic.width = imageData.width;
@@ -118,7 +118,7 @@ _p.extract = function (scale, offset, src) {
 	}
 
 	if (scale <= 0 ||  scale > 1)
-		throw new Error('not supported ' + scale.toString())
+		_j.fatal(new Error('not supported ' + scale.toString()));
 
 	const	sw = (tc.width  * scale) | 0
 	,	sh = (tc.height * scale) | 0

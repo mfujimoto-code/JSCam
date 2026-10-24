@@ -151,10 +151,10 @@ _image.convert = (dst, src)=>{
 
 	const dHash = _convHash[df];
 	if (!dHash)
-		throw new Error(`not supported ${sf} to ${df}`)
+		_j.fatal(new Error(`not supported ${sf} to ${df}`));
 	const fn = dHash[sf];
 	if (!fn)
-		throw new Error(`not supported ${sf} to ${df}`)
+		_j.fatal(new Error(`not supported ${sf} to ${df}`));
 
 	fn(sd, dd);
 };

@@ -457,7 +457,7 @@ render.mode = (param)=>{
 
 	const index = _listImageFn.findIndex((p)=>(p[0] === param));
 	if (index < 0)
-		throw new Error('not supported ' + param)
+		_j.fatal(new Error('not supported ' + param));
 
 	const fn = _listImageFn[index][1];
 
@@ -472,7 +472,7 @@ render.mode = (param)=>{
 const _changeCB = [];
 render.onchange = (cb)=>{
 	if (_changeCB.findIndex((c)=>(c === cb)) > 0)
-		throw new Error('cb conflict')
+		_j.fatal(new Error('cb conflict'));
 	_changeCB.push(cb)
 	cb();
 }
@@ -483,7 +483,7 @@ render.add = (...param)=>{
 	param.forEach((node)=>{
 		if (_listImageFn.findIndex((p)=>(p[0] === node[0])) < 0)
 			return
-		throw new Error(`${node[0]} conflict`)
+		_j.fatal(new Error(`${node[0]} conflict`));
 	});
 	_listImageFn.unshift(...param);
  	_changeCB.forEach((fn)=>(fn()));
@@ -516,7 +516,7 @@ const _setter = {
 render.set = (tag, value)=>{
 	const fn = _setter[tag];
 	if (!fn)
-		throw new Error('not supported ' + tag)
+		_j.fatal(new Error('not supported ' + tag));
 	fn(value);
 };
 
