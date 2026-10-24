@@ -220,7 +220,8 @@ flowchart TB
 
 | シンボル | ファイル | 種類 | 責務 |
 | --- | --- | --- | --- |
-| `jsCam` | `cam2.js` | オブジェクト | ページ名前空間。`version` / `e` / `initFn` / `kick` / `log`。`kick` 後に `monitor` / `image` / `Frame` / `Accum` / `delta` / `render` / `Surface` / `dispatch` が付く。既定 `log` は `console.log`。ui の initFn が HUD 7 行に差し替える。 |
+| `jsCam` | `cam2.js` | オブジェクト | ページ名前空間。`version` / `e` / `initFn` / `kick` / `fatal` / `log`。`kick` 後に `monitor` / `image` / `Frame` / `Accum` / `delta` / `render` / `Surface` / `dispatch` が付く。既定 `log` は `console.log`。ui の initFn が HUD 7 行に差し替える。 |
+| `jsCam.fatal` | `cam2.js` | 関数 | `log(e.toString())` のあと `throw e`。ライブ JS の失敗はこれを使う。boot は `jsCam` 未定義なので従来どおり throw。 |
 | `JSCAM_VERSION` | `cam2.js` | 文字列 | 実装の一意 ID。`jsCam.version`。`ui.js` が Controls 末尾 `#app-version` に書く。**コードまたは設計の修正の最後に必ず更新する。** 形式は `YYYY.MM.DD-HHMMSSZ-<git short HEAD>`（UTC）。 |
 | `jsCam.e` | `cam2.js` | 関数 | `document.getElementById` の短縮。 |
 | `jsCam.kick` | `cam2.js` | 関数 | `initFn` を FIFO で実行し `kparam` を渡す。boot の最終 `onload` が呼ぶ。 |
@@ -231,9 +232,9 @@ flowchart TB
 | `jsCam.Frame` | `frame.js` | コンストラクタ | 今 vis の画素派生。`get` / `set` / `histogram()` / `luminance()`。第 2 引数 timestamp（省略時 `performance.now()`）。LRU / `id` / `map` / `updateStat` は無い。カーネルは `jsCam.image`。 |
 | `jsCam.Accum` | `accum.js` | コンストラクタ | `Accum(noStat, immediate)`。space（`gray` / `rgb` / `yuv`）ごとの指数平滑。`update(frame, space)`。`get`/`set('factor')`。 |
 | `render.mode` | `render.js` | 関数 | 引数なしでキー配列。文字列は `_deferred` に載せ `dispatch.set('schedule')`。dispatch 未評価（init）だけ即差し替え。 |
-| `render.add` / `render.remove` | `render.js` | 関数 | 組み込み以外のモードを hash へ足す／消す。変わったときだけ `onchange` CB。 |
-| `render.onchange` | `render.js` | 関数 | 登録時に即 CB。同一 CB の二重登録は throw。 |
-| `render.setupMode` | `render.js` | 関数 | `_pReset` 末が呼ぶ。`_deferred` を `_buildFunc` へ。 |
+| `render.add` / `render.remove` | `render.js` | 関数 | モードを配列カタログ `_listImageFn` へ足す／消す。`add` は先頭へ `unshift`。既存タグは `conflict`、同一呼び出し内の重複は `duplicate`。`remove` は欠落を無視し、1 件でも消したときだけ CB。 |
+| `render.onchange` | `render.js` | 関数 | 登録時に即 CB。同一 CB の二重登録は `cb conflict`。 |
+| `render.setupMode` | `render.js` | 関数 | `_pReset` 末が呼ぶ。`_deferred` を `_buildFn` へ。 |
 | `jsCam.delta` | `delta.js` | オブジェクト | `delta.accum`（別 Accum）に対する残差。 |
 | `jsCam.Surface` | `surface.js` | コンストラクタ | 2d canvas。`fit` / `show` / `extract` / `inject` / `gFlip` / ヒストグラム描画。 |
 | `render.set` | `render.js` | 関数 | `'afactor'` を閉じた `_accum` へ。`render.accum` は公開しない。 |
@@ -592,7 +593,7 @@ dispatch と camera の映像／canvas は `kparam`。ui と残りのコント�
 
 `kick` 順（`initFn` 登録順 = boot の path 配列）:
 
-1. `cam2.js` … `jsCam`（`version` / `e` / `initFn` / `kick` / `log`）。boot より前に評価済み。既定 `log` は `console.log`。
+1. `cam2.js` … `jsCam`（`version` / `e` / `initFn` / `kick` / `fatal` / `log`）。boot より前に評価済み。既定 `log` は `console.log`。`fatal` は log して throw。
 2. `monitor.js` … `jsCam.monitor` / `jsCam.newObj`。
 3. `image.js` … `jsCam.image`（`convert` / `stat` / `otsuThreshold` / `sobel` / `laplacian` / `equalize`）。
 4. `frame.js` … `jsCam.Frame`。
@@ -738,12 +739,12 @@ s.gBeginHistogram(num) / gDrawHistogram(bins256) / gEndHistogram
 ### `render`
 
 ```javascript
-render.mode();               // キー配列（挿入順）
+render.mode();               // キー配列。add は先頭へ unshift（意図）
 render.mode(name);           // dispatch 前は即差し替え。以降は _deferred + set('schedule')
-render.setupMode();          // _pReset 末。_deferred を _buildFunc へ
-render.add([name, stageFn], ...);  // 未登録キーだけ hash へ。変わったら onchange CB
-render.remove(name, ...);    // あるキーだけ消す。変わったら onchange CB
-render.onchange(cb);         // 登録時に即 cb()。同一 cb の二重登録は throw
+render.setupMode();          // _pReset 末。_deferred を _buildFn へ
+render.add([name, stageFn], ...);  // 先頭へ。既存は conflict、同一呼び出し重複は duplicate
+render.remove(name, ...);    // あるキーだけ消す。1 件でも消したら onchange CB
+render.onchange(cb);         // 登録時に即 cb()。同一 cb は cb conflict
 render.buildImage(rstate);   // 1 サブ段。rstate.stage を進める。image が付いたら完了
 render.set('afactor', v);    // 閉じた _accum.set('factor')
 ```
@@ -793,7 +794,7 @@ dispatch.iDISP;
 
 ### `buildImageFuncs` キー
 
-`(rstate) => rstate`。公開は `render.mode`。各キーは 1 呼び出しで `_stage[state.stage++]` を 1 本。`Raw(RGBA-packed)` だけ一発で `state.image` を載せる。組み込みは `render.add` で hash に載せる。
+`(rstate) => rstate`。公開は `render.mode`。各キーは 1 呼び出しで `_stage[state.stage++]` を 1 本。`Raw(RGBA-packed)` だけ一発で `state.image` を載せる。組み込みは `render.add` で配列カタログへ載せる（先頭へ unshift）。
 
 | キー | 入力 | 出力 |
 | --- | --- | --- |
@@ -1182,7 +1183,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
     理由: pause は凍結フレームを残すため `video.pause()` のみ（トラック live、LED 点灯）。rAF は切る。stop は全 `track.stop()`、`srcObject=null`、overlay 復帰、generation token で進行中 GUM を破棄。`pagehide` / `beforeunload` でも stop。R10 の緩和。
 
 17. **スクリプト分割はグローバルのまま、読み込み順を契約にする。**  
-    理由: バンドラ無し（Non-goal）。`index.html` が読むのは `jscam-boot.js` だけ。boot の path 配列が順を決める: `cam2.js` → `monitor.js` → `image.js` → `frame.js` → `accum.js` → `delta.js` → `render.js` → `surface.js` → `dispatch.js` → `ui.js` → `camera.js`。公開面は `jsCam`（`e` / `kick` / `log` / `monitor` / `newObj` / `image` / 各コンストラクタ）。Dockerfile COPY と compose bind mount と `.dockerignore` 許可リストに boot と path 配列のファイルを含める。内部 `_histogram` は `Object.create(null)` のまま。
+    理由: バンドラ無し（Non-goal）。`index.html` が読むのは `jscam-boot.js` だけ。boot の path 配列が順を決める: `cam2.js` → `monitor.js` → `image.js` → `frame.js` → `accum.js` → `delta.js` → `render.js` → `surface.js` → `dispatch.js` → `ui.js` → `camera.js`。公開面は `jsCam`（`e` / `kick` / `fatal` / `log` / `monitor` / `newObj` / `image` / 各コンストラクタ）。Dockerfile COPY と compose bind mount と `.dockerignore` 許可リストに boot と path 配列のファイルを含める。内部 `_histogram` は `Object.create(null)` のまま。
 
 18. **デジタルズームは処理画素の中央切り出し。パンはオフセット。表示だけの CSS 拡縮はしない。**  
     理由: 拡縮後の `ImageData` でカーネルと accum を回す。`_scaleStep` 整数で等倍は正確な `1`。切り出しは `| 0`。ピンチは 2 本・`Object.keys` 先頭 2 本（採用済み）。ウィンドウリサイズの形は CSS。ビットマップを消したら `_ds.show(_is)`。`_ds.fit` を `_is.fit` より先にし、fit が真なら `_changed` で skip を外す。
@@ -1197,7 +1198,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
     理由: `get('red'|'green'|'blue')` がチャネルを抜き、`get('rgb')` は 3 本の配列。旧 `'RGB-frame'` は `'Raw(RGBA-packed)'`。再パック表示は `'RGB-planar'`。単チャネル表示は `'Red'` / `'Green'` / `'Blue'`。先頭が packed なので起動時は素通し（受け入れ済み）。
 
 22. **モードと蓄積はクロージャ。FPS 監視は vis と独立。**  
-    理由: `render.mode` は dispatch 後 `_deferred` + `set('schedule')`。`setupMode` が vis 末で適用。`add` / `remove` は hash 変化時だけ `onchange`。`render.set('afactor')`。`dispatch.get`/`set`（pause / showHistogram / schedule）。映像リングは `_snap`。HUD は 500ms `setTimeout`。ヒストグラムはキーごとにバーと CDF を同色。先頭 3 色は R/G/B。
+    理由: `render.mode` は dispatch 後 `_deferred` + `set('schedule')`。`setupMode` が vis 末で適用。カタログは配列。`add` は先頭へ `unshift`。`remove` は 1 件でも消したとき `onchange`。`render.set('afactor')`。`dispatch.get`/`set`（pause / showHistogram / schedule）。映像リングは `_snap`。HUD は 500ms `setTimeout`。ヒストグラムはキーごとにバーと CDF を同色。先頭 3 色は R/G/B。失敗は `jsCam.fatal`。
 
 ---
 
@@ -1233,7 +1234,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 
 ### エラーとコメント
 
-- throw は `new Error('…')`。メッセージは短い英語（`'not supported ' + id`）。
+- 失敗は `jsCam.fatal(new Error('…'))`。メッセージは短い英語（`'not supported ' + id`）。`fatal` は `log` してから throw。boot だけは `jsCam` 未定義なので `throw new Error`。
 - コメントは理由だけ。行列の読み方や処理の言い直しは書かない。`width` 代入で transform が消える、今 vis の画素を他処理と共有したまま混ぜない、など。
 - `return` / `throw` 直後のセミコロンは省略してよい。`const` 分解の終わりは `;`。
 
