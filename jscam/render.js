@@ -3,7 +3,7 @@
 jsCam.initFn.push((kparam)=>{
 const _j = jsCam;
 
-const render = Object.create(null);
+const render = _j.hash();
 
 _j.render = render;
 
@@ -18,7 +18,7 @@ const _image = function(frame) {
 
 const _listImageFn = [];
 
-const _builtin = Object.assign(Object.create(null), {
+const _builtin = _j.hash({
 	'Raw(RGBA-packed)': (state)=>{
 		// SPECIAL - no stage to split
 		state.image = state.frame.get('ImageData');

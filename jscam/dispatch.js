@@ -53,7 +53,7 @@ dispatch.set = (tag, value)=>{
 };
 
 dispatch._doit = ()=>{
-	const now = performance.now();
+	const now = _j.now();
 
 	if (now - _lastProcessedEnd < _lastSuggestion) {
 		dispatch.kick();
@@ -62,7 +62,7 @@ dispatch._doit = ()=>{
 
 	const r = dispatch.iDISP.next();
 	_lastSuggestion = r.value;
-	_lastProcessedEnd = performance.now();
+	_lastProcessedEnd = _j.now();
 
 	if (_paused)	// don't kick, it will re-kicked at resume.
 		return
@@ -213,11 +213,11 @@ dispatch.kick = (noskip)=>{
 
 	_AFkicked = true;
 	requestAnimationFrame(()=>{
-		const	begin = performance.now();
+		const	begin = _j.now();
 		_AFkicked = false;
 		++_stat.rAF;
 		dispatch();
-		_stat.running += performance.now() - begin;
+		_stat.running += _j.now() - begin;
 	});
 }
 
@@ -351,16 +351,16 @@ const _pipeline = []
 const	_timeQuantum = ()=>(_timeQuantum.over());
 	(()=>{
 		let	tq = _TIME_QUANTUM
-		,	last = performance.now()
+		,	last = _j.now()
 		,	elapsed = 0
 		;
 		_timeQuantum.update = ()=>{
-			const now = performance.now();
+			const now = _j.now();
 			tq = 0.9*tq + 0.1*(now - last);
 			last = now;
 		};
 		_timeQuantum.over = ()=>{
-			elapsed = performance.now() - last
+			elapsed = _j.now() - last
 			return elapsed > tq
 		};
 		_timeQuantum.tq = ()=>(tq);
@@ -415,12 +415,12 @@ dispatch.watcher = {video:{}, fps:{}};
 			// With some UAs, canvas/video work here can make
 			// rAF drawImage stop updating.
 			// Keep this callback lightweight.
-			const	begin = performance.now();
+			const	begin = _j.now();
 			_VFCkicked = false;
 			++_stat.rVFC;
 			_changed = true;
 			_wv.kick();
-			_stat.running += performance.now() - begin;
+			_stat.running += _j.now() - begin;
 		});
 	};
 })();	// end video watcher
@@ -500,11 +500,11 @@ dispatch.watcher = {video:{}, fps:{}};
 	};
 
 	_wf.iFPS = (function * () {
-		let last = performance.now();
+		let last = _j.now();
 
 		while (true) {
 			yield;
-			const now = performance.now();
+			const now = _j.now();
 
 			const duration = now - last;
 			last = now;

@@ -217,8 +217,8 @@ _p._init = function (noStat, immediate) {
 
 	this._noStat = !!noStat;
 
-	this._getter = Object.create(null);
-	this._buf = Object.create(null);
+	this._getter = _j.hash();
+	this._buf = _j.hash();
 
 	this.set('factor', Accum.FACTOR);
 };

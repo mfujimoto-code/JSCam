@@ -11,7 +11,14 @@ const jsCam = function () {
 const _j = jsCam;
 
 _j.version = JSCAM_VERSION;
-_j.e = (tag)=>(document.getElementById(tag));
+_j.e = document.getElementById.bind(document);
+_j.now = performance.now.bind(performance);
+_j.hash = (seed)=>{
+	if (!seed)
+		return Object.create(null)
+	return Object.assign(_j.hash(), seed)
+};
+
 _j.initFn = [];
 
 _j.kick = (param)=>{

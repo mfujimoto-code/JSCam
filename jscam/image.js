@@ -3,7 +3,7 @@
 jsCam.initFn.push((kparam)=>{
 
 const	_j = jsCam
-,	_image = Object.create(null)
+,	_image = _j.hash()
 ;
 
 _j.image = _image;
@@ -177,32 +177,29 @@ _image.stat = (histogram, luminance, src)=>{
 	}
 };
 
-const	_otsuW = new Uint32Array(256)
-,	_otsuS = new Uint32Array(256)
-;
-_image.otsuThreshold = (histogram)=>{
+const	_otsu = (oW, oS, histogram)=>{
 	let H = 0;
 	for (let k = 0; k < histogram.length; ++k) H += histogram[k];
 
-	_otsuW[0] = histogram[0];
-	_otsuS[0] = 0;
+	oW[0] = histogram[0];
+	oS[0] = 0;
 	for (let k = 1; k < histogram.length; ++k) {
-		_otsuW[k] = _otsuW[k-1] + histogram[k];
-		_otsuS[k] = _otsuS[k-1] + k*histogram[k];
+		oW[k] = oW[k-1] + histogram[k];
+		oS[k] = oS[k-1] + k*histogram[k];
 	}
 
-	const S = _otsuS[_otsuS.length - 1]
+	const S = oS[oS.length - 1]
 	;
 	let maxK = 0
 	,   max = 0
 	;
 	for (let k = 1; k < histogram.length; ++k) {
-		const w1 = _otsuW[k]
-		,     w2 = H - _otsuW[k]
+		const w1 = oW[k]
+		,     w2 = H - oW[k]
 		;
 		if (w1 == 0 || w2 == 0) continue
-		const s1 = _otsuS[k]
-		,     s2 = S - _otsuS[k]
+		const s1 = oS[k]
+		,     s2 = S - oS[k]
 		,     m1 = s1 / w1
 		,     m2 = s2 / w2
 		,     r = w1*w2*(m1-m2)*(m1-m2)
@@ -213,6 +210,11 @@ _image.otsuThreshold = (histogram)=>{
 	}
 	return maxK
 };
+
+const	_otsuWant = [[Uint32Array, 256], [Uint32Array, 256]];
+_image.otsuThreshold = (histogram)=>(
+	_j.use(_otsuWant, (w, s)=>(_otsu(w, s, histogram)))
+);
 
 const _kernel3x3 = {
 	'sobelX': new Float32Array([ // Sobel horizontal kernel
@@ -232,9 +234,25 @@ const _kernel3x3 = {
 	])
 };
 
-_image.sobel = (dst, src, O)=>{ // 3x3
+const	_offset3x3 = (stride)=>{
+	if (stride === _offset3x3.stride)
+		return _offset3x3.table
+
+	_offset3x3.table = new Int32Array([
+		-stride-1, -stride, -stride+1,
+		       -1,       0,         1,
+		 stride-1,  stride,  stride+1
+	]);
+
+	return _offset3x3.table
+};
+_offset3x3.stride = -1;
+_offset3x3.table = null;
+
+_image.sobel = (dst, src, stride)=>{ // 3x3
 	const	Ky = _kernel3x3['sobelY']
 	,	Kx = _kernel3x3['sobelX']
+	,	O = _offset3x3(stride)
 	,	start = O[8]
 	,	end = src.length + O[0]
 	;
@@ -250,10 +268,11 @@ _image.sobel = (dst, src, O)=>{ // 3x3
 	}
 };
 
-_image.laplacian = (dst, src, O)=>{ // 3x3 8direction
-	const K = _kernel3x3['laplacian']
-	,     start = O[8]
-	,     end = src.length + O[0]
+_image.laplacian = (dst, src, stride)=>{ // 3x3 8direction
+	const	K = _kernel3x3['laplacian']
+	,	O = _offset3x3(stride)
+	,	start = O[8]
+	,	end = src.length + O[0]
 	;
 
 	dst.fill(0);
@@ -266,37 +285,48 @@ _image.laplacian = (dst, src, O)=>{ // 3x3 8direction
 	}
 };
 
-const	_eqLUT = new Uint8ClampedArray(256)
-,	_eqSum = new Uint32Array(256)
-;
+const	_mapLUT = (to, from, lut)=>{
+	for (let i = 0; i < to.length; ++i) 
+		to[i] = lut[from[i]>>>0];
+}
+
+const _equalizeLUT = (lut, histogram, bufSize)=>{
+	_j.use([[Uint32Array, 256]], (_eqSum)=>{
+		const	Nl = bufSize;
+
+		for (let i = 0, sum = 0; i < 256; ++i) {
+			sum += histogram[i];
+			_eqSum[i] = sum;
+		}
+
+		let	Hmin = -1;
+		for (let i = 0; i < 256; ++i) {
+			if (_eqSum[i] != 0) {
+				Hmin = _eqSum[i];
+				break
+			}
+		}
+
+		// clone if all elements are identical
+		if (Nl === Hmin) {
+			lut.forEach((e, i)=>(lut[i] = i));
+			return
+		}
+
+		const	factor = 255 / (Nl - Hmin);
+		for (let i = 0; i < 256; ++i) 
+			lut[i] = (_eqSum[i] - Hmin) * factor
+	});
+};
 
 _image.equalize = (out, lbuf, histogram)=>{
-	const	Nl = lbuf.length;
-
-	for (let i = 0, sum = 0; i < 256; ++i) {
-		sum += histogram[i];
-		_eqSum[i] = sum;
-	}
-
-	let	Hmin = -1;
-	for (let i = 0; i < 256; ++i) {
-		if (_eqSum[i] != 0) {
-			Hmin = _eqSum[i];
-			break
-		}
-	}
-
-	// clone if all elements are identical
-	if (Nl === Hmin) {
-		lbuf.forEach((ele, i)=>(out[i] = ele));
-		return
-	}
-
-	const	factor = 255 / (Nl - Hmin);
-	for (let i = 0; i < 256; ++i) 
-		_eqLUT[i] = (_eqSum[i] - Hmin) * factor
-	for (let i = 0; i < Nl; ++i)
-		out[i] = _eqLUT[lbuf[i]];
+	_j.use([[Uint8ClampedArray, 256]], (_eqLUT)=>{
+		_equalizeLUT(_eqLUT, histogram, out.length);
+		_mapLUT(out, lbuf, _eqLUT);
+	});
 };
+_image.equalize.lut = _equalizeLUT;
+_image.equalize.map = _mapLUT;
+
 
 });

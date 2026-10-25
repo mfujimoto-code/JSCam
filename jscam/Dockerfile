@@ -11,6 +11,8 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY index.html cam2.css jscam-boot.js cam2.js frame.js accum.js delta.js render.js surface.js dispatch.js ui.js camera.js /usr/share/nginx/html/
 COPY image.js /usr/share/nginx/html/
 COPY monitor.js /usr/share/nginx/html/
+COPY night.js /usr/share/nginx/html/
+COPY use.js /usr/share/nginx/html/
 
 EXPOSE 8080
 

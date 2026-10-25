@@ -48,6 +48,7 @@ const _load = (pathArray, kicker)=>{
 _load(
 	[	'./cam2.js'
 	,	'./monitor.js'
+	,	'./use.js'
 	,	'./image.js'
 	,	'./frame.js'
 	,	'./accum.js'
@@ -57,6 +58,7 @@ _load(
 	,	'./dispatch.js'
 	,	'./ui.js'
 	,	'./camera.js'
+	,	'./night.js'
 	]
 	, ()=>{
 		jsCam.kick(

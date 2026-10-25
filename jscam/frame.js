@@ -9,7 +9,7 @@ const Frame = function (image, timestamp) {
 		_j.fatal(new Error('Frame requires a source ImageData'));
 
 	if (timestamp === undefined)
-		timestamp = performance.now();
+		timestamp = _j.now();
 
 	this.timestamp = ()=>(timestamp);
 
@@ -18,7 +18,7 @@ const Frame = function (image, timestamp) {
 
 _j.Frame = Frame;
 
-Frame._getters = Object.assign(Object.create(null), {
+Frame._getters = _j.hash({
 	'rgba':             function () {return this._getRgba()}
 ,	'red':              function () {return this._getRed()}
 ,	'green':            function () {return this._getGreen()}
@@ -33,7 +33,7 @@ Frame._getters = Object.assign(Object.create(null), {
 ,	'sobel.rgb':        function () {return this._getEdge('sobel.rgb')}
 });
 
-Frame._setters = Object.assign(Object.create(null), {
+Frame._setters = _j.hash({
 	'buffer':	function (value) {
 		this.getter[value[0]] = ()=>(value[1])
 	}
@@ -61,9 +61,9 @@ Frame.prototype = {
 
 		this.size = ()=>([width, height]);
 		this.num  = ()=>(num);
-		this._histogram = Object.create(null);
-		this._luminance = Object.create(null);
-		this.getter = Object.create(null);
+		this._histogram = _j.hash();
+		this._luminance = _j.hash();
+		this.getter = _j.hash();
 		this.getter['ImageData'] = ()=>(imageData);
 	}
 	, set: function (tag, value) {
@@ -182,13 +182,7 @@ Frame.prototype = {
 	, _getEdge: function (method) {
 		const e = _j.newObj(Uint8ClampedArray, this.num())
 		,     w = this.size()[0]
-		,     O = new Int32Array([
-			-w-1, -w, -w+1,
-			  -1,  0,    1,
-			 w-1,  w,  w+1
-		      ])
 		;
-
 
 		if (method == 'sobel.rgb') {
 			const plane = this.get('rgb')
@@ -200,26 +194,26 @@ Frame.prototype = {
 			,     eG = _j.newObj(Uint8ClampedArray, num)
 			,     eB = _j.newObj(Uint8ClampedArray, num)
 			;
-			_j.image.sobel(eR, R, O);
-			_j.image.sobel(eG, G, O);
-			_j.image.sobel(eB, B, O);
+			_j.image.sobel(eR, R, w);
+			_j.image.sobel(eG, G, w);
+			_j.image.sobel(eB, B, w);
 			for (let i = 0; i < num; ++i)
 				e[i] = Math.max(eR[i], eG[i], eB[i]);
 		}
 		else if (method == 'laplacian') {
 			const raw = _j.newObj(Int16Array, e.length);
-			_j.image.laplacian(raw, this.get('gray'), O);
+			_j.image.laplacian(raw, this.get('gray'), w);
 			for (let i = 0; i < e.length; ++i) 
 				e[i] = Math.abs(raw[i]);
 		}
 		else if (method == 'laplacian.signed') {
 			const raw = _j.newObj(Int16Array, e.length);
-			_j.image.laplacian(raw, this.get('gray'), O);
+			_j.image.laplacian(raw, this.get('gray'), w);
 			for (let i = 0; i < e.length; ++i) 
 				e[i] = raw[i] + 128;
 		}
 		else if (method == 'sobel') {
-			_j.image.sobel(e, this.get('gray'), O);
+			_j.image.sobel(e, this.get('gray'), w);
 		}
 		else _j.fatal(new Error('not supported ' + method));
 

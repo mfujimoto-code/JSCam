@@ -1,6 +1,5 @@
 'use strict';
 
-
 jsCam.initFn.push((kparam)=>{
 	const _j = jsCam;
 
@@ -26,9 +25,9 @@ jsCam.initFn.push((kparam)=>{
 	const fade = {
 		FADE_DURATION: 300
 	,	IN: (ele)=>{
-			const begin = performance.now();
+			const begin = _j.now();
 			const _fade = () => {
-				const now = performance.now();
+				const now = _j.now();
 				const t = now - begin;
 				if (t < fade.FADE_DURATION) {
 					ele.style.opacity = t / fade.FADE_DURATION;
@@ -43,9 +42,9 @@ jsCam.initFn.push((kparam)=>{
 			_fade();
 		}
 	,	OUT: (ele)=>{
-			const begin = performance.now();
+			const begin = _j.now();
 			const _fade = () => {
-				const now = performance.now();
+				const now = _j.now();
 				const t = now - begin;
 				if (t < fade.FADE_DURATION) {
 					ele.style.opacity = 1 - t / fade.FADE_DURATION;
@@ -75,7 +74,7 @@ jsCam.initFn.push((kparam)=>{
 	// disable double tap on the panel
 	let lastTouch = 0;
 	_j.e('side-panel').addEventListener('touchend', (ev)=>{
-			const now = performance.now();
+			const now = _j.now();
 			if (now - lastTouch < 350) ev.preventDefault();
 			lastTouch = now;
 		}
@@ -108,14 +107,14 @@ jsCam.initFn.push((kparam)=>{
 	);
 
 	// drag(pan), double-tap/click(UI on/off), pinch(zoom)
-	const	pointers = Object.create(null)
+	const	pointers = _j.hash()
 	,	DC_DURATION = 300
 	,	P_DURATION = 50
 	,	dclick = function (ev) {
 			const k = Object.keys(pointers);
 			if (k.length > 0) return
 
-			const now = performance.now();
+			const now = _j.now();
 			if (now - plastup < DC_DURATION) fireDC(ev);
 			plastup = now;
 		}
@@ -133,19 +132,19 @@ jsCam.initFn.push((kparam)=>{
 			if (k.length == 2) {
 				// start pinch detection
 				pcdist = pdist(pointers, k);
-				plastmove = performance.now();
+				plastmove = _j.now();
 				return
 			}
 
 			if (k.length == 1) {
 				// start drag detection
-				plastmove = performance.now();
+				plastmove = _j.now();
 				return
 			}
 		}
 	,	pdetect = function (ev) {
 			const k = Object.keys(pointers);
-			const now = performance.now();
+			const now = _j.now();
 
 			if (k.length == 2 && ev.pointerId in pointers) {
 				// pinch detection

@@ -4,6 +4,7 @@
 !jscam-boot.js
 !cam2.js
 !monitor.js
+!use.js
 !image.js
 !frame.js
 !accum.js
@@ -13,6 +14,7 @@
 !dispatch.js
 !ui.js
 !camera.js
+!night.js
 !nginx.conf
 !nginx.main.conf
 !40-gen-tls.sh
