@@ -243,6 +243,7 @@ const	_offset3x3 = (stride)=>{
 		       -1,       0,         1,
 		 stride-1,  stride,  stride+1
 	]);
+	_offset3x3.stride = stride;
 
 	return _offset3x3.table
 };
