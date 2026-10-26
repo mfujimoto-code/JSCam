@@ -43,8 +43,8 @@ _p._ensure = function (space, num) {
 const _mixGray = function (frame, space, rgba) {
 	const	f = this.get('factor')
 	,	num = frame.num()
-	,	src = this._buf[space][0]
-	,	dst = _plane(num)
+	,	inner = this._buf[space][0]
+	,	outer = _plane(num)
 	,	o = 1 - f
 	;
 	for (let i = 0, p = 0; i < num; ++i, p += 4) {
@@ -52,18 +52,19 @@ const _mixGray = function (frame, space, rgba) {
 		+	  rgba[p+1] * 0.587
 		+	  rgba[p+2] * 0.114
 		;
-
-		dst[i] = o * src[i] + f * g;
+		inner[i] = o * inner[i] + f * g;
 	}
 
-	this._buf[space] = [dst];
+	outer.set(inner);
+	frame.set('buffer', ['gray-a', [outer]]);
 
 	if (this._noStat) return
 
 	const	gH = _j.newObj(Uint32Array, 256);
 	let	tl = [[0]];
-	_j.image.stat([gH], tl, [dst]);
-	frame.set('histogram', ['gray-a', gH   ]);
+	_j.image.stat([gH], tl, [outer]);
+
+	frame.set('histogram', ['gray-a', gH]);
 	frame.set('luminance', ['gray-a', tl[0]]);
 }
 
@@ -71,20 +72,23 @@ const _mixRgb = function (frame, space, rgba) {
 	const	f = this.get('factor')
 	,	num = frame.num()
 	,	o = 1 - f
-	,	srcR = this._buf[space][0]
-	,	srcG = this._buf[space][1]
-	,	srcB = this._buf[space][2]
-	,	dstR = _plane(num)
-	,	dstG = _plane(num)
-	,	dstB = _plane(num)
+	,	Rinner = this._buf[space][0]
+	,	Ginner = this._buf[space][1]
+	,	Binner = this._buf[space][2]
+	,	Router = _plane(num)
+	,	Gouter = _plane(num)
+	,	Bouter = _plane(num)
 	;
 	for (let i = 0, p = 0; i < num; ++i, p += 4) {
-		dstR[i] = o * srcR[i] + f * rgba[p  ];
-		dstG[i] = o * srcG[i] + f * rgba[p+1];
-		dstB[i] = o * srcB[i] + f * rgba[p+2];
+		Rinner[i] = o * Rinner[i] + f * rgba[p  ];
+		Ginner[i] = o * Ginner[i] + f * rgba[p+1];
+		Binner[i] = o * Binner[i] + f * rgba[p+2];
 	}
 
-	this._buf[space] = [dstR, dstG, dstB];
+	Router.set(Rinner);
+	Gouter.set(Ginner);
+	Bouter.set(Binner);
+	frame.set('buffer', ['rgb-a', [Router, Gouter, Bouter]]);
 
 	if (this._noStat) return
 
@@ -93,7 +97,7 @@ const _mixRgb = function (frame, space, rgba) {
 	,	bH = _j.newObj(Uint32Array, 256)
 	,	tl = [[0], [0], [0]]
 	;
-	_j.image.stat([rH, gH, bH], tl, [dstR, dstG, dstB]);
+	_j.image.stat([rH, gH, bH], tl, [Router, Gouter, Bouter]);
 	frame.set('histogram', ['red-a',   rH]);
 	frame.set('histogram', ['green-a', gH]);
 	frame.set('histogram', ['blue-a',  bH]);
@@ -106,31 +110,34 @@ const _mixYuv = function (frame, space, rgba) {
 	const	f = this.get('factor')
 	,	num = frame.num()
 	,	o = 1 - f
-	,	srcY = this._buf[space][0]
-	,	srcU = this._buf[space][1]
-	,	srcV = this._buf[space][2]
-	,	dstY = _plane(num)
-	,	dstU = _plane(num)
-	,	dstV = _plane(num)
+	,	Yinner = this._buf[space][0]
+	,	Uinner = this._buf[space][1]
+	,	Vinner = this._buf[space][2]
+	,	Youter = _plane(num)
+	,	Uouter = _plane(num)
+	,	Vouter = _plane(num)
 	;
 	for (let i = 0, p = 0; i < num; ++i, p += 4) {
 		const	r = rgba[p  ]
 		,	g = rgba[p+1]
 		,	b = rgba[p+2]
 		;
-		dstY[i] = o * srcY[i] + f * ( r * 0.299 + g * 0.587 + b * 0.114);
-		dstU[i] = o * srcU[i] + f * (-r * 0.169 - g * 0.331 + b * 0.500);
-		dstV[i] = o * srcV[i] + f * ( r * 0.500 - g * 0.419 - b * 0.081);
+		Yinner[i] = o * Yinner[i] + f * ( r * 0.299 + g * 0.587 + b * 0.114);
+		Uinner[i] = o * Uinner[i] + f * (-r * 0.169 - g * 0.331 + b * 0.500);
+		Vinner[i] = o * Vinner[i] + f * ( r * 0.500 - g * 0.419 - b * 0.081);
 	}
 
-	this._buf[space] = [dstY, dstU, dstV];
+	Youter.set(Yinner);
+	Uouter.set(Uinner);
+	Vouter.set(Vinner);
+	frame.set('buffer', ['yuv-a', [Youter, Uouter, Vouter]]);
 
 	if (this._noStat) return
 
 	const	yH = _j.newObj(Uint32Array, 256)
 	,	tl = [[0]]
 	;
-	_j.image.stat([yH], tl, [dstY]);
+	_j.image.stat([yH], tl, [Youter]);
 	frame.set('histogram', ['y-a', yH   ]);
 	frame.set('luminance', ['y-a', tl[0]]);
 }
@@ -143,7 +150,6 @@ const _mixer = {
 
 const _mix = function (frame, space, rgba) {
 	_mixer[space].call(this, frame, space, rgba);
-	frame.set('buffer', [`${space}-a`, this._buf[space]]);
 }
 
 const _immediateUpdate = function (frame, space) {
