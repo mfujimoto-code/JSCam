@@ -62,7 +62,7 @@ const _mixGray = function (frame, space, rgba) {
 
 	const	gH = _j.newObj(Uint32Array, 256);
 	let	tl = [[0]];
-	_j.image.stat([gH], tl, [outer]);
+	_j.image.stat([gH], tl, [outer], frame.shape());
 
 	frame.set('histogram', ['gray-a', gH]);
 	frame.set('luminance', ['gray-a', tl[0]]);
@@ -97,7 +97,7 @@ const _mixRgb = function (frame, space, rgba) {
 	,	bH = _j.newObj(Uint32Array, 256)
 	,	tl = [[0], [0], [0]]
 	;
-	_j.image.stat([rH, gH, bH], tl, [Router, Gouter, Bouter]);
+	_j.image.stat([rH, gH, bH], tl, [Router, Gouter, Bouter], frame.shape());
 	frame.set('histogram', ['red-a',   rH]);
 	frame.set('histogram', ['green-a', gH]);
 	frame.set('histogram', ['blue-a',  bH]);
@@ -137,7 +137,7 @@ const _mixYuv = function (frame, space, rgba) {
 	const	yH = _j.newObj(Uint32Array, 256)
 	,	tl = [[0]]
 	;
-	_j.image.stat([yH], tl, [Youter]);
+	_j.image.stat([yH], tl, [Youter], frame.shape());
 	frame.set('histogram', ['y-a', yH   ]);
 	frame.set('luminance', ['y-a', tl[0]]);
 }

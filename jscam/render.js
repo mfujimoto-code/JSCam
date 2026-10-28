@@ -10,8 +10,8 @@ _j.render = render;
 const _accum = new _j.Accum(false, true);
 
 const _image = function(frame) {
-	const size = frame.size()
-	,     im = _j.newObj(ImageData, size[0], size[1])
+	const s = frame.shape()
+	,     im = _j.newObj(ImageData, s[0], s[1])
 	;
 	return im
 }

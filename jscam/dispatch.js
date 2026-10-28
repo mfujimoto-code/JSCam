@@ -259,14 +259,13 @@ const _pipeline = []
 	_pipeline.push(me);
 }
 , _pExtract = (context, me) => {
-	const	extract = context.snap[0].extract(_scale, _offset)
+	const	extract = context.snap[0].extract(_scale, _offset, null, 1)
 	,	srcImage = extract[0]
 	;
 	_offset[0] = extract[1];
 	_offset[1] = extract[2];
 
-	const	newFrame = new _j.Frame(srcImage, _video.currentTime)
-	context.frame = newFrame;
+	context.frame = new _j.Frame(srcImage, 1);
 
 	_pipeline.push(me);
 }
@@ -289,7 +288,7 @@ const _pipeline = []
 	_pipeline.unshift(me);
 }
 , _pShow = (context, me) => {
-	_is.inject(context.rstate.image);
+	_is.inject(context.rstate.image, 1);
 	_ds.show(_is);
 
 	_pipeline.push(me);

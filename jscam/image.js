@@ -161,17 +161,45 @@ _image.convert = (dst, src)=>{
 
 const _u8clamp = new Uint8ClampedArray(1);
 
-_image.stat = (histogram, luminance, src)=>{
+_image.stat = (histogram, luminance, src, shape)=>{
+	if (!shape) {
+		for (let i = 0; i < src.length; ++i) {
+			const	cell = src[i]
+			,	h = histogram[i]
+			;
+			h.fill(0);
+			let	tl = 0;
+			for (let j = 0; j < cell.length; ++j) {
+				tl += cell[j];	
+				_u8clamp[0] = cell[j];
+				h[_u8clamp[0]] += 1;
+			}
+			luminance[i] = tl;
+		}
+		return
+	}
+
+	const	inner = shape[2]
+	,	stride = shape[1]
+	,	start = stride * inner + inner
+	,	endOffset = stride * inner + inner
+	,	width = stride - inner * 2
+	;
+
 	for (let i = 0; i < src.length; ++i) {
 		const	cell = src[i]
 		,	h = histogram[i]
 		;
 		h.fill(0);
 		let	tl = 0;
-		for (let j = 0; j < cell.length; ++j) {
-			tl += cell[j];	
-			_u8clamp[0] = cell[j];
-			h[_u8clamp[0]] += 1;
+		const	end = cell.length - endOffset;
+		for (let j = start; j < end; j += stride) {
+			for (let k = 0; k < width; ++k) {
+				const	c = cell[j+k];
+				tl += c;
+				_u8clamp[0] = c;
+				h[_u8clamp[0]] += 1;
+			}
 		}
 		luminance[i] = tl;
 	}

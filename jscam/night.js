@@ -50,8 +50,8 @@ const	_stage = [
 	}
 ,	(state)=>{
 		const	frame = state.frame
-		,	size = frame.size()
-		,	imageData = _j.newObj(ImageData, size[0], size[1])
+		,	s = frame.shape()
+		,	imageData = _j.newObj(ImageData, s[0], s[1])
 		;
 		_j.image.convert(
 			['rgba', imageData.data]

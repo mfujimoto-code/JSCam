@@ -85,9 +85,15 @@ _p.show = function (src) {
 const	_ic = _getCanvas()
 , 	_igc = _getGC(_ic, true)
 ;
-_p.inject = function (imageData) {
+_p.inject = function (imageData, border) {
 	if (!(imageData instanceof ImageData))
 		_j.fatal(new Error('not ImageData'));
+
+	(border === undefined) && (border = 0);
+
+	const	width = imageData.width - border * 2
+	,	height = imageData.height - border * 2
+	;
 
 	if (_ic.width != imageData.width || _ic.height != imageData.height) {
 		_ic.width = imageData.width;
@@ -100,20 +106,106 @@ _p.inject = function (imageData) {
 	;
 	gc.drawImage(
 		_ic
-	,	0, 0, _ic.width, _ic.height
-	,	0, 0, tc.width,  tc.height
+	,	border, border, width, height
+	,	0, 0, tc.width, tc.height
 	);
 };
-_p.extract = function (scale, offset, src) {
+
+const	_adjust = function (image, x, y, w, h) {
+	const	d = image.data
+	,	stride = image.width * 4
+	;
+
+	if (x < 0) {
+		for (let i = x, ix = 0; i < 0; ++i, ++ix) {
+			let	dst = ix * 4
+			,	src = -x * 4
+			;
+			for (let iy = 0; iy < image.height; ++iy) {
+				d[dst+0] = d[src+0];
+				d[dst+1] = d[src+1];
+				d[dst+2] = d[src+2];
+				d[dst+3] = d[src+3];
+				src += stride;
+				dst += stride;
+			}
+		}
+	}
+	if (y < 0) {
+		for (let i = y, iy = 0; i < 0; ++i, ++iy) {
+			let	dst = iy * stride
+			,	src = -y * stride
+			;
+			for (let ix = 0; ix < image.width; ++ix) {
+				d[dst+0] = d[src+0];
+				d[dst+1] = d[src+1];
+				d[dst+2] = d[src+2];
+				d[dst+3] = d[src+3];
+				dst += 4;
+				src += 4;
+			}
+		}
+	}
+	const	tw = this._tc.width;
+	if (x + w > tw) {
+		for (let i = x + w, ix = w - 1; i > tw; --i, --ix) {
+			let	dst = ix * 4
+			,	src = (-x + tw - 1) * 4
+			;
+			for (let iy = 0; iy < image.height; ++iy) {
+				d[dst+0] = d[src+0];
+				d[dst+1] = d[src+1];
+				d[dst+2] = d[src+2];
+				d[dst+3] = d[src+3];
+				src += stride;
+				dst += stride;
+			}
+		}
+	}
+	const	th = this._tc.height;
+	if (y + h > this._tc.height) {
+		for (let i = y + h, iy = h - 1; i > th; --i, --iy) {
+			let	dst = iy * stride
+			,	src = (-y + th - 1) * stride
+			;
+			for (let ix = 0; ix < image.width; ++ix) {
+				d[dst+0] = d[src+0];
+				d[dst+1] = d[src+1];
+				d[dst+2] = d[src+2];
+				d[dst+3] = d[src+3];
+				dst += 4;
+				src += 4;
+			}
+		}
+	}
+};
+
+_p.extract = function (scale, offset, src, border) {
 	const	tc = this._tc
 	,	gc = this._gc
 	;
-	if (scale === undefined
-	||  scale === 1) {
+	(scale === undefined) && (scale = 1);
+	border = (border === undefined) ? (0) : border>>>0;
+	const b2 = border * 2;
+
+	if (scale === 1) {
 		if (src) 
 			gc.drawImage(src, 0, 0, tc.width, tc.height);
-		const im = gc.getImageData(0, 0, tc.width, tc.height);
+		const im = gc.getImageData(
+			-border
+		,	-border
+		,	tc.width + b2
+		,	tc.height + b2
+		);
 		_j.monitor(im);
+		_adjust.call(
+			this
+		,	im
+		,	-border
+		,	-border
+		,	tc.width + b2
+		,	tc.height + b2
+		);
 		return [im, 0, 0]
 	}
 
@@ -123,8 +215,8 @@ _p.extract = function (scale, offset, src) {
 	const	sw = (tc.width  * scale) | 0
 	,	sh = (tc.height * scale) | 0
 	;
-	let	sx = (tc.width  * 0.5 - sw * 0.5) | 0
-	,	sy = (tc.height * 0.5 - sh * 0.5) | 0
+	let	sx = tc.width  * 0.5 - sw * 0.5
+	,	sy = tc.height * 0.5 - sh * 0.5
 	,	ox = 0
 	,	oy = 0
 	;
@@ -151,9 +243,25 @@ _p.extract = function (scale, offset, src) {
 		} else	sy = ny;
 	}
 
+	sx |= 0;
+	sy |= 0;
+
 	if (!src) {
-		const im = gc.getImageData(sx, sy, sw, sh);
+		const im = gc.getImageData(
+			sx - border
+		,	sy - border
+		,	sw + b2
+		,	sh + b2
+		);
 		_j.monitor(im);
+		_adjust.call(
+			this
+		,	im
+		,	sx - border
+		,	sy - border
+		,	sw + b2
+		,	sh + b2
+		);
 		return [im, ox, oy]
 	}
 
@@ -162,8 +270,21 @@ _p.extract = function (scale, offset, src) {
 	,	 0,  0, sw, sh
 	);
 
-	const im = gc.getImageData(0, 0, sw, sh);
+	const im = gc.getImageData(
+		-border
+	,	-border
+	,	sw + b2
+	,	sh + b2
+	);
 	_j.monitor(im);
+	_adjust.call(
+		this
+	,	im
+	,	sx - border
+	,	sy - border
+	,	sw + b2
+	,	sh + b2
+	);
 	return [im, ox, oy]
 }
 

@@ -4,16 +4,8 @@ jsCam.initFn.push((kparam)=>{
 
 const _j = jsCam;
 
-const Frame = function (image, timestamp) {
-	if (!(image instanceof ImageData))
-		_j.fatal(new Error('Frame requires a source ImageData'));
-
-	if (timestamp === undefined)
-		timestamp = _j.now();
-
-	this.timestamp = ()=>(timestamp);
-
-	this.feed(image);
+const Frame = function (image, innerBorder) {
+	this.feed(image, innerBorder);
 }
 
 _j.Frame = Frame;
@@ -54,12 +46,18 @@ Frame._setters = _j.hash({
 });
 
 Frame.prototype = {
-	feed: function (imageData) {
-		const width  = imageData.width;
-		const height = imageData.height;
-		const num    = width * height;
+	feed: function (imageData, innerBorder) {
+		if (!(imageData instanceof ImageData))
+			_j.fatal(new Error('Frame requires a source ImageData'));
+		
+		(innerBorder === undefined) && (innerBorder = 0);
 
-		this.size = ()=>([width, height]);
+		const	width  = imageData.width
+		,	height = imageData.height
+		,	num    = width * height
+		;
+
+		this.shape = ()=>([width, height, innerBorder]);
 		this.num  = ()=>(num);
 		this._histogram = _j.hash();
 		this._luminance = _j.hash();
@@ -104,7 +102,7 @@ Frame.prototype = {
 		,	cTag = ['r', 'g', 'b'][index]
 		;
 		_j.image.convert([cTag, C], ['rgba', this.get('rgba')]);
-		_j.image.stat([hC], lum, [C]);
+		_j.image.stat([hC], lum, [C], this.shape());
 		this.set('buffer',    [bTag, C     ]);
 		this.set('histogram', [bTag, hC    ]);
 		this.set('luminance', [bTag, lum[0]]);
@@ -141,7 +139,7 @@ Frame.prototype = {
 		,	this.get('gray')
 		,	this.histogram('gray')
 		);
-		_j.image.stat([hE], lE, [eq]);
+		_j.image.stat([hE], lE, [eq], this.shape());
 		this.set('buffer',    ['equalized', eq   ]);
 		this.set('histogram', ['equalized', hE   ]);
 		this.set('luminance', ['equalized', lE[0]]);
@@ -159,7 +157,7 @@ Frame.prototype = {
 		,	lum = [[0]]
 		;
 		_j.image.convert(['yuv', yuv], ['rgba', this.get('rgba')]);
-		_j.image.stat([hY], lum, [yuv[0]]);
+		_j.image.stat([hY], lum, [yuv[0]], this.shape());
 
 		this.set('buffer',    ['yuv', yuv   ]);
 		this.set('histogram', ['y',   hY    ]);
@@ -173,7 +171,7 @@ Frame.prototype = {
 		,	lum = [[0]]
 		;
 		_j.image.convert(['gray', gray], ['rgba', this.get('rgba')]);
-		_j.image.stat([hG], lum, [gray]);
+		_j.image.stat([hG], lum, [gray], this.shape());
 		this.set('buffer',    ['gray', gray  ]);
 		this.set('histogram', ['gray', hG    ]);
 		this.set('luminance', ['gray', lum[0]]);
@@ -181,7 +179,7 @@ Frame.prototype = {
 	}
 	, _getEdge: function (method) {
 		const e = _j.newObj(Uint8ClampedArray, this.num())
-		,     w = this.size()[0]
+		,     w = this.shape()[0]
 		;
 
 		if (method == 'sobel.rgb') {
@@ -220,7 +218,7 @@ Frame.prototype = {
 		const	hE = _j.newObj(Uint32Array, 256)
 		,	lum = [[0]]
 		;
-		_j.image.stat([hE], lum, [e]);
+		_j.image.stat([hE], lum, [e], this.shape());
 
 		this.set('buffer',    [method, e     ]);
 		this.set('histogram', [method, hE    ]);
