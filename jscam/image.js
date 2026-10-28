@@ -180,7 +180,7 @@ _image.stat = (histogram, luminance, src, shape)=>{
 	}
 
 	const	inner = shape[2]
-	,	stride = shape[1]
+	,	stride = shape[0]
 	,	start = stride * inner + inner
 	,	endOffset = stride * inner + inner
 	,	width = stride - inner * 2
