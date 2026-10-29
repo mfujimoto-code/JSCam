@@ -284,7 +284,7 @@ flowchart LR
   FR --> BI
   BI --> PI --> SH
   FR -->|get id| BI
-  FR -->|histogram()| HG
+  FR -->|"histogram()"| HG
   BI -->|GRAY-accum / RGB-accum| AccumObj["accum.update / get('*-a')"]
   BI -->|*delta*| DeltaObj["delta.get"]
   FR -->|skip vis| Skip["_pCheckCondition: !_changed なら後段を回す"]
