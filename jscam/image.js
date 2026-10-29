@@ -159,8 +159,6 @@ _image.convert = (dst, src)=>{
 	fn(sd, dd);
 };
 
-const _u8clamp = new Uint8ClampedArray(1);
-
 _image.stat = (histogram, luminance, src, shape)=>{
 	if (!shape) {
 		for (let i = 0; i < src.length; ++i) {
@@ -170,9 +168,9 @@ _image.stat = (histogram, luminance, src, shape)=>{
 			h.fill(0);
 			let	tl = 0;
 			for (let j = 0; j < cell.length; ++j) {
-				tl += cell[j];	
-				_u8clamp[0] = cell[j];
-				h[_u8clamp[0]] += 1;
+				const c = cell[j];
+				tl += c;
+				h[(c > 255) ? 255 : ((c < 0) ? 0 : c|0)] += 1;
 			}
 			luminance[i] = tl;
 		}
@@ -197,8 +195,7 @@ _image.stat = (histogram, luminance, src, shape)=>{
 			for (let k = 0; k < width; ++k) {
 				const	c = cell[j+k];
 				tl += c;
-				_u8clamp[0] = c;
-				h[_u8clamp[0]] += 1;
+				h[(c > 255) ? 255 : ((c < 0) ? 0 : c|0)] += 1;
 			}
 		}
 		luminance[i] = tl;

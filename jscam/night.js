@@ -17,7 +17,7 @@ _stage2.fn = (state, eqLUT, scale, Ytmp)=>{
 	,	U = state.yuv[1]
 	,	V = state.yuv[2]
 	;
-	_eq.lut(eqLUT, frame.histogram('y-a'), Y.length);
+	_eq.lut(eqLUT, frame.histogram('y-a'), frame.innerNum());
 	Ytmp.set(Y);
 	_eq.map(Y, Y, eqLUT);
 	scale[0] = 0;

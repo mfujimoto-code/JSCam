@@ -280,8 +280,8 @@ _p.extract = function (scale, offset, src, border) {
 	_adjust.call(
 		this
 	,	im
-	,	sx - border
-	,	sy - border
+	,	-border
+	,	-border
 	,	sw + b2
 	,	sh + b2
 	);

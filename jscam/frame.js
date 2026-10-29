@@ -5,14 +5,13 @@ jsCam.initFn.push((kparam)=>{
 const _j = jsCam;
 
 const Frame = function (image, innerBorder) {
-	this.feed(image, innerBorder);
+	this._init(image, innerBorder);
 }
 
 _j.Frame = Frame;
 
 Frame._getters = _j.hash({
-	'rgba':             function () {return this._getRgba()}
-,	'red':              function () {return this._getRed()}
+	'red':              function () {return this._getRed()}
 ,	'green':            function () {return this._getGreen()}
 ,	'blue':             function () {return this._getBlue()}
 ,	'rgb':              function () {return this._getRgb()}
@@ -46,7 +45,7 @@ Frame._setters = _j.hash({
 });
 
 Frame.prototype = {
-	feed: function (imageData, innerBorder) {
+	_init: function (imageData, innerBorder) {
 		if (!(imageData instanceof ImageData))
 			_j.fatal(new Error('Frame requires a source ImageData'));
 		
@@ -55,14 +54,18 @@ Frame.prototype = {
 		const	width  = imageData.width
 		,	height = imageData.height
 		,	num    = width * height
+		,	iNum   = (width - innerBorder * 2) * (height - innerBorder * 2)
 		;
 
 		this.shape = ()=>([width, height, innerBorder]);
 		this.num  = ()=>(num);
+		this.innerNum = ()=>(iNum);
 		this._histogram = _j.hash();
 		this._luminance = _j.hash();
-		this.getter = _j.hash();
-		this.getter['ImageData'] = ()=>(imageData);
+		this.getter = _j.hash({
+			'ImageData': ()=>(imageData)
+		,	'rgba':      ()=>(imageData.data)
+		});
 	}
 	, set: function (tag, value) {
 		const fn = Frame._setters[tag];
@@ -87,11 +90,6 @@ Frame.prototype = {
 		if (!tag) 
 			return Object.keys(this._luminance)
 		return this._luminance[tag]()
-	}
-	, _getRgba: function () {
-		const data = this.get('ImageData').data;
-		this.set('buffer', ['rgba', data]);
-		return this.get('rgba')
 	}
 	, __getComponent: function (index) {
 		const	num  = this.num()
@@ -133,12 +131,13 @@ Frame.prototype = {
 		const	eq = _j.newObj(Uint8ClampedArray, this.num())
 		,	hE = _j.newObj(Uint32Array, 256)
 		,	lE = [[0]]
+		,	g = this.get('gray')
+		,	_e = _j.image.equalize
 		;
-		_j.image.equalize(
-			eq
-		,	this.get('gray')
-		,	this.histogram('gray')
-		);
+		_j.use([[Uint8ClampedArray, 256]], (_eqLUT)=>{
+			_e.lut(_eqLUT, this.histogram('gray'), this.innerNum());
+			_e.map(eq, g, _eqLUT);
+		});
 		_j.image.stat([hE], lE, [eq], this.shape());
 		this.set('buffer',    ['equalized', eq   ]);
 		this.set('histogram', ['equalized', hE   ]);

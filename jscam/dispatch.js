@@ -296,7 +296,7 @@ const _pipeline = []
 , __pHistogram = (context, me) => {
 	const f = context.frame;
 	_hs.gClear();
-	_hs.gBeginHistogram(f.num());
+	_hs.gBeginHistogram(f.innerNum());
 	f.histogram().forEach(
 		(k)=>_hs.gDrawHistogram(f.histogram(k))
 	);
