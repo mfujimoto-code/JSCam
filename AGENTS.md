@@ -7,7 +7,7 @@
 ## ソース
 
 - ライブ JS の集合と読み込み順は `jscam/jscam-boot.js` が正本。本数は増減する。`index.html` が読むのは boot だけ。
-- 静的ファイルを足す／外すときは、次を同じ集合に保つ。`index.html`、`jscam/Dockerfile` の COPY、`compose.yaml` の bind mount、`jscam/.dockerignore` の許可（`!ファイル名`）。抜けはイメージビルド失敗や実行時 404 になる。
+- 静的ファイルを足す／外すときは、次を同じ集合に保つ。`index.html`、`jscam/Dockerfile` の COPY、`compose.yaml` の bind mount、`jscam/.dockerignore` の許可（`!ファイル名`）。抜けはイメージビルド失敗や実行時 404 になる。ライブ JS の集合が変わったら `README.md` の読み込み順図も合わせる。
 - スナップショット（現行は `cam.js`）はライブ API の掃除で触らない。
 - `tmp/` は gitignore。コミットしない。
 
@@ -22,6 +22,7 @@
 
 - ライブアプリ（`jscam/` の HTML / CSS / JS）または `cam2-design.md` を変えたら、`jscam/cam2.js` の `JSCAM_VERSION` を UTC `YYYY.MM.DD-HHMMSSZ-<short HEAD>` に更新する。README やこのファイルだけならバンプしない。
 - 挙動や公開契約を変えたら、同じ変更で `cam2-design.md` をコードに合わせる。master へマージしたあとも同じ。設計の差分は設計書に書き、このファイルには足さない。
+- 利用者が見る事実（起動方法、secure context、クライアント内処理、boot の読み込み順、1 vis の処理概要）が変わったら、同じ変更で `README.md` を合わせる。master へマージしたあとも同じ。詳細は設計書に残し、README に複製しない。
 
 ## Git
 
