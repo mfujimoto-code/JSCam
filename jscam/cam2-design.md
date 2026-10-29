@@ -352,7 +352,7 @@ sequenceDiagram
         Note over SC: 2台以上なら #camera-select を表示
         SC->>GUM: 先頭 deviceId.exact（id 無ければ video:true）
         GUM-->>SC: MediaStream
-        SC->>V: 旧 stream を stop; srcObject = stream; play()
+        SC->>V: 旧 stream を stop#59; srcObject = stream#59; play()
         SC->>OV: classList.add("is-live")
         SC->>P: setIoPaused(false)
         Note over P: Pause / Stop camera を enabled
@@ -369,7 +369,7 @@ sequenceDiagram
   U->>Stop: click
   Stop->>XC: onclick
   XC->>XC: ++generation（進行中 GUM を無効化）
-  XC->>V: 全 track.stop(); srcObject=null
+  XC->>V: 全 track.stop()#59; srcObject=null
   XC->>OV: classList.remove("is-live")
   XC->>P: setIoPaused(false)
   Note over XC: pagehide / beforeunload でも同じ
