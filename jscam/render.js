@@ -19,7 +19,7 @@ const _image = function(frame) {
 const _listImageFn = [];
 
 const _builtin = _j.hash({
-	'Raw(RGBA-packed)': (state)=>{
+	'Raw(RGBA-byte)': (state)=>{
 		// SPECIAL - no stage to split
 		state.image = state.frame.get('ImageData');
 		return state

@@ -40,17 +40,18 @@ _p._ensure = function (space, num) {
 
 }
 
-const _mixGray = function (frame, space, rgba) {
+const _mixGray = function (frame, space, argb) {
 	const	f = this.get('factor')
 	,	num = frame.num()
 	,	inner = this._buf[space][0]
 	,	outer = _plane(num)
 	,	o = 1 - f
 	;
-	for (let i = 0, p = 0; i < num; ++i, p += 4) {
-		const g = rgba[p  ] * 0.299
-		+	  rgba[p+1] * 0.587
-		+	  rgba[p+2] * 0.114
+	for (let i = 0; i < num; ++i) {
+		const c = argb[i]
+		,     g = ((c>>16) & 0xff) * 0.299
+		+	  ((c>>8 ) & 0xff) * 0.587
+		+	  ((c    ) & 0xff) * 0.114
 		;
 		inner[i] = o * inner[i] + f * g;
 	}
@@ -68,7 +69,7 @@ const _mixGray = function (frame, space, rgba) {
 	frame.set('luminance', ['gray-a', tl[0]]);
 }
 
-const _mixRgb = function (frame, space, rgba) {
+const _mixRgb = function (frame, space, argb) {
 	const	f = this.get('factor')
 	,	num = frame.num()
 	,	o = 1 - f
@@ -79,10 +80,11 @@ const _mixRgb = function (frame, space, rgba) {
 	,	Gouter = _plane(num)
 	,	Bouter = _plane(num)
 	;
-	for (let i = 0, p = 0; i < num; ++i, p += 4) {
-		Rinner[i] = o * Rinner[i] + f * rgba[p  ];
-		Ginner[i] = o * Ginner[i] + f * rgba[p+1];
-		Binner[i] = o * Binner[i] + f * rgba[p+2];
+	for (let i = 0; i < num; ++i) {
+		const c = argb[i];
+		Rinner[i] = o * Rinner[i] + f * ((c>>16)&0xff);
+		Ginner[i] = o * Ginner[i] + f * ((c>>8 )&0xff);
+		Binner[i] = o * Binner[i] + f * ((c    )&0xff);
 	}
 
 	Router.set(Rinner);
@@ -106,7 +108,7 @@ const _mixRgb = function (frame, space, rgba) {
 	frame.set('luminance', ['blue-a',  tl[2]]);
 }
 
-const _mixYuv = function (frame, space, rgba) {
+const _mixYuv = function (frame, space, argb) {
 	const	f = this.get('factor')
 	,	num = frame.num()
 	,	o = 1 - f
@@ -118,9 +120,10 @@ const _mixYuv = function (frame, space, rgba) {
 	,	Vouter = _plane(num)
 	;
 	for (let i = 0, p = 0; i < num; ++i, p += 4) {
-		const	r = rgba[p  ]
-		,	g = rgba[p+1]
-		,	b = rgba[p+2]
+		const	c = argb[i]
+		,	r = (c>>16)&0xff
+		,	g = (c>>8 )&0xff
+		,	b = (c    )&0xff
 		;
 		Yinner[i] = o * Yinner[i] + f * ( r * 0.299 + g * 0.587 + b * 0.114);
 		Uinner[i] = o * Uinner[i] + f * (-r * 0.169 - g * 0.331 + b * 0.500);
@@ -148,8 +151,8 @@ const _mixer = {
 ,	'yuv':  _mixYuv
 };
 
-const _mix = function (frame, space, rgba) {
-	_mixer[space].call(this, frame, space, rgba);
+const _mix = function (frame, space, argb) {
+	_mixer[space].call(this, frame, space, argb);
 }
 
 const _immediateUpdate = function (frame, space) {
@@ -158,18 +161,18 @@ const _immediateUpdate = function (frame, space) {
 	_check(space);
 
 	const	num = frame.num()
-	,	rgba = frame.get('rgba')
+	,	argb = frame.get('argb')
 	;
 
 	if (this._ensure(space, num)) {
 		const _factor = this.get('factor');
 		this.set('factor', 1);
-		_mix.call(this, frame, space, rgba);
+		_mix.call(this, frame, space, argb);
 		this.set('factor', _factor);
 		return
 	}
 
-	_mix.call(this, frame, space, rgba);
+	_mix.call(this, frame, space, argb);
 }
 
 const _delayUpdate = function (frame, space) {
@@ -185,7 +188,7 @@ const _delayUpdate = function (frame, space) {
 	}
 
 	if (this._ensure(space, num)) {
-		this._delay = frame.get('rgba');
+		this._delay = frame.get('argb');
 		const _factor = this.get('factor');
 		this.set('factor', 1);
 		_mix.call(this, frame, space, this._delay);
@@ -197,7 +200,7 @@ const _delayUpdate = function (frame, space) {
 	if (this._hasDelay) 
 		_mix.call(this, frame, space, this._delay);
 
-	this._delay = frame.get('rgba');
+	this._delay = frame.get('argb');
 	this._hasDelay = true;
 }
 
