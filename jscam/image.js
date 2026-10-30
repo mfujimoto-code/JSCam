@@ -128,7 +128,7 @@ const _argb2yuv = (from, to)=>{
 	,	U = to[1]
 	,	V = to[2]
 	;
-	for (let i = 0; i < to.length; ++i) {
+	for (let i = 0; i < from.length; ++i) {
 		const	c = from[i]
 		,	r = c>>16 & 0xff
 		,	g = c>>8  & 0xff
@@ -177,6 +177,7 @@ const _convHash = {
 	}
 ,	'rgb': {
 		'rgba':	_rgba2rgb
+	,	'argb': _argb2rgb
 	}
 ,	'r': {
 		'rgba':	_rgba2r

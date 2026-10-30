@@ -119,7 +119,7 @@ const _mixYuv = function (frame, space, argb) {
 	,	Uouter = _plane(num)
 	,	Vouter = _plane(num)
 	;
-	for (let i = 0, p = 0; i < num; ++i, p += 4) {
+	for (let i = 0; i < num; ++i) {
 		const	c = argb[i]
 		,	r = (c>>16)&0xff
 		,	g = (c>>8 )&0xff

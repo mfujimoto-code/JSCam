@@ -156,7 +156,7 @@ Frame.prototype = {
 		,	hY = _j.newObj(Uint32Array, 256)
 		,	lum = [[0]]
 		;
-		_j.image.convert(['yuv', yuv], ['rgba', this.get('rgba')]);
+		_j.image.convert(['yuv', yuv], ['argb', this.get('argb')]);
 		_j.image.stat([hY], lum, [yuv[0]], this.shape());
 
 		this.set('buffer',    ['yuv', yuv   ]);
