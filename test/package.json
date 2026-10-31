@@ -1,0 +1,8 @@
+{
+  "name": "jscam-test",
+  "private": true,
+  "description": "Playwright Chromium harness for JSCam live scripts",
+  "devDependencies": {
+    "@playwright/test": "1.55.0"
+  }
+}

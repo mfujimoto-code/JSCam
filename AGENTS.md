@@ -10,6 +10,7 @@
 - 静的ファイルを足す／外すときは、次を同じ集合に保つ。`index.html`、`jscam/Dockerfile` の COPY、`compose.yaml` の bind mount、`jscam/.dockerignore` の許可（`!ファイル名`）。抜けはイメージビルド失敗や実行時 404 になる。ライブ JS の集合が変わったら `README.md` の読み込み順図も合わせる。
 - スナップショット（現行は `cam.js`）はライブ API の掃除で触らない。
 - `tmp/` は gitignore。コミットしない。
+- テストコードは `/app/test/`。四者同期（boot / Dockerfile COPY / compose bind / `.dockerignore`）には載せない。
 
 ## 編集
 
@@ -21,8 +22,16 @@
 ## バージョンと設計書
 
 - ライブアプリ（`jscam/` の HTML / CSS / JS）または `cam2-design.md` を変えたら、`jscam/cam2.js` の `JSCAM_VERSION` を UTC `YYYY.MM.DD-HHMMSSZ-<short HEAD>` に更新する。README やこのファイルだけならバンプしない。
-- 挙動や公開契約を変えたら、同じ変更で `cam2-design.md` をコードに合わせる。master へマージしたあとも同じ。設計の差分は設計書に書き、このファイルには足さない。
+- 挙動や公開インタフェースを変えたら、同じ変更で `cam2-design.md` をコードに合わせる。master へマージしたあとも同じ。設計の差分は設計書に書き、このファイルには足さない。
 - 利用者が見る事実（起動方法、secure context、クライアント内処理、boot の読み込み順、1 vis の処理概要）が変わったら、同じ変更で `README.md` を合わせる。master へマージしたあとも同じ。詳細は設計書に残し、README に複製しない。
+
+## テスト
+
+- 仕様は `test/SPEC.md`。spec は `test/`。四者同期に載せない。
+- ライブ JS・設計書・公開インタフェース・配信を変えたら、同じ変更で `test/SPEC.md` と該当するテストケースを合わせる（項目の追加・修正・削除）。
+- そのあと簡易自動を実施する: `sh test/run-simple.sh`。pass / skip / fail と終了コードを作業報告に書く。
+- フル自動（Docker ホスト、pull 後は docker のみ）: `docker compose -f compose.ci.yaml --profile test run --rm --build test`
+- 見た目・実カメラはマニュアル。`package.json` の `@playwright/test` 版と Playwright image タグは同じにする。
 
 ## Git
 

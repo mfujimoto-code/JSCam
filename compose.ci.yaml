@@ -1,0 +1,45 @@
+name: jscam-ci
+
+# Full-auto: image COPY only (no bind mounts of live JS).
+# git pull && docker compose -f compose.ci.yaml --profile test run --rm --build test
+
+services:
+  web:
+    build:
+      context: ./jscam
+      dockerfile: Dockerfile
+    image: jscam:local
+    init: true
+    environment:
+      TLS_SAN: DNS:web
+    expose:
+      - "8081"
+      - "8443"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  test:
+    profiles: ["test"]
+    build:
+      context: ./test
+      dockerfile: Dockerfile
+    image: jscam-test:local
+    ipc: host
+    init: true
+    shm_size: 256mb
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      JSCAM_SUITE: full
+      BASE_URL: http://web:8081
+      CAMERA_URL: https://web:8443
+    volumes:
+      - ./test/playwright-report:/test/playwright-report
+      - ./test/test-results:/test/test-results
+    working_dir: /test
+    command: ["playwright", "test"]

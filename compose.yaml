@@ -31,3 +31,24 @@ services:
       - ./jscam/night.js:/usr/share/nginx/html/night.js:ro
       - ./jscam/use.js:/usr/share/nginx/html/use.js:ro
       - ./jscam/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+  test:
+    profiles: ["test"]
+    build:
+      context: ./test
+      dockerfile: Dockerfile
+    image: jscam-test:local
+    ipc: host
+    init: true
+    shm_size: 256mb
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      JSCAM_SUITE: full
+      BASE_URL: http://web:8081
+      CAMERA_URL: https://web:8443
+    volumes:
+      - ./test:/test
+    working_dir: /test
+    command: ["playwright", "test"]

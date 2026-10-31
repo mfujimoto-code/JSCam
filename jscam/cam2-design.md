@@ -27,7 +27,7 @@ JSCam はブラウザ上で動作するライブカメラ画像処理ベンチ�
 
 `cam2.js`（`jsCam`: `version` / `e` / `initFn` / `kick` / `log`）→ `monitor.js`（`jsCam.monitor` / `jsCam.newObj`）→ `image.js`（`jsCam.image`）→ `frame.js` → `accum.js` → `delta.js` → `render.js` → `surface.js` → `dispatch.js` → `ui.js` → `camera.js`
 
-各ファイル（boot 以外）は評価時に `jsCam.initFn.push` するだけである。コンストラクタやループの副作用は `kick` が `initFn` を shift して走らせたあと。ES module の `import` / `export` は無い。契約は DOM id と `jsCam` のプロパティである。現行 JS のインデントはタブ。オブジェクトリテラルのメソッド本体は `{` の内側で 1 段下げる（`cam.js` 由来の `Frame.prototype` / `buildImageFuncs` のずれは直した）。`cam.js` スナップショットはスペースのまま。
+各ファイル（boot 以外）は評価時に `jsCam.initFn.push` するだけである。コンストラクタやループの副作用は `kick` が `initFn` を shift して走らせたあと。ES module の `import` / `export` は無い。公開面は DOM id と `jsCam` のプロパティである。現行 JS のインデントはタブ。オブジェクトリテラルのメソッド本体は `{` の内側で 1 段下げる（`cam.js` 由来の `Frame.prototype` / `buildImageFuncs` のずれは直した）。`cam.js` スナップショットはスペースのまま。
 
 ### `cam.js` から `cam2` への修正（事実）
 
@@ -58,7 +58,7 @@ JSCam はブラウザ上で動作するライブカメラ画像処理ベンチ�
 
 ## Goals & Non-Goals
 
-### Goals（現行システムの守るべき契約）
+### Goals（現行システムの守るべき規約）
 
 - ブラウザだけでカメラ映像をリアルタイム処理し、モード切替で結果を確認できること。
 - 内部処理解像度は `video.videoWidth` × `video.videoHeight`。表示はアスペクト比を保った contain。
@@ -69,7 +69,7 @@ JSCam はブラウザ上で動作するライブカメラ画像処理ベンチ�
 - 起動前に `enumerateDevices` で `videoinput` をスキャンすること。1 台なら従来どおり起動。2 台以上なら列挙の先頭で起動し、`#camera-select` で切替できること。
 - 使っているカメラの `getCapabilities()` に、再構成なしで変えられる項目があれば Controls の `#camera-params` に出すこと。width/height/frameRate は出さない。
 - 入力プレビュー `#video` の表示は縦横とも最大 640 CSS px。超える辺はアスペクト比を保って縮小（内部処理解像度は生サイズのまま）。
-- ヒストグラムは `#h-canvas` overlay。ビットマップは表示サイズ（`#d-canvas` と同じ contain CSS px）。画素契約は hc 座標（x=10、1px×256、高さ `height/3`、底 `height-1`、キーあたり色 2 つ）。`Draw histogram` は映像から独立。
+- ヒストグラムは `#h-canvas` overlay。ビットマップは表示サイズ（`#d-canvas` と同じ contain CSS px）。画素の置き方は hc 座標（x=10、1px×256、高さ `height/3`、底 `height-1`、キーあたり色 2 つ）。`Draw histogram` は映像から独立。
 - 非 secure context ではカメラを呼ばず、localhost HTTP / 同一ポート HTTPS への誘導を出すこと。
 - ホスト `8888` 一ポートで HTTP と HTTPS の両方を受け付けること。
 - グローバルスクリプト分割をバンドラ無しで維持し、`histogram` は `Object.create(null)` のままにすること。
@@ -566,7 +566,7 @@ out[c][i]           = abs( current[space][c][i] - planes[space][c][i] )
 
 `dispatch.set('showHistogram')` はフラグを書いて `_scheduleReset` する。組み直しは vis 末の `_pReset`（フラグを先に下ろしてから `_buildPipeline`。幽霊 `_pReset` を残さない）。真なら `_pHistogram` が `gBeginHistogram(f.innerNum())` のあと `context.frame.histogram()` の **すべてのキー** を `_hs.gDrawHistogram(f.histogram(k))` し、以降は `__pHistogram`。偽ならその vis で `_hs.gClear` し、段をパイプラインから外す。`Draw histogram` の uncheck は `ui.js` が `dispatch.set('showHistogram')` と `kick(true)`。overlay canvas の `display` は `#show-overlay`。パイプライン形への反映は 1 vis 遅れを許容。
 
-ヒストグラムの画素契約は **`#h-canvas`（表示サイズ = `#d-canvas`）座標系**。CSS は `inset:0; width/height:100%`。バーは表示ピクセルで 1px。狭いウィンドウでは 266px ストリップが切れる（R4）。
+ヒストグラムの画素の置き方は **`#h-canvas`（表示サイズ = `#d-canvas`）座標系**。CSS は `inset:0; width/height:100%`。バーは表示ピクセルで 1px。狭いウィンドウでは 266px ストリップが切れる（R4）。
 
 - バー: `fillRect(x, hc.height-1-h, 1, h)`。`x` は 10 から 1px 刻みで 256 本（カバー幅 266px、左下寄せ）。
 - バー高さ = `bins[i] * (hc.height/3) / max(bins)`。CDF 線高さスケール = `(hc.height/3) / numPixels`。底は `hc.height-1`。
@@ -618,13 +618,13 @@ dispatch と camera の映像／canvas は `kparam`。ui と残りのコント�
 
 ## API / Interface Changes
 
-本節は現行の「公開相当」インタフェースである。ES module の public API は無い。契約は DOM id と `jsCam` のプロパティである。
+本節は現行の「公開相当」インタフェースである。ES module の public API は無い。公開面は DOM id と `jsCam` のプロパティである。
 
-### DOM id 契約（カメラ/I/O を含む）
+### DOM id の対応（カメラ/I/O を含む）
 
 `jsCam.e(id)` と CSS セレクタが依存する id。映像／表示 canvas の id は boot の `kparam` 経由。改名は JS と HTML と CSS（と `kparam`）を同時に変えること。ブログ記事埋め込み用の `s18-` プレフィックスは廃止した（単体ページのため）。`cam.js` スナップショットは旧 id のまま。
 
-| id | 要素 | 契約 |
+| id | 要素 | 内容 |
 | --- | --- | --- |
 | `video` | `<video autoplay playsinline muted>` | getUserMedia シンク兼プレビュー。`srcObject` の有無が「カメラ起動済み」。表示は max 640×640 contain。処理は生 `videoWidth/Height`。 |
 | `preview-size` | `<output for="video">` | `Input preview` の右。生解像度 `W×H`。未起動・0 サイズは空。`loadedmetadata` / `resize` / attach / stop で `syncPreviewSize`。 |
@@ -668,7 +668,7 @@ currentImageMode();   // #image-mode の selected value。未選択なら ''
 syncModeSettings();   // document.querySelectorAll('[data-modes]') の hidden を同期
 ```
 
-契約:
+規約:
 
 - `data-modes` はカンマ区切りの `buildImageFuncs` キー。`split(',')` のみ。**空白は trim しない**（`GRAY-accum, BW-delta` は一致しない）。
 - 現在のモードがリストに無ければ `element.hidden = true`。あれば `false`。
@@ -941,7 +941,7 @@ Frame LRU は無い。1080p で派生配列が揃うと今フレーム数十 MiB
 
 ### 3. ヒストグラムを別 canvas / overlay DOM にする（**採用済み、PR 3**）
 
-以前は内部 canvas に半透明描画していた。現行は `#h-canvas` overlay + `#show-histogram`。内部 `ImageData` はクリーン。画素契約（表示座標、x=10、1px×256、高さ 1/3、底 height-1、キーあたり色 2 つ）。dc 後段への直描き（sx/sy 手動）は採っていない。
+以前は内部 canvas に半透明描画していた。現行は `#h-canvas` overlay + `#show-histogram`。内部 `ImageData` はクリーン。画素の置き方（表示座標、x=10、1px×256、高さ 1/3、底 height-1、キーあたり色 2 つ）。dc 後段への直描き（sx/sy 手動）は採っていない。
 
 ### 4. Worker + `OffscreenCanvas`（未採用）
 
@@ -975,7 +975,7 @@ PR 6 は既存のグローバル境界に沿った分割である。現行の読
 
 ## 方式検討メモ（画素配列プールと GC 観測）
 
-2026-09-19 起稿。コード未着手。2026-10-05 時点で Frame LRU（HIGH/LOW/`map`）は廃止済み。現行 vis はローカル `new Frame` 1 本と映像 Surface 5 枚。本節は当時の「安定時だけ手動プール」案の記録であり、現行コードの契約ではない。
+2026-09-19 起稿。コード未着手。2026-10-05 時点で Frame LRU（HIGH/LOW/`map`）は廃止済み。現行 vis はローカル `new Frame` 1 本と映像 Surface 5 枚。本節は当時の「安定時だけ手動プール」案の記録であり、現行コードの仕様ではない。
 
 ### 現状の寿命
 
@@ -1006,7 +1006,7 @@ PR 6 は既存のグローバル境界に沿った分割である。現行の読
 
 WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし `texImage2D(video)` の直後に全フレーム readback するのは、デスクトップ GL の同期 `glReadPixels` と同じクラス（帯域より GPU/CPU 同期）。JS カーネルを残すなら抽出が数 ms 速くなっても 1080p Sobel に飲まれる。メモリ改善は入力 LRU の 80–170 MB と 250 MB/s の new が消える分に限る。
 
-`VideoFrame.copyTo(既存 buffer)` は全フレーム読み出し向けで、I420 なら 1080p 約 3.1 MB かつ gray/YUV の RGB 経由を省略できる。今のパイプラインを保ったまま入力をプールするなら WebGL より短い。COOP やデコーダ形式は別契約。
+`VideoFrame.copyTo(既存 buffer)` は全フレーム読み出し向けで、I420 なら 1080p 約 3.1 MB かつ gray/YUV の RGB 経由を省略できる。今のパイプラインを保ったまま入力をプールするなら WebGL より短い。COOP やデコーダ形式は別の前提。
 
 画素を CPU に戻さない（シェーダ化）なら readback 問題は消える。それは Non-goal を外す判断であり、本メモのプール案ではない。
 
@@ -1020,7 +1020,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 - `#image-mode` 変更（`ui.js` onchange）
 - 推奨: `stopCamera`（停止後に YUV が 10 枚残らない）
 
-付帯契約:
+付帯する前提:
 
 - **遅延 RGBA は `accum` 所有のコピー。** 成功 tick で `_delay.set(get('rgba'))`（約 10 Hz）。Frame プールに入れない。モード変更では残す。`num` 変化では遅延と今の space を張り替える。
 - キー: `Uint8ClampedArray(num)` は gray/Y/R/G/B/E/edge で共有可。UV の `Array`（または将来の `Float32Array`）は別。256 ビンは入れない。
@@ -1035,7 +1035,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 | --- | --- | --- |
 | 安定時の平面 `new` | ほぼ 0 | 毎 vis |
 | ピーク（平面） | LRU 分＋プール分。上限と開放を誤ると GC より悪い | LRU 分で頭打ち |
-| モード／解像度切替 | 自分で空にし、旧世代を Salvage しない契約が要る | 旧 Frame が押し出されれば自然に落ちる |
+| モード／解像度切替 | 自分で空にし、旧世代を Salvage しない決まりが要る | 旧 Frame が押し出されれば自然に落ちる |
 | `_next` | コピー必須 | エイリアスでよい |
 | 画素バグ | エイリアス・0 埋め漏れ・長さ・開放穴 | 参照が切れていれば低い |
 | 入力 `ImageData` / scratch | どちらも毎 vis new | 同じ |
@@ -1083,7 +1083,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 - 既にある `frm` / `get` と FPS min–max。長いポーズの代理だが Sobel や `getImageData` と区別できない。alloc が高い vis でだけ読む。
 - `longtask`: gray モードで 50 ms 超が出るか。エッジではカーネル自身が longtask になる。
 
-載せない: 毎フレームのヒープ読み、COOP/COEP + `measureUserAgentSpecificMemory`（nginx / Pages 契約を変える）、`new Uint8ClampedArray` の全域フック（256 ビンが混ざる）。
+載せない: 毎フレームのヒープ読み、COOP/COEP + `measureUserAgentSpecificMemory`（nginx / Pages の前提を変える）、`new Uint8ClampedArray` の全域フック（256 ビンが混ざる）。
 
 同一解像度で 10 秒以上置いた 500 ms 行の読み方:
 
@@ -1162,7 +1162,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
    理由: `canvas.width` 代入が凍結フレームを消す。HUD は `#dcanvas-layer` の CSS overlay で、レイアウト幅に入れない。pause 中の layout は rAF ではなく `ResizeObserver`。
 
 4. **ヒストグラムは `#h-canvas` overlay（表示サイズ、CSS 100%）。内部 canvas には焼かない。**  
-   理由: 独立チェックボックス `Draw histogram` とクリーンな内部 `ImageData` が必要だった（旧決定 2 / PR 3）。画素契約は x=10、幅 1px×256、高さ `hc.height/3`、底 `hc.height-1`、キーあたり色 2 つ。`gBeginHistogram` の `color=0` と `++` のため最初は緑バー + 黄 CDF。`index.html` の "bottom-left of the image" は全幅下帯ではなく、この左下ストリップを指す。
+   理由: 独立チェックボックス `Draw histogram` とクリーンな内部 `ImageData` が必要だった（旧決定 2 / PR 3）。画素の置き方は x=10、幅 1px×256、高さ `hc.height/3`、底 `hc.height-1`、キーあたり色 2 つ。`gBeginHistogram` の `color=0` と `++` のため最初は緑バー + 黄 CDF。`index.html` の "bottom-left of the image" は全幅下帯ではなく、この左下ストリップを指す。
 
 5. **既定 Laplacian は符号付き畳み込み → abs → 0–255 クランプ。符号付きプレビューは別キー。**  
    理由: `Uint8ClampedArray` へ負値を直接書くと 0 になりエッジが消える（`cam.js` のバグ）。abs 後も 255 超は飽和する。零交差の可視化は `Edge(Laplacian signed)`（零 = 128）で opt-in（PR 8）。既存キーの画素は変えない。
@@ -1200,7 +1200,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 16. **Pause と Stop camera は別操作。**  
     理由: pause は凍結フレームを残すため `video.pause()` のみ（トラック live、LED 点灯）。rAF は切る。stop は全 `track.stop()`、`srcObject=null`、overlay 復帰、generation token で進行中 GUM を破棄。`pagehide` / `beforeunload` でも stop。R10 の緩和。
 
-17. **スクリプト分割はグローバルのまま、読み込み順を契約にする。**  
+17. **スクリプト分割はグローバルのまま、読み込み順を規約にする。**  
     理由: バンドラ無し（Non-goal）。`index.html` が読むのは `jscam-boot.js` だけ。boot の path 配列が順を決める: `cam2.js` → `monitor.js` → `use.js` → `image.js` → `frame.js` → `accum.js` → `delta.js` → `render.js` → `surface.js` → `dispatch.js` → `ui.js` → `camera.js` → `night.js`。公開面は `jsCam`（`e` / `now` / `hash` / `kick` / `fatal` / `log` / `monitor` / `newObj` / `use` / `image` / 各コンストラクタ）。Dockerfile COPY と compose bind mount と `.dockerignore` 許可リストに boot と path 配列のファイルを含める。内部 `_histogram` は `Object.create(null)` のまま。
 
 18. **デジタルズームは処理画素の中央切り出し。パンはオフセット。表示だけの CSS 拡縮はしない。**  
@@ -1287,7 +1287,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 | R4 | ヒストグラム overlay は表示座標。`hc.width < 266` だとバーが切れる | Low | overlay 分離済み（内部 ImageData はクリーン）。狭いウィンドウでストリップが崩れる |
 | R5 | メインスレッド画素ループ。1080p + `sobel.rgb` で UI が固まりうる | High | モード切替、time quantum スライス、rVFC 間引き。解像度 cap（PR 4）は延期。Worker は未実装 |
 | R6 | 自己署名証明書。警告無視が必要。SAN 不一致だとまた警告 | Medium | `TLS_SAN`。ドキュメントで手順を固定 |
-| R7 | rVFC 未対応 UA は dispatch 評価時に throw | Medium | 意図した契約。フォールバックは置かない |
+| R7 | rVFC 未対応 UA は dispatch 評価時に throw | Medium | 意図した仕様。フォールバックは置かない |
 | R8 | `get('gray')` と `get('yuv')[0]` は別キー。丸めはどちらも convert の `ToUint8Clamp` | Low | ヒストグラムキーは `'gray'` と `'y'`。`GRAY` は `get('gray')` |
 | R9 | `print` の `innerHTML` 非エスケープ | Low | 入力は内部文字列。外部入力を足すなら textContent へ |
 | R10 | pause してもカメラ占有（トラック live） | Low | 意図的。明示 `Stop camera` と `pagehide` / `beforeunload` で解放済み |
@@ -1296,7 +1296,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 | R13 | `fade` が timeout。バックグラウンドタブでパネルアニメが伸びる | Low | 機能影響なし。メインループの rAF とは別 |
 | R14 | `YUV` / `YUV-accum` の計算値が 0–255 外。ImageData 経由でクランプ | Low | 色ずれとして受容 |
 | R15 | 畳み込みは 1-D 範囲 `w+1 .. len-w-1`。ハロー無しでは左右端が行跨ぎラップ | Low | ライブ vis は 1px 複製ハロー + inner inject。ラップはハロー画素に落ちる。stat / equalize / overlay は `innerNum`。stride は幅 |
-| R16 | 表示ビットマップ = CSS px。`devicePixelRatio` 無し。HiDPI で柔らかい | Medium | 現行契約。pause 中に dpr を掛けない（R2）。シャープ化はリサイズ前コピーが前提 |
+| R16 | 表示ビットマップ = CSS px。`devicePixelRatio` 無し。HiDPI で柔らかい | Medium | 現行の仕様。pause 中に dpr を掛けない（R2）。シャープ化はリサイズ前コピーが前提 |
 | R17 | pause 中のカメラ切替は表示を更新しない | Low | 制限。Resume 後の vis で新しいカメラになる |
 | R18 | `data-modes` は `split(',')` のみで trim しない。キー前後の空白は一致しない | Low | 現行 HTML は空白無し。新しい属性もカンマ直後に空白を置かない |
 
@@ -1347,7 +1347,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 - `/app/jscam/ui.js` — パネル / モード / range
 - `/app/jscam/camera.js` — start / stop / pause。initFn 末尾で `startCamera()`
 - `/app/jscam/cam.js` — 修正前。バグ対照用
-- `/app/jscam/index.html` — DOM 契約。script は `jscam-boot.js` のみ
+- `/app/jscam/index.html` — DOM id の対応。script は `jscam-boot.js` のみ
 - `/app/jscam/cam2.css` — overlay / contain / パネル / `#h-canvas` / fps-hud / 720px シート
 - 本ファイル「方式検討メモ（画素配列プールと GC 観測）」— 観測は `jsCam.monitor`。手動プールは未実装。Open Question 8
 - `/app/compose.yaml`, `/app/jscam/Dockerfile`, `/app/jscam/nginx.main.conf`, `/app/jscam/nginx.conf`, `/app/jscam/40-gen-tls.sh`
@@ -1387,7 +1387,7 @@ PR 4 解像度 cap — 延期（必須チェーン外。決定 4）← 残作業
 - **タイトル:** `docs: cam2.js 現行システム設計書`
 - **対象ファイル:** `/app/jscam/cam2-design.md`（本文書の初版）。コードなし。
 - **依存:** なし
-- **内容:** アーキテクチャ、DOM 契約、`buildImageFuncs` キー、`[data-modes]`、pause の CSS-only フィット、grid パネル、nginx 8888 多重化、既知リスクを固定する。以降の PR の判断基準。
+- **内容:** アーキテクチャ、DOM id の対応、`buildImageFuncs` キー、`[data-modes]`、pause の CSS-only フィット、grid パネル、nginx 8888 多重化、既知リスクを固定する。以降の PR の判断基準。
 
 ### PR 1 — Dead code hygiene (behavior-preserving)
 
@@ -1466,4 +1466,4 @@ PR 4 解像度 cap — 延期（必須チェーン外。決定 4）← 残作業
 - **タイトル:** `refactor: split Frame, delta, render, camera into script files`
 - **対象:** `/app/jscam/frame.js` 等、`index.html` の script 順、`Dockerfile` / `compose.yaml` の COPY と volume
 - **依存:** PR 1, 3, 5, 7, 8（histogram 所属とキーとループが安定したあと）
-- **内容:** グローバル契約は維持（バンドラ無し）。順は `cam2.js`（`e`, `Graph`）→ `frame.js` → `delta.js` → `render.js` → `dispatch.js` → `ui.js` → `camera.js`。`histogram` は `Object.create(null)` のまま。Dockerfile COPY と compose mounts に全 JS を含める。回帰は全モードの目視と `#field-afactor` の表示切替。Key Decision 1 の正本を複数ファイルに拡張した。
+- **内容:** グローバル分割の方針は維持（バンドラ無し）。順は `cam2.js`（`e`, `Graph`）→ `frame.js` → `delta.js` → `render.js` → `dispatch.js` → `ui.js` → `camera.js`。`histogram` は `Object.create(null)` のまま。Dockerfile COPY と compose mounts に全 JS を含める。回帰は全モードの目視と `#field-afactor` の表示切替。Key Decision 1 の正本を複数ファイルに拡張した。

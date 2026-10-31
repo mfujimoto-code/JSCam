@@ -1,1 +1,6 @@
 tmp/
+test/node_modules/
+test/test-results/
+test/playwright-report/
+test/blob-report/
+test/playwright/.cache/
