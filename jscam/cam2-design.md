@@ -5,15 +5,15 @@
 | 文書タイトル | JSCam live-camera bench 現行アーキテクチャ設計書 |
 | 対象 | `/app/jscam/` の分割グローバルスクリプト（`jscam-boot.js` が `cam2.js` / `monitor.js` / `image.js` … `camera.js` を順に載せる）および付随する HTML / CSS / Docker / nginx |
 | 著者 | JSCam maintainers |
-| 日付 | 2026-10-29 |
-| ステータス | Draft（PR 1–3, 5–8 実装済み。PR 4 延期。RGBaccum 再マージ：Frame `innerBorder`。`extract(..., 1)` が 1px 複製ハロー、`inject(..., 1)` が表示は inner。stat / equalize / overlay は `innerNum`） |
+| 日付 | 2026-10-31 |
+| ステータス | Draft（PR 1–3, 5–8 実装済み。PR 4 延期。RGBaccum 再マージ：packed `argb`（`Uint32Array`、画素ごと 0xAARRGGBB）。gray / yuv / r/g/b と Accum mix / delta は argb からシフト抽出） |
 | 種別 | 現行システムの記述（greenfield 再設計ではない） |
 
 ---
 
 ## Overview
 
-JSCam はブラウザ上で動作するライブカメラ画像処理ベンチである。`getUserMedia` の映像は Surface 5 枚のリングに保持し、vis で `show(video)` してから `extract` する。ライブ vis の `extract(..., 1)` は 1px 複製ハローを付け、`new Frame(im, 1)` が inner を記録する。`inject(..., 1)` は inner だけを表示する。`Frame` は今 vis の切り出しだけを持ち、過去 Frame の LRU は無い。画素は `get` / `set`。ヒストグラムは `histogram()`（キー列またはビン）。RGB は packed RGBA から `red` / `green` / `blue` 平面を遅延生成し、`get('rgb')` は `[R,G,B]` を返す。蓄積平面は `get('gray-a'|'rgb-a'|'yuv-a')`。グレー／YUV／エッジ／ヒストグラム／Otsu／蓄積差分を計算し、内部面 `_is` へ `inject` して `#d-canvas`（`_ds`）に `show` する。ホイール／ピンチは中央切り出し。パンはオフセット。フリップは表示 Surface の水平 CTM。ヒストグラムは `#h-canvas`（`_hs`）。蓄積は render 内 `_accum` と `delta.accum` の 2 本（`#afactor` は `render.set('afactor')` と `delta.accum.set`）。キャプチャ vis は rVFC（または zoom/pan/kick/fit）が `_changed` を立てたときだけ走る。rVFC 未対応 UA は dispatch 評価時に throw。FPS HUD は vis と独立な 500ms `setTimeout`。既定モードはセレクト先頭の `Raw(RGBA-packed)`。ページロードで insecure でなければ先頭カメラを `startCamera()` する。
+JSCam はブラウザ上で動作するライブカメラ画像処理ベンチである。`getUserMedia` の映像は Surface 5 枚のリングに保持し、vis で `show(video)` してから `extract` する。ライブ vis の `extract(..., 1)` は 1px 複製ハローを付け、`new Frame(im, 1)` が inner を記録する。`inject(..., 1)` は inner だけを表示する。`Frame` は今 vis の切り出しだけを持ち、過去 Frame の LRU は無い。画素は `get` / `set`。ヒストグラムは `histogram()`（キー列またはビン）。`get('rgba')` は `ImageData.data`。内部 packed は `get('argb')`（`Uint32Array`、画素ごと 0xAARRGGBB）。`red` / `green` / `blue` 平面は argb から遅延生成し、`get('rgb')` は `[R,G,B]` を返す。蓄積平面は `get('gray-a'|'rgb-a'|'yuv-a')`。グレー／YUV／エッジ／ヒストグラム／Otsu／蓄積差分を計算し、内部面 `_is` へ `inject` して `#d-canvas`（`_ds`）に `show` する。ホイール／ピンチは中央切り出し。パンはオフセット。フリップは表示 Surface の水平 CTM。ヒストグラムは `#h-canvas`（`_hs`）。蓄積は render 内 `_accum` と `delta.accum` の 2 本（`#afactor` は `render.set('afactor')` と `delta.accum.set`）。キャプチャ vis は rVFC（または zoom/pan/kick/fit）が `_changed` を立てたときだけ走る。rVFC 未対応 UA は dispatch 評価時に throw。FPS HUD は vis と独立な 500ms `setTimeout`。既定モードはセレクト先頭の `Raw(RGBA-packed)`。ページロードで insecure でなければ先頭カメラを `startCamera()` する。
 
 本システムは `cam.js` の後継である。画像処理カーネル・描画・UI・カメラ起動はバンドラ無しのグローバルスクリプトに分割している（PR 6）。`cam.js` にあった typo / 計算バグ（`videoHeight`、RGB プレーン参照、Laplacian の符号、ヒストグラム均等化の `Vmin`、Frame ID 衝突、FPS 統計、`histogram` 命名、蓄積バッファサイズ）を修正したうえで、contain レイアウト・I/O 一時停止・明示的なカメラ停止・secure context カメラ起動・単一 rAF ループ・単一ポート HTTP/HTTPS 多重化を足している。サーバ側は Docker 上の nginx がホストポート `8888` を `ssl_preread` で HTTP (`8081`) と TLS (`8443`) に振り分ける。
 
@@ -233,7 +233,7 @@ flowchart TB
 | `jscam-boot.js` | `jscam-boot.js` | ローダ | path 配列を順挿入。`#fps-caption` に `Loading N` / `Starting`。`onerror` は caption に `failed to load <path>` を書いて throw。完了後 `jsCam.kick`。 |
 | `jsCam.monitor` | `monitor.js` | 関数 | 引数ありは画素バッファを `WeakRef` 登録。引数なしは死参照を刈り `[live, before]`。HUD `obj:` は vis あたり `before` の EMA。対象は改変しない。プールはしない。 |
 | `jsCam.newObj` | `monitor.js` | 関数 | `new Ctor(...args)` して `monitor` に載せる。画素配列と `ImageData` の確保口。 |
-| `jsCam.image` | `image.js` | オブジェクト | `convert([dstFmt,dst],[srcFmt,src])` / `stat(hist[], lum[], src[], shape?)` / `otsuThreshold(histogram)` / `sobel(dst,src,stride)` / `laplacian(dst,src,stride)` / `equalize(out,lbuf,histogram)`（`.lut` / `.map`）。`stat` に `shape` があれば inner だけビンする（stride は `shape[0]`＝幅）。convert は `rgba` ↔ `yuv`/`rgb`/`y`/`luminance`/`gray`、および `r`/`g`/`b` ← `rgba`。未知は fatal。 |
+| `jsCam.image` | `image.js` | オブジェクト | `convert([dstFmt,dst],[srcFmt,src])` / `stat(hist[], lum[], src[], shape?)` / `otsuThreshold(histogram)` / `sobel(dst,src,stride)` / `laplacian(dst,src,stride)` / `equalize(out,lbuf,histogram)`（`.lut` / `.map`）。`stat` に `shape` があれば inner だけビンする（stride は `shape[0]`＝幅）。convert は `argb` ← `rgba`、`y`/`luminance`/`gray`/`r`/`g`/`b`/`rgb`/`yuv` ← `argb`、および表示用 `rgba` ← `yuv`/`rgb`/`y`/`luminance`/`gray`。`rgba` からの旧経路も残る。未知は fatal。 |
 | `jsCam.Frame` | `frame.js` | コンストラクタ | 今 vis の画素派生。`Frame(imageData, innerBorder)`（省略 inner は 0）。`shape()` / `num()` / `innerNum()` / `get` / `set` / `histogram()` / `luminance()`。LRU / `id` / `map` / `updateStat` / `size()` / `feed` は無い。カーネルは `jsCam.image`。 |
 | `jsCam.Accum` | `accum.js` | コンストラクタ | `Accum(noStat, immediate)`。space（`gray` / `rgb` / `yuv`）ごとの指数平滑。`update(frame, space)`。`get`/`set('factor')`。 |
 | `render.mode` | `render.js` | 関数 | 引数なしでキー配列。文字列は `_deferred` に載せ `dispatch.set('schedule')`。dispatch 未評価（init）だけ即差し替え。 |
@@ -468,7 +468,7 @@ pause / リサイズパスで `width = cssW * dpr` してはならない。ビ�
   - `'buffer'` … `value` は `[id, plane]`。`getter[id]` に載せる
   - `'histogram'` … `[key, Uint32Array(256)]`。`bins === null` ならそのキーを削除
   - `'luminance'` … `[key, total]`。`null` なら削除
-- `_init` が載せるのは `getter['ImageData']` と `getter['rgba']`（`imageData.data` の alias）。gray 以降は初回 `_get*` が `set('buffer')`
+- `_init` が載せるのは `getter['ImageData']` と `getter['rgba']`（`imageData.data` の alias）。`argb` 以降は初回 `_get*` が `set('buffer')`
 - `histogram(tag)` … 引数なしはキー配列（`Object.keys`）。ありはビン。内部 `_histogram` は `Object.create(null)`（`{}` に置き換えないこと）
 - `luminance(tag)` … 同じ形。画素合計。`image.stat(..., shape())` は inner だけ数える
 - `updateStat` は無い。accum は mix 後に `set('histogram'|'luminance')` で `*-a` を載せる
@@ -478,14 +478,15 @@ pause / リサイズパスで `width = cssW * dpr` してはならない。ビ�
 
 #### 色空間
 
-- **Gray** (`_getGray`): `image.convert(['gray', gray], ['rgba', rgba])`。`gray` は `Uint8ClampedArray`（BT.601 を `ToUint8Clamp`）。`image.stat(..., shape())` のあと `histogram('gray')` / `luminance('gray')`。平面は `num()` 長。ビンは inner。
+- **ARGB packed** (`_getARGB`): `image.convert(['argb', argb], ['rgba', rgba])`。`Uint32Array` 長さ `num()`。各画素は JS ワード 0xAARRGGBB（`A<<24 | R<<16 | G<<8 | B`）。R は `>>16 & 0xff`、G は `>>8 & 0xff`、B は `& 0xff`。
+- **Gray** (`_getGray`): `image.convert(['gray', gray], ['argb', argb])`。`gray` は `Uint8ClampedArray`（BT.601 を `ToUint8Clamp`）。`image.stat(..., shape())` のあと `histogram('gray')` / `luminance('gray')`。平面は `num()` 長。ビンは inner。
 - **YUV** (`_getYUV`):
   - 戻りは平面配列 `[Y, U, V]`。
-  - `image.convert(['yuv', yuv], ['rgba', rgba])`。`Y` は `Uint8ClampedArray`（`ToUint8Clamp`。半数は even、範囲外は 0/255）。
+  - `image.convert(['yuv', yuv], ['argb', argb])`。`Y` は `Uint8ClampedArray`（`ToUint8Clamp`。半数は even、範囲外は 0/255）。
   - `U` / `V` は `Float32Array` に符号付きのまま（`U = -0.169R - 0.331G + 0.500B`、`V = 0.500R - 0.419G - 0.081B`）。
   - `histogram('y')`（ビンはクランプ後の `Y`）。gray キーは触らない。
 - **Y と Gray の丸めは同じ**（どちらも convert → `ToUint8Clamp`）。ヒストグラムキーは `'gray'` と `'y'`。`GRAY` モードは `get('gray')`。空間としては同一視しない。
-- **RGB 平面** (`__getComponent` / `_getRed` / `_getGreen` / `_getBlue`): `image.convert(['r'|'g'|'b', C], ['rgba', rgba])`。`histogram('red'|'green'|'blue')`。`get('rgb')` は `[get('red'), get('green'), get('blue')]`。8colors / RGB-accum / `sobel.rgb` はこの 3 本を使う。
+- **RGB 平面** (`__getComponent` / `_getRed` / `_getGreen` / `_getBlue`): `image.convert(['r'|'g'|'b', C], ['argb', argb])`。`histogram('red'|'green'|'blue')`。`get('rgb')` は `[get('red'), get('green'), get('blue')]`。8colors / RGB-accum / `sobel.rgb` はこの 3 本を使う。
 - **Equalize** (`_getEqualized`): ライブは `equalize.lut(lut, histogram('gray'), innerNum())` と `equalize.map(eq, gray, lut)`。`image.equalize(out, lbuf, hist)` は `out.length` を Nl にするラッパで、ライブ経路からは呼ばない。CDF `H[i]`（累積カウント）。`Hmin` は最初の非零 `H[i]`。全 inner 画素が同一階調（`Nl === Hmin`）なら LUT は恒等。それ以外は `factor = 255/(Nl-Hmin)`、`lut[i] = (Hi-Hmin)*factor`。`eq` は `num()` 長。続けて `image.stat(..., shape())`。キーは `'equalized'`。Night Vision も `lut(..., frame.innerNum())`。
 
 #### エッジ
@@ -520,7 +521,7 @@ stride は `shape()[0]`（幅）。`image.stat(..., shape())` は inner だけ�
 #### `Accum` / `delta`
 
 ```
-planes[space][c][t] = (1-factor)*planes[space][c][t-1] + factor * extract(delayRGBA, space, c)
+planes[space][c][t] = (1-factor)*planes[space][c][t-1] + factor * extract(delayARGB, space, c)
 out[c][i]           = abs( current[space][c][i] - planes[space][c][i] )
 ```
 
@@ -529,16 +530,16 @@ out[c][i]           = abs( current[space][c][i] - planes[space][c][i] )
 - `get`/`set('factor')`。既定 `Accum.FACTOR` 0.5。残差は factor でスケールしない。
 - vis ごとの EMA（旧 `accum.time` 100ms ゲートは削除）。mix は inner（`_buf[space]`）を in-place し、outer コピーを `frame.set('buffer', [space+'-a', outer])` する。公開 `*-a` を壊しても次 vis の EMA は汚染されない。
 - `_ensure` が張り替えた vis は一時 `factor=1` で今フレームを載せる（ズームで `num` が変わっても黒フェードしない）。
-- 遅延インスタンスの入力は space ごとではなく **RGBA 1 本**。`_delay` は `frame.get('rgba')`（`ImageData.data`）の参照を 1 vis 保持する。コピーしない。毎 vis の mix は直前 vis の rgba を読む（今 vis の画素と他処理が共有するバッファを混ぜないため）。`getImageData` は vis ごとに新しい `ImageData` を返す。即時インスタンスは今 vis の rgba を混ぜる。
-- 遅延のコールドスタート: `_hasDelay` が偽の vis は EMA mix をスキップし、今の rgba を遅延へ載せる。`_ensure` が真ならその vis で `factor=1` の mix が先に走る（ゼロ埋めの黒フェードを避ける）。
-- `'gray'` と `'yuv'` の Y は同一視しない。mix は RGBA から BT.601 / RGB / YUV を `Float32Array` へ直接書く（`frame.get('gray'|'yuv')` は呼ばない）。
+- 遅延インスタンスの入力は space ごとではなく **ARGB 1 本**。`_delay` は `frame.get('argb')`（`Uint32Array`）の参照を 1 vis 保持する。コピーしない。毎 vis の mix は直前 vis の argb を読む（今 vis の画素と他処理が共有するバッファを混ぜないため）。`getImageData` は vis ごとに新しい `ImageData` を返す。即時インスタンスは今 vis の argb を混ぜる。
+- 遅延のコールドスタート: `_hasDelay` が偽の vis は EMA mix をスキップし、今の argb を遅延へ載せる。`_ensure` が真ならその vis で `factor=1` の mix が先に走る（ゼロ埋めの黒フェードを避ける）。
+- `'gray'` と `'yuv'` の Y は同一視しない。mix は argb ワードから BT.601 / RGB / YUV を `Float32Array` へ直接書く（`frame.get('gray'|'yuv')` は呼ばない）。インデックスは `frame.num()`。
 - mix は `frame.num()`（ハロー込み）で inner `_buf` を進める。そのあと（`noStat` でなければ）`image.stat(..., frame.shape())`（inner だけ。共有 `_u8clamp` = `ToUint8Clamp`）でキーを載せる: gray → `'gray-a'`。rgb → `'red-a'` / `'green-a'` / `'blue-a'`。yuv → `'y-a'`。
 - `_mix` は常に `frame.set('buffer', [space + '-a', planes])`。表示は `get('gray-a'|'rgb-a'|'yuv-a')`。`planes(space)` は delta が内部で読む。
 - `GRAY-accum` は `update(frame, 'gray')` のあと `get('gray-a')[0]` を `ImageData` へ（代入時 `ToUint8Clamp`）。`#field-afactor` 表示。
 - `RGB-accum` は `update(..., 'rgb')` のあと `get('rgb-a')` をパック。`#field-afactor` 表示。
 - `YUV-accum` は `update(..., 'yuv')` のあと `get('yuv-a')` を Y+1.402V 等で再構成。ヒストグラムは `'y-a'`（表示 RGB とは別）。`#field-afactor` 表示。
-- 遅延 `update` は `_delay` だけを混ぜる。即時 `update` は今 vis の rgba。`get(space)` は呼ばない。
-- `delta.get(frame, space)` は `delta.accum.update(frame, space)` のあと、今 vis の生平面と背景の絶対差。現フレームは `image.convert` で rgba から取る（`frame.get('gray'|'rgb'|'yuv')` は呼ばない。コンストラクタ `noStat` なので overlay に `*-a` を足さない）。省略 space は `'gray'`。
+- 遅延 `update` は `_delay` だけを混ぜる。即時 `update` は今 vis の argb。`get(space)` は呼ばない。
+- `delta.get(frame, space)` は `delta.accum.update(frame, space)` のあと、今 vis の生平面と背景の絶対差。現フレームは `image.convert` で argb から取る（`frame.get('gray'|'rgb'|'yuv')` は呼ばない。コンストラクタ `noStat` なので overlay に `*-a` を足さない）。省略 space は `'gray'`。
 - `'gray'` は U8 1 本（convert `'y'`）。`'rgb'` は U8 3 平面。`'yuv'` の現フレームは Y が U8、U/V が `Float32Array`。残差出力は 3 本とも `Uint8ClampedArray`（`abs` を `ToUint8Clamp`）。
 - 互換エイリアス `delta.factor` / `delta.time` / `delta.aBuffer` / `delta.accum()` は削除。`delta.accum` は Accum インスタンス。
 - `delta.id` / `delta.threshold` は削除済み（PR 1）。`BW-delta` は `d[i]==0` かどうかで白黒。`BW-delta` / `Gray-delta` は space 省略（gray）。
@@ -692,8 +693,9 @@ f.shape();              // [width, height, innerBorder]
 f.num();                // width*height（ハロー込み）
 f.innerNum();           // (w-2i)*(h-2i)
 f.get('rgba');          // Uint8ClampedArray 長さ num*4（ImageData.data の alias）
+f.get('argb');          // Uint32Array 長さ num。画素ごと 0xAARRGGBB
 f.get('ImageData');     // ImageData（canvas の render.getImage とは別）
-f.get('gray');          // Uint8ClampedArray。convert BT.601 → ToUint8Clamp
+f.get('gray');          // Uint8ClampedArray。argb から BT.601 → ToUint8Clamp
 f.get('yuv');           // [Y, U, V]。Y は Uint8ClampedArray ToUint8Clamp
                         // U,V は Float32Array（符号付き）
                         // histogram('y')。丸めは get('gray') と同じ
@@ -713,11 +715,11 @@ f.histogram();          // キー配列。gray?, y?, red?, green?, blue?, equali
 f.histogram(key);       // Uint32Array(256)（inner 画素）
 f.luminance();          // キー配列
 f.luminance(key);       // inner 画素合計
-Frame._getters;         // 計算系 id → 初回関数（ImageData と rgba は _init）
+Frame._getters;         // 計算系 id → 初回関数（ImageData と rgba は _init。argb 以降は _get*）
 Frame._setters;         // buffer / histogram / luminance
 ```
 
-カーネルと Otsu と色変換は `jsCam.image`。`convert([dstFmt,dst],[srcFmt,src])`（`rgba` ↔ `yuv`/`rgb`/`y`/`luminance`/`gray`、および `r`/`g`/`b` ← `rgba`）、`stat(hist[], lum[], src[], shape?)`（`shape` ありは inner だけ。stride は `shape[0]`＝幅。ビンは共有 `_u8clamp`、hist は `Uint32Array(256)`）、`otsuThreshold(histogram256)`、`sobel(dst,src,stride)`、`laplacian(dst,src,stride)`、`equalize(out,lbuf,histogram)`（`out.length` を Nl。ライブは `.lut(lut, hist, innerNum)` / `.map`）。3x3 オフセットは stride が同じなら再利用。`dst.fill(0)`。otsu / equalize の作業配列は `jsCam.use`。
+カーネルと Otsu と色変換は `jsCam.image`。`convert([dstFmt,dst],[srcFmt,src])`（`argb` ← `rgba`、`y`/`luminance`/`gray`/`r`/`g`/`b`/`rgb`/`yuv` ← `argb`、表示用 `rgba` ← `yuv`/`rgb`/`y`/`luminance`/`gray`。`rgba` からの旧経路も残る）、`stat(hist[], lum[], src[], shape?)`（`shape` ありは inner だけ。stride は `shape[0]`＝幅。ビンは共有 `_u8clamp`、hist は `Uint32Array(256)`）、`otsuThreshold(histogram256)`、`sobel(dst,src,stride)`、`laplacian(dst,src,stride)`、`equalize(out,lbuf,histogram)`（`out.length` を Nl。ライブは `.lut(lut, hist, innerNum)` / `.map`）。3x3 オフセットは stride が同じなら再利用。`dst.fill(0)`。otsu / equalize の作業配列は `jsCam.use`。
 
 `jsCam.monitor(...bufs)` は画素バッファを `WeakRef` 登録。`jsCam.monitor()` は死参照を刈り `[live, before]`。HUD `obj:` は vis あたり `before` の EMA。`jsCam.newObj(Ctor, ...args)` は `new` して `monitor` に載せる。
 
@@ -773,8 +775,8 @@ Accum.SPACES;                // ['gray','rgb','yuv']。_check が includes
 Accum.FACTOR;                // 0.5
 a.set('factor', v); a.get('factor');
 a.update(frame, space);      // 省略 space は 'gray'。毎 vis 混ぜる
-                             // immediate 偽: 直前 vis の rgba 参照（1 フレーム）
-                             // immediate 真: 今 vis の rgba
+                             // immediate 偽: 直前 vis の argb 参照（1 フレーム）
+                             // immediate 真: 今 vis の argb
                              // mix は inner in-place、outer コピーを *-a として公開
                              // 常に set('buffer', [space + '-a', outer])
                              // コンストラクタ noStat 真なら *-a の histogram/luminance なし
@@ -788,7 +790,7 @@ a.planes(space);             // Float32Array 平面。未 update は空。delta 
 ```javascript
 delta.accum;                 // new Accum(true, false)。残差用。render の _accum とは別
 delta.get(frame, space);     // update(frame, space) のあと |current − planes|
-                             // current は image.convert from rgba。省略 space は 'gray'
+                             // current は image.convert from argb。省略 space は 'gray'
 ```
 
 ### `dispatch`
@@ -905,7 +907,7 @@ scanCameraSupport(); // #support-scan。非同期。結果は #support-report（
 _snap: Surface[5]           // 映像リング。_pFetch で pop/unshift、読むのは [0]
 Frame 1 個あたり（今 vis のみ）:
   ImageData (width*height*4 bytes)
-  必要に応じて gray / yuv / equalized / red,green,blue / edge / *-a
+  必要に応じて argb / gray / yuv / equalized / red,green,blue / edge / *-a
   histogram() / luminance()  キーは gray, y, red, green, blue, equalized, edge ids, *-a
 ```
 
@@ -913,7 +915,7 @@ Frame LRU は無い。1080p で派生配列が揃うと今フレーム数十 MiB
 
 ### 蓄積バッファ
 
-`accum` の平面は `update` された space だけ持つ。mix のたびに新規 `Float32Array` へ書いて差し替える。`frame.num()` がその space の長さと違う vis ではその space を張り替え、`factor=1` で今フレームを載せる（ズーム切り出しやカメラ切替）。遅延 `_delay` は直前 vis の `rgba` 参照。他 space は次の `update` まで旧長さのまま。モード切替では他 space を捨てない（凍結）。
+`accum` の平面は `update` された space だけ持つ。mix のたびに新規 `Float32Array` へ書いて差し替える。`frame.num()` がその space の長さと違う vis ではその space を張り替え、`factor=1` で今フレームを載せる（ズーム切り出しやカメラ切替）。遅延 `_delay` は直前 vis の `argb` 参照。他 space は次の `update` まで旧長さのまま。モード切替では他 space を捨てない（凍結）。
 
 ### ループ状態
 
@@ -1178,13 +1180,13 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
    理由: 処理は生 `videoWidth/Height`。`getCapabilities` は同期。`applyConstraints` はトラック再取得しない。frameRate と解像度はパイプライン再構成がありうるので出さない。PTZ のために `zoom: true` で GUM し直さない（追加許可ダイアログを避ける）。PR 4 は延期のまま。
 
 10. **派生画像はインスタンス表 `getter[tag]` のスロット差し替えでメモ化する。`get(tag)` が表を呼ぶ。`set('buffer')` が載せる。**  
-    理由: 同一フレームで gray と Laplacian と histogram が gray を共有。再計算しない。`_init` が表を作り直すまで無効化も無い。prototype の `get` にスロットを付けない（全 Frame で共有される）。未知 id は throw。`histogram()` / `luminance()` は別マップ。`num` / `shape` / `innerNum` は画素 `get` に入れない。`rgba` は `_init` で `ImageData.data`。
+    理由: 同一フレームで gray と Laplacian と histogram が gray を共有。再計算しない。`_init` が表を作り直すまで無効化も無い。prototype の `get` にスロットを付けない（全 Frame で共有される）。未知 id は throw。`histogram()` / `luminance()` は別マップ。`num` / `shape` / `innerNum` は画素 `get` に入れない。`rgba` は `_init` で `ImageData.data`。`argb` は初回 `_getARGB`。
 
 11. **ヘッダーは専用行。Controls はヘッダー下の映像エリアに overlay。JS は `paddingRight` を書かない。CSS `cqw` の 4:3 ボックスはライブ後に `aspect-ratio:auto` で破棄。**  
     理由: トップバーと Close / Pause が重なると操作不能になる。chrome 非表示時はヘッダー行が潰れ映像が全画面。Controls 背景 50% 透過。`fitDisplaySize` は `#layers` から CSS padding だけ引く。
 
-12. **蓄積は `Accum(noStat, immediate)`。平面は `Float32Array`。遅延インスタンスは直前 vis の `rgba` 参照を 1 フレーム保持。即時は今 vis の rgba。mix は inner を in-place し outer コピーを `*-a` として公開する。毎 vis 混ぜる。render の `_accum` と `delta.accum` と Night Vision の `_abuf` は別インスタンス。**  
-    理由: プレビュー EMA は即時（`Accum(false, true)`）。残差 EMA は遅延+noStat（`Accum(true, false)`）。Night Vision は独自即時 Accum。factor スライダは render と delta へ（Night は既定 0.5 のまま）。`ImageData` には積まない。遅延側は今 vis の画素バッファを他処理と共有したまま混ぜない。公開 `*-a` を壊しても inner EMA は残る。gray と Y は同一視しない。表示は `get('*-a')`。delta は overlay に `*-a` を足さない。
+12. **蓄積は `Accum(noStat, immediate)`。平面は `Float32Array`。遅延インスタンスは直前 vis の `argb` 参照を 1 フレーム保持。即時は今 vis の argb。mix は inner を in-place し outer コピーを `*-a` として公開する。毎 vis 混ぜる。render の `_accum` と `delta.accum` と Night Vision の `_abuf` は別インスタンス。**  
+    理由: プレビュー EMA は即時（`Accum(false, true)`）。残差 EMA は遅延+noStat（`Accum(true, false)`）。Night Vision は独自即時 Accum。factor スライダは render と delta へ（Night は既定 0.5 のまま）。`ImageData` には積まない。遅延側は今 vis の画素バッファを他処理と共有したまま混ぜない。公開 `*-a` を壊しても inner EMA は残る。gray と Y は同一視しない。表示は `get('*-a')`。delta は overlay に `*-a` を足さない。mix は argb ワードからシフト抽出。
 
 13. **`showHistogram` は overlay 専用。`dispatch.set('showHistogram')`。`Draw image` / `dispatch.showImage` は削除。**  
     理由: 負荷は rVFC 間引きと time quantum スライス。vis が走ればカーネルは走る。ヒストグラムを外すと映像は動き overlay だけ消える。
@@ -1218,6 +1220,9 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 
 23. **ライブ Frame は 1px 複製ハロー。統計と overlay は inner。**  
     理由: 3x3 は 1-D 範囲のまま。ハローがあるので inner 近傍はハロー画素に落ち、`inject` が外周を落とす。`image.stat` の stride は幅（`shape[0]`）。equalize の Nl と `gBeginHistogram` は `innerNum()`。Accum mix は `num()`（ハロー込み）。scaled extract の `getImageData` 原点は `sx-border, sy-border`。src あり経路は描画後 `-border,-border`。キャンバス外は最近傍を複製。
+
+24. **内部 packed は `argb`（`Uint32Array`、画素ごと 0xAARRGGBB）。**  
+    理由: mix とチャネル抽出を 1 画素 1 インデックスにする。`rgba` は `ImageData.data` のまま。gray / yuv / r/g/b と Accum / delta の現フレームは `get('argb')` から取る。表示パックは従来どおり `rgba` ← 平面。
 
 ---
 
@@ -1286,7 +1291,7 @@ WebGL `readPixels(..., pixels)` は既存 `Uint8Array` に書ける。ただし 
 | R8 | `get('gray')` と `get('yuv')[0]` は別キー。丸めはどちらも convert の `ToUint8Clamp` | Low | ヒストグラムキーは `'gray'` と `'y'`。`GRAY` は `get('gray')` |
 | R9 | `print` の `innerHTML` 非エスケープ | Low | 入力は内部文字列。外部入力を足すなら textContent へ |
 | R10 | pause してもカメラ占有（トラック live） | Low | 意図的。明示 `Stop camera` と `pagehide` / `beforeunload` で解放済み |
-| R11 | EMA は毎 vis。delta は遅延 rgba、プレビューと Night は即時。Accum は独立 | Low | 張り替え vis は factor=1。mix は inner in-place + outer 公開。スライダは render と delta |
+| R11 | EMA は毎 vis。delta は遅延 argb、プレビューと Night は即時。Accum は独立 | Low | 張り替え vis は factor=1。mix は inner in-place + outer 公開。スライダは render と delta |
 | R12 | CSS `.stage-layer` の 4:3 はカメラ前プレースホルダ。実カメラが 16:9 でも起動前は 4:3 | Low | 起動後 JS が上書き |
 | R13 | `fade` が timeout。バックグラウンドタブでパネルアニメが伸びる | Low | 機能影響なし。メインループの rAF とは別 |
 | R14 | `YUV` / `YUV-accum` の計算値が 0–255 外。ImageData 経由でクランプ | Low | 色ずれとして受容 |
