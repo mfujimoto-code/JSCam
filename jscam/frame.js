@@ -14,7 +14,7 @@ Frame._getters = _j.hash({
 	'red':              function () {return this._getRed()}
 ,	'green':            function () {return this._getGreen()}
 ,	'blue':             function () {return this._getBlue()}
-,	'rgb':              function () {return this._getRgb()}
+,	'rgb':              function () {return this._getRGB()}
 ,	'gray':             function () {return this._getGray()}
 ,	'yuv':              function () {return this._getYUV()}
 ,	'equalized':        function () {return this._getEqualized()}
@@ -22,6 +22,7 @@ Frame._getters = _j.hash({
 ,	'laplacian.signed': function () {return this._getEdge('laplacian.signed')}
 ,	'sobel':            function () {return this._getEdge('sobel')}
 ,	'sobel.rgb':        function () {return this._getEdge('sobel.rgb')}
+,	'argb':             function () {return this._getARGB()}
 });
 
 Frame._setters = _j.hash({
@@ -99,7 +100,7 @@ Frame.prototype = {
 		,	bTag = ['red', 'green', 'blue'][index]
 		,	cTag = ['r', 'g', 'b'][index]
 		;
-		_j.image.convert([cTag, C], ['rgba', this.get('rgba')]);
+		_j.image.convert([cTag, C], ['argb', this.get('argb')]);
 		_j.image.stat([hC], lum, [C], this.shape());
 		this.set('buffer',    [bTag, C     ]);
 		this.set('histogram', [bTag, hC    ]);
@@ -115,7 +116,7 @@ Frame.prototype = {
 	, _getBlue: function () {
 		return this.__getComponent(2)
 	}
-	, _getRgb: function () {
+	, _getRGB: function () {
 		this.set('buffer', 
 		[	'rgb'
 		,	[
@@ -155,7 +156,7 @@ Frame.prototype = {
 		,	hY = _j.newObj(Uint32Array, 256)
 		,	lum = [[0]]
 		;
-		_j.image.convert(['yuv', yuv], ['rgba', this.get('rgba')]);
+		_j.image.convert(['yuv', yuv], ['argb', this.get('argb')]);
 		_j.image.stat([hY], lum, [yuv[0]], this.shape());
 
 		this.set('buffer',    ['yuv', yuv   ]);
@@ -169,7 +170,7 @@ Frame.prototype = {
 		,	hG = _j.newObj(Uint32Array, 256)
 		,	lum = [[0]]
 		;
-		_j.image.convert(['gray', gray], ['rgba', this.get('rgba')]);
+		_j.image.convert(['gray', gray], ['argb', this.get('argb')]);
 		_j.image.stat([hG], lum, [gray], this.shape());
 		this.set('buffer',    ['gray', gray  ]);
 		this.set('histogram', ['gray', hG    ]);
@@ -223,6 +224,14 @@ Frame.prototype = {
 		this.set('histogram', [method, hE    ]);
 		this.set('luminance', [method, lum[0]]);
 		return this.get(method);
+	}
+	, _getARGB: function () {
+		const	argb = _j.newObj(Uint32Array, this.num());
+		
+		_j.image.convert(['argb', argb], ['rgba', this.get('rgba')]);
+		this.set('buffer', ['argb', argb]);
+
+		return this.get('argb')
 	}
 }
 

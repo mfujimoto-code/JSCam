@@ -26,7 +26,7 @@ const delta = {
 			,	out = delta._delta
 			,	n = Math.min(acc[0].length, g.length, out.length)
 			;
-			_j.image.convert(['y', g], ['rgba', frame.get('rgba')]);
+			_j.image.convert(['y', g], ['argb', frame.get('argb')]);
 			delta._absPlane(out, g, acc[0], n);
 			return out
 		}
@@ -45,7 +45,7 @@ const delta = {
 			,	n = Math.min(acc[0].length, num)
 			;
 
-			_j.image.convert(['rgb', cur], ['rgba', frame.get('rgba')]);
+			_j.image.convert(['rgb', cur], ['argb', frame.get('argb')]);
 			for (let k = 0; k < 3; ++k)
 				delta._absPlane(out[k], cur[k], acc[k], n);
 			return out
@@ -70,7 +70,7 @@ const delta = {
 		,	aV = acc[2]
 		;
 
-		_j.image.convert(['yuv', yuv], ['rgba', frame.get('rgba')]);
+		_j.image.convert(['yuv', yuv], ['argb', frame.get('argb')]);
 
 		for (let k = 0; k < 3; ++k)
 			delta._absPlane(out[k], yuv[k], acc[k], n);

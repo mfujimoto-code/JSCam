@@ -8,6 +8,16 @@ const	_j = jsCam
 
 _j.image = _image;
 
+const _rgba2argb = (from, to)=>{
+	for (let s = 0, d = 0; d < to.length; s+=4, ++d) {
+		to[d] = from[s+0]<<16
+		|       from[s+1]<<8
+		|       from[s+2]
+		|       from[s+3]<<24
+		;
+	}
+};
+
 const _y2rgba = (from, to)=>{
 	const	L = from
 	,	fromLen = L.length
@@ -55,6 +65,16 @@ const _yuv2rgba = (from, to)=>{
 	}
 };
 
+const _argb2y = (from, to)=>{
+	for (let i = 0; i < to.length; ++i) {
+		const	c = from[i];
+		to[i] = (c>>16 & 0xff)*0.299
+		+       (c>>8  & 0xff)*0.587
+		+       (c     & 0xff)*0.114
+		;
+	}
+};
+
 const _rgba2y = (from, to)=>{
 	const	toLen = to.length;
 	for (let fi = 0, ti = 0; ti < toLen; fi+=4, ++ti) {
@@ -64,6 +84,15 @@ const _rgba2y = (from, to)=>{
 		;
 	}
 };
+
+const __argb2x = (from, to, x)=>{
+	for (let i = 0; i < to.length; ++i) {
+		to[i] = from[i]>>(x*8) & 0xff;
+	}
+};
+const _argb2r = (from, to)=>(__argb2x(from, to, 2));
+const _argb2g = (from, to)=>(__argb2x(from, to, 1));
+const _argb2b = (from, to)=>(__argb2x(from, to, 0));
 
 const __rgba2x = (from, to, x)=>{
 	const	toLen = to.length;
@@ -75,6 +104,12 @@ const _rgba2r = (from, to)=>(__rgba2x(from, to, 0));
 const _rgba2g = (from, to)=>(__rgba2x(from, to, 1));
 const _rgba2b = (from, to)=>(__rgba2x(from, to, 2));
 
+const _argb2rgb = (from, to)=>{
+	_argb2r(from, to[0]);
+	_argb2g(from, to[1]);
+	_argb2b(from, to[2]);
+};
+
 const _rgba2rgb = (from, to)=>{
 	const	toLen = to[0].length
 	,	R = to[0]
@@ -85,6 +120,26 @@ const _rgba2rgb = (from, to)=>{
 		R[ti] = from[fi+0];
 		G[ti] = from[fi+1];
 		B[ti] = from[fi+2];
+	}
+};
+
+const _argb2yuv = (from, to)=>{
+	const	Y = to[0]
+	,	U = to[1]
+	,	V = to[2]
+	;
+	for (let i = 0; i < from.length; ++i) {
+		const	c = from[i]
+		,	r = c>>16 & 0xff
+		,	g = c>>8  & 0xff
+		,	b = c     & 0xff
+		;
+		// Y =  0.299R + 0.587G + 0.114B
+		// U = -0.169R - 0.331G + 0.500B
+		// V =  0.500R - 0.419G - 0.081B
+		Y[i] = r*0.299 + g*0.587 + b*0.114;
+		U[i] =-r*0.169 - g*0.331 + b*0.500;
+		V[i] = r*0.500 - g*0.419 - b*0.081;
 	}
 };
 
@@ -118,27 +173,38 @@ const _convHash = {
 	}
 ,	'yuv': {
 		'rgba': _rgba2yuv
+	,	'argb': _argb2yuv
 	}
 ,	'rgb': {
 		'rgba':	_rgba2rgb
+	,	'argb': _argb2rgb
 	}
 ,	'r': {
 		'rgba':	_rgba2r
+	,	'argb': _argb2r
 	}
 ,	'g': {
 		'rgba':	_rgba2g
+	,	'argb': _argb2g
 	}
 ,	'b': {
 		'rgba':	_rgba2b
+	,	'argb': _argb2b
 	}
 ,	'y': {
 		'rgba':	_rgba2y
+	,	'argb':	_argb2y
 	}
 ,	'luminance': {
 		'rgba':	_rgba2y
+	,	'argb':	_argb2y
 	}
 ,	'gray': {
 		'rgba':	_rgba2y
+	,	'argb':	_argb2y
+	}
+,	'argb': {
+		'rgba': _rgba2argb
 	}
 };
 
