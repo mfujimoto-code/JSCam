@@ -84,12 +84,12 @@ Frame.prototype = {
 	}
 	, histogram: function (tag) {
 		if (!tag) 
-			return Object.keys(this._histogram)
+			return _j.hash.keys(this._histogram)
 		return this._histogram[tag]()
 	}
 	, luminance: function (tag) {
 		if (!tag) 
-			return Object.keys(this._luminance)
+			return _j.hash.keys(this._luminance)
 		return this._luminance[tag]()
 	}
 	, __getComponent: function (index) {

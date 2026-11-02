@@ -1,7 +1,7 @@
 'use strict';
 
 // Bump on every change (UTC YYYY.MM.DD-HHMMSSZ-<git short HEAD at edit>).
-const JSCAM_VERSION = '2026.10.31-180104Z-e2f696f';
+const JSCAM_VERSION = '2026.10.31-000455Z-3b2610a';
 
 const jsCam = function () {
 };
@@ -11,13 +11,17 @@ const jsCam = function () {
 const _j = jsCam;
 
 _j.version = JSCAM_VERSION;
-_j.e = document.getElementById.bind(document);
-_j.now = performance.now.bind(performance);
+
+(typeof document !== 'undefined')    && (_j.e = document.getElementById.bind(document));
+(typeof performance !== 'undefined') && (_j.now = performance.now.bind(performance));
+(typeof console !== 'undefined')     && (_j.log = console.log.bind(console));
+
 _j.hash = (seed)=>{
 	if (!seed)
 		return Object.create(null)
 	return Object.assign(_j.hash(), seed)
 };
+_j.hash.keys = (hash)=>(Object.keys(hash));
 
 _j.initFn = [];
 
@@ -32,9 +36,5 @@ _j.fatal = (e)=>{
 	_j.log(e.toString());
 	throw e
 }
-
-_j.log = (...msg)=>{
-	console.log(...msg)
-};
 
 })();

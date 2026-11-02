@@ -111,7 +111,7 @@ jsCam.initFn.push((kparam)=>{
 	,	DC_DURATION = 300
 	,	P_DURATION = 50
 	,	dclick = function (ev) {
-			const k = Object.keys(pointers);
+			const k = _j.hash.keys(pointers);
 			if (k.length > 0) return
 
 			const now = _j.now();
@@ -127,7 +127,7 @@ jsCam.initFn.push((kparam)=>{
 			return dx*dx + dy*dy
 		}
 	,	pstart = function (ev) {
-			const k = Object.keys(pointers);
+			const k = _j.hash.keys(pointers);
 
 			if (k.length == 2) {
 				// start pinch detection
@@ -143,7 +143,7 @@ jsCam.initFn.push((kparam)=>{
 			}
 		}
 	,	pdetect = function (ev) {
-			const k = Object.keys(pointers);
+			const k = _j.hash.keys(pointers);
 			const now = _j.now();
 
 			if (k.length == 2 && ev.pointerId in pointers) {
