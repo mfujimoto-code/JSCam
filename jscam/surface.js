@@ -14,9 +14,11 @@ const	_getGC = (c, r) => (
 	    : c.getContext('2d')
 );
 
-const	_useOC = (typeof OffscreenCanvas !== 'undefined')
-,	_getCanvas = _useOC ? ()=>(new OffscreenCanvas(640, 480))
-			    : ()=>(document.createElement('canvas'))
+const	_isOC = (typeof OffscreenCanvas !== 'undefined')
+,	_isDOC = (typeof document !== 'undefined')
+,	_getCanvas = _isOC ? ()=>(new OffscreenCanvas(640, 480))
+			   : _isDOC ? ()=>(document.createElement('canvas'))
+			            : ()=>(_j.fatal(new Error('no offscreen canvas')))
 ;
 
 const _p = Surface.prototype;
@@ -64,8 +66,12 @@ _p.shape = function () {
 };
 _p.clientRect = function () {
 	const	tc = this._tc
+	,	fn = tc.getBoundingClientRect
 	;
-	return tc.getBoundingClientRect()
+	if (!fn)
+		_j.fatal(new Error('no getBoundingClientRect'));
+
+	return fn.call(tc)
 };
 
 _p.show = function (src) {
@@ -136,14 +142,7 @@ const	_adjust = function (image, x, y, w, h) {
 			let	dst = iy * stride
 			,	src = -y * stride
 			;
-			for (let ix = 0; ix < image.width; ++ix) {
-				d[dst+0] = d[src+0];
-				d[dst+1] = d[src+1];
-				d[dst+2] = d[src+2];
-				d[dst+3] = d[src+3];
-				dst += 4;
-				src += 4;
-			}
+			d.copyWithin(dst, src, image.width * 4);
 		}
 	}
 	const	tw = this._tc.width;
@@ -168,46 +167,17 @@ const	_adjust = function (image, x, y, w, h) {
 			let	dst = iy * stride
 			,	src = (-y + th - 1) * stride
 			;
-			for (let ix = 0; ix < image.width; ++ix) {
-				d[dst+0] = d[src+0];
-				d[dst+1] = d[src+1];
-				d[dst+2] = d[src+2];
-				d[dst+3] = d[src+3];
-				dst += 4;
-				src += 4;
-			}
+			d.copyWithin(dst, src, image.width * 4);
 		}
 	}
 };
 
-_p.extract = function (scale, offset, src, border) {
-	const	tc = this._tc
-	,	gc = this._gc
-	;
+_p.rect = function (scale, offset) {
+	const	tc = this._tc;
 	(scale === undefined) && (scale = 1);
-	border = (border === undefined) ? (0) : border>>>0;
-	const b2 = border * 2;
 
-	if (scale === 1) {
-		if (src) 
-			gc.drawImage(src, 0, 0, tc.width, tc.height);
-		const im = gc.getImageData(
-			-border
-		,	-border
-		,	tc.width + b2
-		,	tc.height + b2
-		);
-		_j.monitor(im);
-		_adjust.call(
-			this
-		,	im
-		,	-border
-		,	-border
-		,	tc.width + b2
-		,	tc.height + b2
-		);
-		return [im, 0, 0]
-	}
+	if (scale === 1) 
+		return [0, 0, tc.width, tc.height, 0, 0]
 
 	if (scale <= 0 ||  scale > 1)
 		_j.fatal(new Error('not supported ' + scale.toString()));
@@ -246,47 +216,31 @@ _p.extract = function (scale, offset, src, border) {
 	sx |= 0;
 	sy |= 0;
 
-	if (!src) {
-		const im = gc.getImageData(
-			sx - border
-		,	sy - border
-		,	sw + b2
-		,	sh + b2
-		);
-		_j.monitor(im);
-		_adjust.call(
-			this
-		,	im
-		,	sx - border
-		,	sy - border
-		,	sw + b2
-		,	sh + b2
-		);
-		return [im, ox, oy]
-	}
+	return [sx, sy, sw, sh, ox, oy]
+};
 
-	gc.drawImage(src
-	,	sx, sy, sw, sh
-	,	 0,  0, sw, sh
-	);
+_p.extract = function (rect, src, border) {
+	const	tc = this._tc
+	,	gc = this._gc
+	;
+	border = (border === undefined) ? (0) : border>>>0;
+	const	b2 = border * 2;
 
-	const im = gc.getImageData(
-		-border
-	,	-border
-	,	sw + b2
-	,	sh + b2
-	);
+	src && gc.drawImage(
+			src
+		,	rect[0], rect[1], rect[2], rect[3]
+		,	0,       0,       rect[2], rect[3]
+		);
+	const	x = rect[0] - border
+	,	y = rect[1] - border
+	,	w = rect[2] + b2
+	,	h = rect[3] + b2
+	,	im = gc.getImageData(x, y, w, h);
+	;
 	_j.monitor(im);
-	_adjust.call(
-		this
-	,	im
-	,	-border
-	,	-border
-	,	sw + b2
-	,	sh + b2
-	);
-	return [im, ox, oy]
-}
+	_adjust.call(this, im, x, y, w, h);
+	return im
+};
 
 _p.gIdentity = function () {
 	this._gc.setTransform(1, 0, 0, 1, 0, 0)

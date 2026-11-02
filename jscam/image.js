@@ -420,5 +420,47 @@ _image.equalize = (out, lbuf, histogram)=>{
 _image.equalize.lut = _equalizeLUT;
 _image.equalize.map = _mapLUT;
 
+const	_splitH = (r)=>{
+	const	T = [
+		r[0]
+	,	r[1]
+	,	r[2]
+	,	r[3] >> 1
+	]
+	,	B = [
+		r[0]
+	,	r[1] + T[3]
+	,	r[2]
+	,	r[3] - T[3]
+	]
+	;
+	return [T, B]
+}
+,	_splitV = (r)=>{
+	const	L = [
+		r[0]
+	,	r[1]
+	,	r[2] >> 1
+	,	r[3]
+	]
+	,	R = [
+		r[0] + L[2]
+	,	r[1]
+	,	r[2] - L[2]
+	,	r[3]
+	]
+	;
+	return [L, R]
+}
+,	_grid = (d, t, r)=>{
+	if (r[2] * r[3] <= t) 
+		return [r]
+
+	let	s = (d & 1) ? _splitV(r) : _splitH(r);
+	++d;
+	return [..._grid(d, t, s[0]), ..._grid(d, t, s[1])]
+}
+
+_image.grid = (target, rect)=>(_grid(0, target, rect));
 
 });

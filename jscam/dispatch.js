@@ -259,11 +259,11 @@ const _pipeline = []
 	_pipeline.push(me);
 }
 , _pExtract = (context, me) => {
-	const	extract = context.snap[0].extract(_scale, _offset, null, 1)
-	,	srcImage = extract[0]
+	const	r = context.snap[0].rect(_scale, _offset)
+	,	srcImage = context.snap[0].extract(r, null, 1)
 	;
-	_offset[0] = extract[1];
-	_offset[1] = extract[2];
+	_offset[0] = r[4];
+	_offset[1] = r[5];
 
 	context.frame = new _j.Frame(srcImage, 1);
 
