@@ -1,12 +1,9 @@
 'use strict';
 
 jsCam.initFn.push((kparam)=>{
-const _j = jsCam;
-
-let	_afactor = 0.5
-;
-const	_abuf = new _j.Accum(false, true)
-,	_eq = _j.image.equalize
+const	_j = jsCam
+,	_i = _j.image
+,	_eq = _i.equalize
 ;
 
 const	_stage2 = _j.hash();
@@ -37,7 +34,7 @@ _stage2.want = [[Uint8ClampedArray, 256], [Float32Array, 256], [Uint8ClampedArra
 
 const	_stage = [
 	(state)=>{
-		_abuf.update(state.frame, 'yuv');
+		state.frame.get('argb');
 	}
 ,	(state)=>{
 		const	yuv = state.frame.get('yuv-a');
@@ -53,9 +50,9 @@ const	_stage = [
 		,	s = frame.shape()
 		,	imageData = _j.newObj(ImageData, s[0], s[1])
 		;
-		_j.image.convert(
-			['rgba', imageData.data]
-		,	['yuv', state.yuv]
+		_i.convert(
+			['yuv', state.yuv]
+		,	['rgba', imageData.data]
 		);
 		state.image = imageData;
 	}

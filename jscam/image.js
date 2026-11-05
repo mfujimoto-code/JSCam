@@ -3,10 +3,109 @@
 jsCam.initFn.push((kparam)=>{
 
 const	_j = jsCam
-,	_image = _j.hash()
+,	_i = _j.hash()
 ;
 
-_j.image = _image;
+_j.image = _i;
+
+const _diff = (pair, out)=>{
+	const	p1 = pair[0]
+	,	p2 = pair[1]
+	;
+	for (let p = 0; p < p1.length; ++p) {
+		const	o = out[p]
+		,	d1 = p1[p]
+		,	d2 = p2[p]
+		;
+		for (let i = 0; i < o.length; ++i) {
+			o[i] = Math.abs(d1[i] - d2[i])
+		}
+	}
+};
+
+_i.diff = _diff;
+
+const _hashIA = _j.hash({
+	'rgba':      (size)=>(_j.newObj(Uint8ClampedArray, size*4))
+,	'argb':      (size)=>(_j.newObj(Uint32Array,       size))
+,	'rgb':       (size)=>(_j.newObj(Float32Array,      size*3))
+,	'yuv':       (size)=>(_j.newObj(Float32Array,      size*3))
+,	'gray':      (size)=>(_j.newObj(Float32Array,      size))
+,	'plane':     (size)=>(_j.newObj(Float32Array,      size))
+,	'histogram': (size)=>(_j.newObj(Uint32Array,       256*size))
+});
+_i.array = (type, numPixel)=>(_hashIA[type](numPixel));
+_i.chop3 = (array)=>{
+	const stride = (array.length / 3)>>>0;
+	return [
+		array.subarray(0,        stride)
+	,	array.subarray(stride,   stride*2)
+	,	array.subarray(stride*2, stride*3)
+	]
+};
+
+const _blendY2Y = (Ysrc, dst, factor)=>{
+	const	rf = 1 - factor
+	,	Ydst = dst[0]
+	;
+	for (let i = 0; i < Ysrc.length; ++i) {
+		Ydst[i] = rf * Ydst[i] + factor * Ysrc[i];
+	}
+};
+
+const _blendY = (argb, y, factor)=>{
+	const	rf = 1 - factor
+	,	Y = y[0]
+	;
+	for (let i = 0; i < argb.length; ++i) {
+		const c = argb[i];
+		Y[i] = rf * Y[i]
+		+      factor * (((c>>16) & 0xff) * 0.299
+		                +((c>>8 ) & 0xff) * 0.587
+		                +((c    ) & 0xff) * 0.114)
+		;
+	}
+};
+
+const _blendRGB = (argb, rgb, factor)=>{
+	const	rf = 1 - factor
+	,	R = rgb[0], G = rgb[1], B = rgb[2]
+	;
+	for (let i = 0; i < argb.length; ++i) {
+		const c = argb[i];
+		R[i] = rf * R[i] + factor * ((c>>16)&0xff);
+		G[i] = rf * G[i] + factor * ((c>>8 )&0xff);
+		B[i] = rf * B[i] + factor * ((c    )&0xff);
+	}
+};
+
+const _blendYUV = function (argb, yuv, factor) {
+	const	rf = 1 - factor
+	,	Y = yuv[0], U = yuv[1], V = yuv[2]
+	;
+	for (let i = 0; i < argb.length; ++i) {
+		const	c = argb[i]
+		,	r = (c>>16)&0xff
+		,	g = (c>>8 )&0xff
+		,	b = (c    )&0xff
+		;
+		Y[i] = rf * Y[i] + factor * ( r * 0.299 + g * 0.587 + b * 0.114);
+		U[i] = rf * U[i] + factor * (-r * 0.169 - g * 0.331 + b * 0.500);
+		V[i] = rf * V[i] + factor * ( r * 0.500 - g * 0.419 - b * 0.081);
+	}
+}
+
+const _bhash = _j.hash({
+	'y':	_blendY
+,	'gray':	_blendY
+,	'rgb':	_blendRGB
+,	'yuv':	_blendYUV
+,	'y2y':  _blendY2Y
+});
+
+_i.blend = (space, from, to, factor)=>{
+	_bhash[space](from, to, factor);
+};
 
 const _rgba2argb = (from, to)=>{
 	for (let s = 0, d = 0; d < to.length; s+=4, ++d) {
@@ -208,7 +307,7 @@ const _convHash = {
 	}
 };
 
-_image.convert = (dst, src)=>{
+_i.convert = (src, dst)=>{
 	const	df = dst[0]
 	,	dd = dst[1]
 	,	sf = src[0]
@@ -225,7 +324,7 @@ _image.convert = (dst, src)=>{
 	fn(sd, dd);
 };
 
-_image.stat = (histogram, luminance, src, shape)=>{
+_i.stat = (histogram, luminance, src, shape)=>{
 	if (!shape) {
 		for (let i = 0; i < src.length; ++i) {
 			const	cell = src[i]
@@ -303,7 +402,7 @@ const	_otsu = (oW, oS, histogram)=>{
 };
 
 const	_otsuWant = [[Uint32Array, 256], [Uint32Array, 256]];
-_image.otsuThreshold = (histogram)=>(
+_i.otsuThreshold = (histogram)=>(
 	_j.use(_otsuWant, (w, s)=>(_otsu(w, s, histogram)))
 );
 
@@ -341,7 +440,7 @@ const	_offset3x3 = (stride)=>{
 _offset3x3.stride = -1;
 _offset3x3.table = null;
 
-_image.sobel = (dst, src, stride)=>{ // 3x3
+_i.sobel = (dst, src, stride)=>{ // 3x3
 	const	Ky = _kernel3x3['sobelY']
 	,	Kx = _kernel3x3['sobelX']
 	,	O = _offset3x3(stride)
@@ -360,7 +459,7 @@ _image.sobel = (dst, src, stride)=>{ // 3x3
 	}
 };
 
-_image.laplacian = (dst, src, stride)=>{ // 3x3 8direction
+_i.laplacian = (dst, src, stride)=>{ // 3x3 8direction
 	const	K = _kernel3x3['laplacian']
 	,	O = _offset3x3(stride)
 	,	start = O[8]
@@ -411,14 +510,14 @@ const _equalizeLUT = (lut, histogram, bufSize)=>{
 	});
 };
 
-_image.equalize = (out, lbuf, histogram)=>{
+_i.equalize = (out, lbuf, histogram)=>{
 	_j.use([[Uint8ClampedArray, 256]], (_eqLUT)=>{
 		_equalizeLUT(_eqLUT, histogram, out.length);
 		_mapLUT(out, lbuf, _eqLUT);
 	});
 };
-_image.equalize.lut = _equalizeLUT;
-_image.equalize.map = _mapLUT;
+_i.equalize.lut = _equalizeLUT;
+_i.equalize.map = _mapLUT;
 
 const	_splitH = (r)=>{
 	const	T = [
@@ -461,6 +560,6 @@ const	_splitH = (r)=>{
 	return [..._grid(d, t, s[0]), ..._grid(d, t, s[1])]
 }
 
-_image.grid = (target, rect)=>(_grid(0, target, rect));
+_i.grid = (target, rect)=>(_grid(0, target, rect));
 
 });

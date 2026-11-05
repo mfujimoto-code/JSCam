@@ -18,15 +18,16 @@ const	_stage = _j.e(kparam.topLayer)
 ,	_WATCH = 500
 ;
 
-const	_ID_OK_MOVE_ON = 0
+const	_ID_OK_MOVEON         = 0
 ,	_ID_YOU_ARE_NOT_READY = 100
-,	_TIME_QUANTUM = 1000
+,	_TIME_QUANTUM         = 1000
 ;
 
 let	_showHistogram    = true
 ,	_lastSuggestion   = 0
 ,	_lastProcessedEnd = 0
 ,	_paused           = false
+,	_afactor          = 0.5
 ;
 
 const _getter = {
@@ -36,7 +37,8 @@ const _getter = {
 const _setter = {
 	'showHistogram': (v)=>(_showHistogram = v)
 ,	'pause':         (v)=>(_paused        = v)
-,	'schedule':      (v)=>(true)
+,	'schedule':      (v)=>(true)			// Okay if set was called
+,	'afactor':       (v)=>(_afactor       = v)
 };
 dispatch.get = (tag)=>{
 	const fn = _getter[tag];
@@ -232,13 +234,13 @@ const _pipeline = []
 	if (!dispSize)
 		return _ID_YOU_ARE_NOT_READY;
 
-	return _ID_OK_MOVE_ON
+	return _ID_OK_MOVEON
 }
 , _pCheckCondition = (context, me)=>{
 	const s = context.suggestion = __pCheck();
 	_pipeline.push(me);
 
-	if (s === _ID_OK_MOVE_ON && _changed) {
+	if (s === _ID_OK_MOVEON && _changed) {
 		_changed = false;
 		++_stat.viewed;
 		return
@@ -259,13 +261,21 @@ const _pipeline = []
 	_pipeline.push(me);
 }
 , _pExtract = (context, me) => {
-	const	r = context.snap[0].rect(_scale, _offset)
-	,	srcImage = context.snap[0].extract(r, null, 1)
+	const	c = context
+	,	r = c.snap[0].rect(_scale, _offset)
+	,	srcImage = c.snap[0].extract(r, null, 1)
 	;
 	_offset[0] = r[4];
 	_offset[1] = r[5];
 
-	context.frame = new _j.Frame(srcImage, 1);
+	c.attachment.afactor = _afactor;
+
+	const	f = c.frame = new _j.Frame(srcImage, 1)
+	,	a = c.attachment
+	;
+	_j.hash.keys(a).forEach((k)=>{
+		f.attach(k, a[k]);
+	});
 
 	_pipeline.push(me);
 }
@@ -277,15 +287,18 @@ const _pipeline = []
 	_pipeline.push(me);
 }
 , _pRender = (context, me) => {
+	const	c = context;
 	context.rstate = _j.render.buildImage(
 		context.rstate
 	);
 
-	if (!!context.rstate.image) {
-		_pipeline.push(me);
+	if (!context.rstate.image) {
+		_pipeline.unshift(me);
 		return
 	}
-	_pipeline.unshift(me);
+
+	context.attachment = context.frame.attachment();
+	_pipeline.push(me);
 }
 , _pShow = (context, me) => {
 	_is.inject(context.rstate.image, 1);
@@ -369,9 +382,10 @@ const	_timeQuantum = ()=>(_timeQuantum.over());
 dispatch.timeQuantum = _timeQuantum;
 
 dispatch.iDISP = (function * () {
-	let	context = {
-			suggestion: _ID_OK_MOVE_ON
-		}
+	let	context = _j.hash({
+			suggestion: _ID_OK_MOVEON
+		,	attachment: _j.hash()
+		})
 	;
 
 	_buildPipeline();
@@ -379,9 +393,7 @@ dispatch.iDISP = (function * () {
 		yield context.suggestion;
 		_timeQuantum.update();
 
-		context = {
-			suggestion: _ID_OK_MOVE_ON
-		};
+		context.suggestion = _ID_OK_MOVEON;
 
 		_pipeline.push(_endMark);
 		while (true) {
@@ -392,7 +404,7 @@ dispatch.iDISP = (function * () {
 
 			if (_timeQuantum() && _pipeline[0] !== _endMark) {
 				_stat.suspend += 1;
-				yield _ID_OK_MOVE_ON
+				yield _ID_OK_MOVEON
 				_timeQuantum.update();
 			}
 		}

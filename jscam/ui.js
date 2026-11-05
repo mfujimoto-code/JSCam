@@ -307,8 +307,7 @@ jsCam.initFn.push((kparam)=>{
 
 	setupRange('afactor', 'accumulation factor', (v)=>{
 		const	f = Number(v);
-		_j.render.set('afactor', f);
-		_j.delta.accum.set('factor', f);
+		_j.dispatch.set('afactor', f);
 	});
 
 	const appVersion = _j.e('app-version');

@@ -1,13 +1,13 @@
 'use strict';
 
 jsCam.initFn.push((kparam)=>{
-const _j = jsCam;
+const	_j = jsCam
+,	_i = _j.image
+;
 
 const render = _j.hash();
 
 _j.render = render;
-
-const _accum = new _j.Accum(false, true);
 
 const _image = function(frame) {
 	const s = frame.shape()
@@ -31,9 +31,9 @@ const _builtin = _j.hash({
 			}
 		,	(state)=>{
 				const	imageData = _image(state.frame);
-				_j.image.convert(
-					['rgba', imageData.data]
-				,	['rgb', state.rgb]
+				_i.convert(
+					['rgb', state.rgb]
+				,	['rgba', imageData.data]
 				);
 				state.image = imageData
 			}
@@ -51,9 +51,9 @@ const _builtin = _j.hash({
 		,	(state)=>{
 				const imageData = _image(state.frame);
 
-				_j.image.convert(
-					['rgba', imageData.data]
-				,	['luminance', state.plane]
+				_i.convert(
+					['luminance', state.plane]
+				,	['rgba', imageData.data]
 				);
 
 				state.image = imageData;
@@ -72,9 +72,9 @@ const _builtin = _j.hash({
 		,	(state)=>{
 				const imageData = _image(state.frame);
 
-				_j.image.convert(
-					['rgba', imageData.data]
-				,	['luminance', state.plane]
+				_i.convert(
+					['luminance', state.plane]
+				,	['rgba', imageData.data]
 				);
 
 				state.image = imageData;
@@ -93,9 +93,9 @@ const _builtin = _j.hash({
 		,	(state)=>{
 				const imageData = _image(state.frame);
 
-				_j.image.convert(
-					['rgba', imageData.data]
-				,	['luminance', state.plane]
+				_i.convert(
+					['luminance', state.plane]
+				,	['rgba', imageData.data]
 				);
 
 				state.image = imageData;
@@ -114,9 +114,9 @@ const _builtin = _j.hash({
 		,	(state)=>{
 				const imageData = _image(state.frame);
 
-				_j.image.convert(
-					['rgba', imageData.data]
-				,	['luminance', state.plane]
+				_i.convert(
+					['luminance', state.plane]
+				,	['rgba', imageData.data]
 				);
 
 				state.image = imageData;
@@ -134,9 +134,9 @@ const _builtin = _j.hash({
 			}
 		,	(state)=>{
 				const imageData = _image(state.frame);
-				_j.image.convert(
-					['rgba', imageData.data]
-				,	['luminance', state.e]
+				_i.convert(
+					['luminance', state.e]
+				,	['rgba', imageData.data]
 				);
 				state.image = imageData;
 			}
@@ -153,9 +153,9 @@ const _builtin = _j.hash({
 			}
 		,	(state)=>{
 				const imageData = _image(state.frame);
-				_j.image.convert(
-					['rgba', imageData.data]
-				,	['yuv', state.yuv]
+				_i.convert(
+					['yuv', state.yuv]
+				,	['rgba', imageData.data]
 				);
 				state.image = imageData;
 			}
@@ -168,14 +168,14 @@ const _builtin = _j.hash({
 ,	'GRAY-accum': (()=>{
 		const _stage = [
 			(state)=>{
-				_accum.update(state.frame, 'gray');
+				state.frame.get('argb');
 			}
 		,	(state)=>{
 				const imageData = _image(state.frame);
 
-				_j.image.convert(
-					['rgba', imageData.data]
-				,	['gray', state.frame.get('gray-a')[0]]
+				_i.convert(
+					['gray', state.frame.get('gray-a')]
+				,	['rgba', imageData.data]
 				);
 
 				state.image = imageData;
@@ -189,14 +189,14 @@ const _builtin = _j.hash({
 ,	'RGB-accum': (()=>{
 		const _stage = [
 			(state)=>{
-				_accum.update(state.frame, 'rgb');
+				state.frame.get('argb');
 			}
 		,	(state)=>{
 				const imageData = _image(state.frame);
 
-				_j.image.convert(
-					['rgba', imageData.data]
-				,	['rgb', state.frame.get('rgb-a')]
+				_i.convert(
+					['rgb', state.frame.get('rgb-a')]
+				,	['rgba', imageData.data]
 				);
 
 				state.image = imageData;
@@ -210,14 +210,14 @@ const _builtin = _j.hash({
 ,	'YUV-accum': (()=>{
 		const _stage = [
 			(state)=>{
-				_accum.update(state.frame, 'yuv');
+				state.frame.get('argb');
 			}
 		,	(state)=>{
 				const imageData = _image(state.frame);
 
-				_j.image.convert(
-					['rgba', imageData.data]
-				,	['yuv', state.frame.get('yuv-a')]
+				_i.convert(
+					['yuv', state.frame.get('yuv-a')]
+				,	['rgba', imageData.data]
 				);
 
 				state.image = imageData;
@@ -231,7 +231,13 @@ const _builtin = _j.hash({
 ,	'BW-delta': (()=>{
 		const _stage = [
 			(state)=>{
-				state.delta = _j.delta.get(state.frame)
+				state.frame.get('argb');
+			}
+		,	(state)=>{
+				state.delta = state.frame.get('gray-d')
+				const Hdelta = _i.array('histogram', 1);
+				_i.stat([Hdelta], [0], [state.delta], state.frame.shape());
+				state.Totsu = _i.otsuThreshold(Hdelta);
 			}
 		,	(state)=>{
 				const imageData = _image(state.frame);
@@ -239,13 +245,13 @@ const _builtin = _j.hash({
 				const	num  = state.frame.num()
 				,	data = imageData.data
 				,	d = state.delta
+				,	t = state.Totsu
 				;
 
 				for (let i = 0, o = 0; i < num; ++i, o += 4) {
-					const bw = (d[i] == 0) ? 0 : 255;
 					data[o  ] =
 					data[o+1] =
-					data[o+2] = bw;
+					data[o+2] = (d[i] < t) ? 0 : 255;
 					data[o+3] = 255;
 				}
 
@@ -257,24 +263,17 @@ const _builtin = _j.hash({
 			return state
 		}
 	})()
-,	'Gray-delta': (()=>{
+,	'GRAY-delta': (()=>{
 		const _stage = [
 			(state)=>{
-				state.delta = _j.delta.get(state.frame)
+				state.frame.get('argb');
 			}
 		,	(state)=>{
 				const imageData = _image(state.frame);
 
-				const	num  = state.frame.num()
-				,	data = imageData.data
-				,	d = state.delta
-				;
-				for (let i = 0, o = 0; i < num; ++i, o += 4) {
-					data[o  ] =
-					data[o+1] =
-					data[o+2] = Math.abs(d[i]);
-					data[o+3] = 255;
-				}
+				_i.convert(['gray', state.frame.get('gray-d')]
+				,          ['rgba', imageData.data]
+				);
 
 				state.image = imageData;
 			}
@@ -299,9 +298,9 @@ const _builtin = _j.hash({
 				,	G = rgb[1]
 				,	B = rgb[2]
 				,	f = state.frame
-				,	tR = _j.image.otsuThreshold(f.histogram('red'))
-				,	tG = _j.image.otsuThreshold(f.histogram('green'))
-				,	tB = _j.image.otsuThreshold(f.histogram('blue'))
+				,	tR = _i.otsuThreshold(f.histogram('red'))
+				,	tG = _i.otsuThreshold(f.histogram('green'))
+				,	tB = _i.otsuThreshold(f.histogram('blue'))
 				;
 				for (let i = 0, o = 0; i < num; ++i, o += 4) {
 					data[o+0] = R[i] > tR ? 255 : 0;
@@ -326,9 +325,9 @@ const _builtin = _j.hash({
 		,	(state)=>{
 				const imageData = _image(state.frame);
 
-				_j.image.convert(
-					['rgba', imageData.data]
-				,	['luminance', state.edge]
+				_i.convert(
+					['luminance', state.edge]
+				,	['rgba', imageData.data]
 				);
 
 				state.image = imageData;
@@ -347,9 +346,9 @@ const _builtin = _j.hash({
 		,	(state)=>{
 				const imageData = _image(state.frame);
 
-				_j.image.convert(
-					['rgba', imageData.data]
-				,	['luminance', state.edge]
+				_i.convert(
+					['luminance', state.edge]
+				,	['rgba', imageData.data]
 				);
 
 				state.image = imageData;
@@ -368,9 +367,9 @@ const _builtin = _j.hash({
 		,	(state)=>{
 				const imageData = _image(state.frame);
 
-				_j.image.convert(
-					['rgba', imageData.data]
-				,	['luminance', state.edge]
+				_i.convert(
+					['luminance', state.edge]
+				,	['rgba', imageData.data]
 				);
 
 				state.image = imageData;
@@ -419,7 +418,7 @@ const _builtin = _j.hash({
 
 				const	num  = state.frame.num()
 				,	data = imageData.data
-				,	t = _j.image.otsuThreshold(
+				,	t = _i.otsuThreshold(
 						state.frame.histogram('sobel')
 					)
 				,	e = state.edge
@@ -512,16 +511,5 @@ render.add(
 
 render.mode(render.mode()[0]);
 render.buildImage = (st)=>(_buildFn(st));
-
-const _setter = {
-	'afactor': (v)=>(_accum.set('factor', v))
-};
-
-render.set = (tag, value)=>{
-	const fn = _setter[tag];
-	if (!fn)
-		_j.fatal(new Error('not supported ' + tag));
-	fn(value);
-};
 
 });

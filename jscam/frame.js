@@ -2,7 +2,9 @@
 
 jsCam.initFn.push((kparam)=>{
 
-const _j = jsCam;
+const	_j = jsCam
+,	_i = _j.image
+;
 
 const Frame = function (image, innerBorder) {
 	this._init(image, innerBorder);
@@ -23,6 +25,10 @@ Frame._getters = _j.hash({
 ,	'sobel':            function () {return this._getEdge('sobel')}
 ,	'sobel.rgb':        function () {return this._getEdge('sobel.rgb')}
 ,	'argb':             function () {return this._getARGB()}
+,	'gray-a':           function () {return this._getAccumedGray()}
+,	'rgb-a':            function () {return this._getAccumedRGB()}
+,	'yuv-a':            function () {return this._getAccumedYUV()}
+,	'gray-d':           function () {return this._getDeltaGray()}
 });
 
 Frame._setters = _j.hash({
@@ -67,6 +73,19 @@ Frame.prototype = {
 			'ImageData': ()=>(imageData)
 		,	'rgba':      ()=>(imageData.data)
 		});
+		this.attachment = ()=>(_j.hash({afactor:0.5}));
+	}
+	, attach: function (tag, data) {
+		const hash = this.attachment();
+		hash[tag] = data;
+		this.attachment = ()=>(hash);
+	}
+	, detach: function (tag) {
+		const hash = this.attachment();
+		if (!hash || !hash[tag])
+			return
+		delete hash[tag]
+		this.attachment = ()=>(hash);
 	}
 	, set: function (tag, value) {
 		const fn = Frame._setters[tag];
@@ -94,14 +113,14 @@ Frame.prototype = {
 	}
 	, __getComponent: function (index) {
 		const	num  = this.num()
-		,	C = _j.newObj(Uint8ClampedArray, num)
-		,	hC = _j.newObj(Uint32Array, 256)
+		,	C = _i.array('plane', num)
+		,	hC = _i.array('histogram', 1)
 		,	lum = [[0]]
 		,	bTag = ['red', 'green', 'blue'][index]
 		,	cTag = ['r', 'g', 'b'][index]
 		;
-		_j.image.convert([cTag, C], ['argb', this.get('argb')]);
-		_j.image.stat([hC], lum, [C], this.shape());
+		_i.convert(['argb', this.get('argb')], [cTag, C]);
+		_i.stat([hC], lum, [C], this.shape());
 		this.set('buffer',    [bTag, C     ]);
 		this.set('histogram', [bTag, hC    ]);
 		this.set('luminance', [bTag, lum[0]]);
@@ -117,29 +136,45 @@ Frame.prototype = {
 		return this.__getComponent(2)
 	}
 	, _getRGB: function () {
-		this.set('buffer', 
-		[	'rgb'
-		,	[
-				this.get('red')
-			,	this.get('green')
-			,	this.get('blue')
-			]
-		]);
+		const	rgb = _i.chop3(_i.array('rgb', this.num()))
+		;
+		_i.convert(['rgba', this.get('rgba')], ['rgb', rgb]);
+ 		this.set('buffer', ['rgb', rgb]);
+
+		const	hRGB = _i.chop3(_i.array('histogram', 3))
+		,	lum = [0,0,0]
+		;
+		_i.stat(hRGB, lum, rgb, this.shape());
+		this.set('histogram', ['red',   hRGB[0]]);
+		this.set('histogram', ['green', hRGB[1]]);
+		this.set('histogram', ['blue',  hRGB[2]]);
+		this.set('luminance', ['red',   lum[0]]);
+		this.set('luminance', ['green', lum[1]]);
+		this.set('luminance', ['blue',  lum[2]]);
+
+// 		this.set('buffer', 
+// 		[	'rgb'
+// 		,	[
+// 				this.get('red')
+// 			,	this.get('green')
+// 			,	this.get('blue')
+// 			]
+// 		]);
 
 		return this.get('rgb')
 	}
 	, _getEqualized: function () {
-		const	eq = _j.newObj(Uint8ClampedArray, this.num())
-		,	hE = _j.newObj(Uint32Array, 256)
+		const	eq = _i.array('gray', this.num())
+		,	hE = _i.array('histogram', 1)
 		,	lE = [[0]]
 		,	g = this.get('gray')
-		,	_e = _j.image.equalize
+		,	_e = _i.equalize
 		;
 		_j.use([[Uint8ClampedArray, 256]], (_eqLUT)=>{
 			_e.lut(_eqLUT, this.histogram('gray'), this.innerNum());
 			_e.map(eq, g, _eqLUT);
 		});
-		_j.image.stat([hE], lE, [eq], this.shape());
+		_i.stat([hE], lE, [eq], this.shape());
 		this.set('buffer',    ['equalized', eq   ]);
 		this.set('histogram', ['equalized', hE   ]);
 		this.set('luminance', ['equalized', lE[0]]);
@@ -148,16 +183,12 @@ Frame.prototype = {
 	}
 	, _getYUV: function () {
 		const	num = this.num()
-		,	yuv = [
-				_j.newObj(Uint8ClampedArray, num)
-			,	_j.newObj(Float32Array, num)
-			,	_j.newObj(Float32Array, num)
-			]
-		,	hY = _j.newObj(Uint32Array, 256)
+		,	yuv = _i.chop3(_i.array('yuv', num))
+		,	hY = _i.array('histogram', 1)
 		,	lum = [[0]]
 		;
-		_j.image.convert(['yuv', yuv], ['argb', this.get('argb')]);
-		_j.image.stat([hY], lum, [yuv[0]], this.shape());
+		_i.convert(['argb', this.get('argb')], ['yuv', yuv]);
+		_i.stat([hY], lum, [yuv[0]], this.shape());
 
 		this.set('buffer',    ['yuv', yuv   ]);
 		this.set('histogram', ['y',   hY    ]);
@@ -166,19 +197,19 @@ Frame.prototype = {
 	}
 	, _getGray: function () {
 		const	num = this.num()
-		,	gray = _j.newObj(Uint8ClampedArray, num)
-		,	hG = _j.newObj(Uint32Array, 256)
+		,	gray = _i.array('gray', num)
+		,	hG = _i.array('histogram', 1)
 		,	lum = [[0]]
 		;
-		_j.image.convert(['gray', gray], ['argb', this.get('argb')]);
-		_j.image.stat([hG], lum, [gray], this.shape());
+		_i.convert(['argb', this.get('argb')], ['gray', gray]);
+		_i.stat([hG], lum, [gray], this.shape());
 		this.set('buffer',    ['gray', gray  ]);
 		this.set('histogram', ['gray', hG    ]);
 		this.set('luminance', ['gray', lum[0]]);
 		return this.get('gray');
 	}
 	, _getEdge: function (method) {
-		const e = _j.newObj(Uint8ClampedArray, this.num())
+		const e = _i.array('gray', this.num())
 		,     w = this.shape()[0]
 		;
 
@@ -188,37 +219,40 @@ Frame.prototype = {
 			,     G = plane[1]
 			,     B = plane[2]
 			,     num = this.num()
-			,     eR = _j.newObj(Uint8ClampedArray, num)
-			,     eG = _j.newObj(Uint8ClampedArray, num)
-			,     eB = _j.newObj(Uint8ClampedArray, num)
+			,     ePlane = _i.chop3(_i.array('rgb', num))
+			,     eR = ePlane[0]
+			,     eG = ePlane[1]
+			,     eB = ePlane[2]
 			;
-			_j.image.sobel(eR, R, w);
-			_j.image.sobel(eG, G, w);
-			_j.image.sobel(eB, B, w);
+			_i.sobel(eR, R, w);
+			_i.sobel(eG, G, w);
+			_i.sobel(eB, B, w);
 			for (let i = 0; i < num; ++i)
 				e[i] = Math.max(eR[i], eG[i], eB[i]);
 		}
 		else if (method == 'laplacian') {
-			const raw = _j.newObj(Int16Array, e.length);
-			_j.image.laplacian(raw, this.get('gray'), w);
-			for (let i = 0; i < e.length; ++i) 
-				e[i] = Math.abs(raw[i]);
+			_j.use([[Int16Array, e.length]], (raw)=>{
+				_i.laplacian(raw, this.get('gray'), w);
+				for (let i = 0; i < e.length; ++i) 
+					e[i] = Math.abs(raw[i]);
+			});
 		}
 		else if (method == 'laplacian.signed') {
-			const raw = _j.newObj(Int16Array, e.length);
-			_j.image.laplacian(raw, this.get('gray'), w);
-			for (let i = 0; i < e.length; ++i) 
-				e[i] = raw[i] + 128;
+			_j.use([[Int16Array, e.length]], (raw)=>{
+				_i.laplacian(raw, this.get('gray'), w);
+				for (let i = 0; i < e.length; ++i) 
+					e[i] = raw[i] + 128;
+			});
 		}
 		else if (method == 'sobel') {
-			_j.image.sobel(e, this.get('gray'), w);
+			_i.sobel(e, this.get('gray'), w);
 		}
 		else _j.fatal(new Error('not supported ' + method));
 
-		const	hE = _j.newObj(Uint32Array, 256)
-		,	lum = [[0]]
+		const	hE = _i.array('histogram', 1)
+		,	lum = [0]
 		;
-		_j.image.stat([hE], lum, [e], this.shape());
+		_i.stat([hE], lum, [e], this.shape());
 
 		this.set('buffer',    [method, e     ]);
 		this.set('histogram', [method, hE    ]);
@@ -226,12 +260,127 @@ Frame.prototype = {
 		return this.get(method);
 	}
 	, _getARGB: function () {
-		const	argb = _j.newObj(Uint32Array, this.num());
+		const	argb = _i.array('argb', this.num());
 		
-		_j.image.convert(['argb', argb], ['rgba', this.get('rgba')]);
+		_i.convert(['rgba', this.get('rgba')], ['argb', argb]);
 		this.set('buffer', ['argb', argb]);
 
 		return this.get('argb')
+	}
+	, _getAccumedGray: function () {
+		const	num = this.num();
+		let	{abuf} = this.attachment();
+		if (!abuf || (abuf.length !== num)) {
+			abuf = _i.array('gray', num);
+			_i.convert(['argb', this.get('argb')], ['gray', abuf]);
+			this.attach('abuf', abuf);
+		}
+
+		_i.blend('gray', this.get('argb'), [abuf], this.attachment().afactor);
+
+		const	grayAccumed = _i.array('gray', num)
+		,	hG = _i.array('histogram', 1)
+		,	lum = [[0]]
+		;
+		grayAccumed.set(abuf);
+		_i.stat([hG], lum, [grayAccumed], this.shape());
+		this.set('buffer',    ['gray-a', grayAccumed]);
+		this.set('histogram', ['gray-a', hG         ]);
+		this.set('luminance', ['gray-a', lum[0]     ]);
+		return this.get('gray-a');
+	}
+	, _getAccumedRGB: function () {
+		const	num = this.num();
+		let	{abuf} = this.attachment()
+		;
+		if (!abuf || (abuf.length !== (num * 3))) {
+			abuf = _i.array('rgb', num);
+			_i.convert(['argb', this.get('argb')]
+			,          ['rgb', _i.chop3(abuf)]
+			);
+			this.attach('abuf', abuf);
+		}
+
+		const	rgb = _i.chop3(abuf);
+		_i.blend('rgb', this.get('argb'), rgb, this.attachment().afactor);
+
+		const	rgbAccumed = _i.chop3(_i.array('rgb', num))
+		,	hRGB = _i.chop3(_i.array('histogram', 3))
+		,	lum = [0,0,0]
+		;
+		rgbAccumed[0].set(rgb[0]);
+		rgbAccumed[1].set(rgb[1]);
+		rgbAccumed[2].set(rgb[2]);
+		this.set('buffer', ['rgb-a', rgbAccumed]);
+
+		_i.stat(hRGB, lum, rgbAccumed, this.shape());
+		this.set('histogram', ['red-a',   hRGB[0]]);
+		this.set('histogram', ['green-a', hRGB[1]]);
+		this.set('histogram', ['blue-a',  hRGB[2]]);
+		this.set('luminance', ['red-a',   lum[0]]);
+		this.set('luminance', ['green-a', lum[1]]);
+		this.set('luminance', ['blue-a',  lum[2]]);
+
+		return this.get('rgb-a');
+	}
+	, _getAccumedYUV: function () {
+		const	num = this.num();
+		let	{abuf} = this.attachment()
+		;
+		if (!abuf || (abuf.length !== (num * 3))) {
+			abuf = _i.array('yuv', num);
+			_i.convert(['argb', this.get('argb')]
+			,          ['yuv', _i.chop3(abuf)]
+			);
+			this.attach('abuf', abuf);
+		}
+
+		const	yuv = _i.chop3(abuf);
+		_i.blend('yuv', this.get('argb'), yuv, this.attachment().afactor);
+
+		const	yuvAccumed = _i.chop3(_i.array('yuv', num))
+		,	hY = _i.array('histogram', 1)
+		,	lum = [0]
+		;
+		yuvAccumed[0].set(yuv[0]);
+		yuvAccumed[1].set(yuv[1]);
+		yuvAccumed[2].set(yuv[2]);
+		this.set('buffer', ['yuv-a', yuvAccumed]);
+
+		_i.stat([hY], lum, [yuvAccumed[0]], this.shape());
+		this.set('histogram', ['y-a', hY]);
+		this.set('luminance', ['y-a', lum[0]]);
+
+		return this.get('yuv-a');
+	}
+	, _getDeltaGray: function () {
+		const	num = this.num()
+		,	argb = this.get('argb')
+		;
+
+
+		let	{abuf, gray} = this.attachment();
+		if (!gray || (gray.length !== num)) {
+			gray = _i.array('gray', num);
+			_i.convert(['argb', argb], ['gray', gray]);
+			this.attach('previous', gray);
+		}
+		if (!abuf || (abuf.length !== num)) {
+			abuf = _i.array('gray', num);
+			abuf.set(gray);
+			this.attach('abuf', abuf);
+		}
+
+		_i.blend('y2y', gray, [abuf], this.attachment().afactor);
+
+		_i.convert(['argb', argb], ['gray', gray]);
+		this.attach('previous', gray);
+
+		const	grayDelta = _i.array('gray', num);
+		_i.diff([[gray], [abuf]], [grayDelta]);
+		this.set('buffer', ['gray-d', grayDelta]);
+
+		return this.get('gray-d');
 	}
 }
 

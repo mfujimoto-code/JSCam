@@ -51,8 +51,6 @@ _load(
 	,	'./use.js'
 	,	'./image.js'
 	,	'./frame.js'
-	,	'./accum.js'
-	,	'./delta.js'
 	,	'./render.js'
 	,	'./surface.js'
 	,	'./dispatch.js'
