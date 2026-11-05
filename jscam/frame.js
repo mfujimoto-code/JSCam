@@ -152,15 +152,6 @@ Frame.prototype = {
 		this.set('luminance', ['green', lum[1]]);
 		this.set('luminance', ['blue',  lum[2]]);
 
-// 		this.set('buffer', 
-// 		[	'rgb'
-// 		,	[
-// 				this.get('red')
-// 			,	this.get('green')
-// 			,	this.get('blue')
-// 			]
-// 		]);
-
 		return this.get('rgb')
 	}
 	, _getEqualized: function () {
@@ -371,7 +362,7 @@ Frame.prototype = {
 		}
 		if (!abuf || (abuf.length !== num) || (atype !== 'gray')) {
 			abuf = _i.array('gray', num);
-			abuf.set(gray);
+			abuf.set(pbuf);
 			this.attach('abuf', abuf);
 			this.attach('atype', 'gray');
 		}
