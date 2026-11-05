@@ -16,7 +16,7 @@ test.describe('image.convert / stat / kernels', () => {
 		const got = await evalAfterKick(page, `
 			const rgba = new Uint8ClampedArray([1, 2, 3, 255, 10, 20, 30, 128]);
 			const argb = new Uint32Array(2);
-			jsCam.image.convert(['argb', argb], ['rgba', rgba]);
+			jsCam.image.convert(['rgba', rgba], ['argb', argb]);
 			return [argb[0] >>> 0, argb[1] >>> 0];
 		`);
 		expect(got).toEqual([0xff010203, 0x800a141e]);
@@ -26,25 +26,25 @@ test.describe('image.convert / stat / kernels', () => {
 		const got = await evalAfterKick(page, `
 			const rgba = new Uint8ClampedArray([255, 0, 0, 255]);
 			const argb = new Uint32Array(1);
-			jsCam.image.convert(['argb', argb], ['rgba', rgba]);
+			jsCam.image.convert(['rgba', rgba], ['argb', argb]);
 			const y = new Uint8ClampedArray(1);
 			const r = new Uint8ClampedArray(1);
 			const g = new Uint8ClampedArray(1);
 			const b = new Uint8ClampedArray(1);
 			const yuv = [new Uint8ClampedArray(1), new Float32Array(1), new Float32Array(1)];
-			jsCam.image.convert(['gray', y], ['argb', argb]);
-			jsCam.image.convert(['r', r], ['argb', argb]);
-			jsCam.image.convert(['g', g], ['argb', argb]);
-			jsCam.image.convert(['b', b], ['argb', argb]);
-			jsCam.image.convert(['yuv', yuv], ['argb', argb]);
+			jsCam.image.convert(['argb', argb], ['gray', y]);
+			jsCam.image.convert(['argb', argb], ['r', r]);
+			jsCam.image.convert(['argb', argb], ['g', g]);
+			jsCam.image.convert(['argb', argb], ['b', b]);
+			jsCam.image.convert(['argb', argb], ['yuv', yuv]);
 			const back = new Uint8ClampedArray(4);
-			jsCam.image.convert(['rgba', back], ['gray', y]);
+			jsCam.image.convert(['gray', y], ['rgba', back]);
 			const fromRgb = new Uint8ClampedArray(4);
-			jsCam.image.convert(['rgba', fromRgb], ['rgb', [
+			jsCam.image.convert(['rgb', [
 				new Uint8ClampedArray([9]),
 				new Uint8ClampedArray([8]),
 				new Uint8ClampedArray([7]),
-			]]);
+			]], ['rgba', fromRgb]);
 			return {
 				y: y[0], r: r[0], g: g[0], b: b[0],
 				Y: yuv[0][0], U: yuv[1][0], V: yuv[2][0],

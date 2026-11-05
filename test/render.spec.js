@@ -11,7 +11,7 @@ const run = async (page, body) => {
 	return jscamEval(page, `(() => { ${PIXEL_SRC} ${body} })()`);
 };
 
-test.describe('render and Night Vision', () => {
+test.describe('render and NightVision', () => {
 	test('A11 buildImage Raw and GRAY', async ({ page }) => {
 		const got = await run(page, `
 			const im = solid(2, 2, 4, 5, 6, 255);
@@ -34,7 +34,7 @@ test.describe('render and Night Vision', () => {
 		expect(got.gray[0]).toBeGreaterThan(0);
 	});
 
-	test('A12 Night Vision LUT uses innerNum', async ({ page }) => {
+	test('A12 NightVision LUT uses innerNum', async ({ page }) => {
 		const got = await run(page, `
 			const im = solid(4, 4, 0, 0, 0, 255);
 			const d = im.data;
@@ -45,14 +45,14 @@ test.describe('render and Night Vision', () => {
 				}
 			}
 			const frame = new jsCam.Frame(im, 1);
-			const acc = new jsCam.Accum(false, true);
-			acc.update(frame, 'yuv');
+			frame.attach('afactor', 0.5);
+			frame.get('yuv-a');
 			const hist = frame.histogram('y-a');
 			const ident = new Uint8ClampedArray(256);
 			const wrong = new Uint8ClampedArray(256);
 			jsCam.image.equalize.lut(ident, hist, frame.innerNum());
 			jsCam.image.equalize.lut(wrong, hist, frame.num());
-			jsCam.render.mode('Night Vision');
+			jsCam.render.mode('NightVision');
 			jsCam.render.setupMode();
 			const st = { frame: frame, stage: 0 };
 			for (let i = 0; i < 8 && !st.image; ++i)

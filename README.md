@@ -32,9 +32,7 @@ flowchart TB
   Mon --> Use["use.js"]
   Use --> Img["image.js"]
   Img --> Frame["frame.js"]
-  Frame --> Accum["accum.js"]
-  Accum --> Delta["delta.js"]
-  Delta --> Render["render.js"]
+  Frame --> Render["render.js"]
   Render --> Surf["surface.js"]
   Surf --> Disp["dispatch.js"]
   Disp --> UI["ui.js"]
@@ -42,7 +40,7 @@ flowchart TB
   Cam --> Night["night.js"]
 ```
 
-Roles, in that same order: namespace → buffer observation → typed-array scratch → convert/kernels → this-vis pixels → EMA → residual → image modes → canvas I/O → vis pipeline → controls → getUserMedia → Night Vision.
+Roles, in that same order: namespace → buffer observation → typed-array scratch → convert/kernels/blend → this-vis pixels (including accum/delta) → image modes → canvas I/O → vis pipeline → controls → getUserMedia → Night Vision.
 
 Architecture, decisions, and coding rules: [`jscam/cam2-design.md`](jscam/cam2-design.md).
 

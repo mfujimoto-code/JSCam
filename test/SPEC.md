@@ -111,7 +111,7 @@ sh test/run-simple.sh
 
 **成功の目安（現行の実装済み spec）**
 
-`http` プロジェクトだけが走る。`delivery.spec.js` と `insecure.spec.js` は skip。A 系（boot、ハロー、convert、Frame、Accum、delta、render、UI）が pass。終了コード 0。レポートは `test/playwright-report/`（gitignore）。
+`http` プロジェクトだけが走る。`delivery.spec.js` と `insecure.spec.js` は skip。A 系（boot、ハロー、convert、Frame、gray-a / gray-d、render、UI）が pass。終了コード 0。レポートは `test/playwright-report/`（gitignore）。
 
 一度作った `node_modules` とブラウザキャッシュは残してよい。`package-lock.json` が変わったときだけ `npm ci` をやり直す。Chromium の版を上げるときは `package.json` とフル自動の image タグを同じ版にしてから `playwright install chromium` する。
 
@@ -142,18 +142,18 @@ docker compose -f compose.ci.yaml --profile test run --rm --build test
 
 | ID | 内容 | 簡 | フ | 手 | 実装 |
 |---|---|---|---|---|---|
-| A1 | boot、全 script 200、`kick`、`#app-version`、rVFC、Night Vision | Y | Y | | `boot.spec.js` |
-| A2 | `Surface.extract(..., 1)` が 1px ハロー複製 | Y | Y | | `surface-halo.spec.js` |
-| A3 | `rgba→argb` が画素あたり `0xAARRGGBB` | Y | Y | | `image.spec.js` |
+| A1 | boot、全 script 200、`kick`、`#app-version`、rVFC、`NightVision` | Y | Y | | `boot.spec.js` |
+| A2 | `Surface.rect` + `extract(rect, 1)` が 1px ハロー複製（上下も含む） | Y | Y | | `surface-halo.spec.js` |
+| A3 | `convert([src],[dst])` の `rgba→argb` が画素あたり `0xAARRGGBB` | Y | Y | | `image.spec.js` |
 | A4 | `gray` / `yuv` / `r,g,b` ← `argb`、表示 `rgba` ← 平面 | Y | Y | | `image.spec.js` |
 | A5 | `stat(..., shape)` は inner のみ、stride = 幅 | Y | Y | | `image.spec.js` |
 | A6 | `Frame(im, 1)` の `innerNum` / `get('argb')` / histogram | Y | Y | | `frame.spec.js` |
 | A7 | `equalize.lut` の Nl = `innerNum` | Y | Y | | `image.spec.js` |
 | A8 | Sobel / Laplacian がハロー込み近傍 | Y | Y | | `image.spec.js` |
-| A9 | `Accum` size 変更で factor=1、`*-a` は outer コピー | Y | Y | | `accum-delta.spec.js` |
-| A10 | `delta.get` は `argb` から convert | Y | Y | | `accum-delta.spec.js` |
+| A9 | `get('gray-a')` は attachment の `abuf` を vis 間で運ぶ。公開平面は outer コピー。サイズ変更 vis は今フレームで張り替える。`rgb-a`/`yuv-a` は `atype` で分ける | Y | Y | | `accum-delta.spec.js` |
+| A10 | `get('gray-d')` は 1 vis 前の輝度を混ぜた `abuf` との絶対差 | Y | Y | | `accum-delta.spec.js` |
 | A11 | `render.buildImage` Raw / GRAY | Y | Y | | `render.spec.js` |
-| A12 | Night Vision LUT が vis 全体の innerNum | Y | Y | | `render.spec.js` |
+| A12 | NightVision LUT が vis 全体の innerNum | Y | Y | | `render.spec.js` |
 | A13 | 未知 convert が `fatal` | Y | Y | | `image.spec.js` |
 | A14 | `#image-mode` / Flip の DOM 操作 | Y | Y | | `ui.spec.js` |
 

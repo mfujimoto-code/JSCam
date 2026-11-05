@@ -38,7 +38,7 @@ test.describe('live boot', () => {
 		expect(live.hasDispatch).toBe(true);
 		expect(live.rVFC).toBe('function');
 		expect(live.modes.length).toBeGreaterThan(0);
-		expect(live.modes).toContain('Night Vision');
+		expect(live.modes).toContain('NightVision');
 
 		const selected = await page.locator('#image-mode').inputValue();
 		expect(selected.length).toBeGreaterThan(0);
