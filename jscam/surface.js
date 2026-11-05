@@ -142,7 +142,7 @@ const	_adjust = function (image, x, y, w, h) {
 			let	dst = iy * stride
 			,	src = -y * stride
 			;
-			d.copyWithin(dst, src, image.width * 4);
+			d.copyWithin(dst, src, src + stride);
 		}
 	}
 	const	tw = this._tc.width;
@@ -167,7 +167,7 @@ const	_adjust = function (image, x, y, w, h) {
 			let	dst = iy * stride
 			,	src = (-y + th - 1) * stride
 			;
-			d.copyWithin(dst, src, image.width * 4);
+			d.copyWithin(dst, src, src + stride);
 		}
 	}
 };
@@ -219,18 +219,13 @@ _p.rect = function (scale, offset) {
 	return [sx, sy, sw, sh, ox, oy]
 };
 
-_p.extract = function (rect, src, border) {
+_p.extract = function (rect, border) {
 	const	tc = this._tc
 	,	gc = this._gc
 	;
 	border = (border === undefined) ? (0) : border>>>0;
 	const	b2 = border * 2;
 
-	src && gc.drawImage(
-			src
-		,	rect[0], rect[1], rect[2], rect[3]
-		,	0,       0,       rect[2], rect[3]
-		);
 	const	x = rect[0] - border
 	,	y = rect[1] - border
 	,	w = rect[2] + b2

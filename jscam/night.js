@@ -30,7 +30,11 @@ _stage2.fn = (state, eqLUT, scale, Ytmp)=>{
 		V[i] = V[i] * scale[Ytmp[i]]
 	}
 }
-_stage2.want = [[Uint8ClampedArray, 256], [Float32Array, 256], [Uint8ClampedArray, 0]];
+_stage2.want = [
+	[Uint8ClampedArray, 256]
+,	[Float32Array,      256]
+,	[Uint8ClampedArray, 0]
+];
 
 const	_stage = [
 	(state)=>{
@@ -63,6 +67,6 @@ const	_stageFn = (state)=>{
 	return state
 };
 
-_j.render.add(['Night Vision', _stageFn]);
+_j.render.add(['NightVision', _stageFn]);
 
 });

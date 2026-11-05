@@ -35,10 +35,10 @@ const _getter = {
 ,	'pause':         ()=>(_paused)
 };
 const _setter = {
-	'showHistogram': (v)=>(_showHistogram = v)
-,	'pause':         (v)=>(_paused        = v)
-,	'schedule':      (v)=>(true)			// Okay if set was called
-,	'afactor':       (v)=>(_afactor       = v)
+	'showHistogram': (v)=>((_showHistogram = v), true)
+,	'pause':         (v)=>((_paused        = v), true)
+,	'afactor':       (v)=>((_afactor       = v), false)
+,	'schedule':      (v)=>(true)	// Okay if set was called
 };
 dispatch.get = (tag)=>{
 	const fn = _getter[tag];
@@ -50,8 +50,7 @@ dispatch.set = (tag, value)=>{
 	const fn = _setter[tag];
 	if (!fn)
 		_j.fatal(new Error('not supported ' + tag));
-	fn(value);
-	_scheduleReset();
+	fn(value) && _scheduleReset();
 };
 
 dispatch._doit = ()=>{
@@ -263,7 +262,7 @@ const _pipeline = []
 , _pExtract = (context, me) => {
 	const	c = context
 	,	r = c.snap[0].rect(_scale, _offset)
-	,	srcImage = c.snap[0].extract(r, null, 1)
+	,	srcImage = c.snap[0].extract(r, 1)
 	;
 	_offset[0] = r[4];
 	_offset[1] = r[5];

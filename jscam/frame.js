@@ -291,14 +291,15 @@ Frame.prototype = {
 	}
 	, _getAccumedRGB: function () {
 		const	num = this.num();
-		let	{abuf} = this.attachment()
+		let	{abuf, atype} = this.attachment()
 		;
-		if (!abuf || (abuf.length !== (num * 3))) {
+		if (!abuf || (abuf.length !== (num * 3)) || (atype !== 'rgb')) {
 			abuf = _i.array('rgb', num);
 			_i.convert(['argb', this.get('argb')]
 			,          ['rgb', _i.chop3(abuf)]
 			);
 			this.attach('abuf', abuf);
+			this.attach('atype', 'rgb');
 		}
 
 		const	rgb = _i.chop3(abuf);
@@ -324,19 +325,22 @@ Frame.prototype = {
 		return this.get('rgb-a');
 	}
 	, _getAccumedYUV: function () {
-		const	num = this.num();
-		let	{abuf} = this.attachment()
+		const	num = this.num()
+		,	argb = this.get('argb')
 		;
-		if (!abuf || (abuf.length !== (num * 3))) {
+		let	{abuf, atype} = this.attachment()
+		;
+		if (!abuf || (abuf.length !== (num * 3)) || (atype !== 'yuv')) {
 			abuf = _i.array('yuv', num);
-			_i.convert(['argb', this.get('argb')]
+			_i.convert(['argb', argb]
 			,          ['yuv', _i.chop3(abuf)]
 			);
 			this.attach('abuf', abuf);
+			this.attach('atype', 'yuv');
 		}
 
 		const	yuv = _i.chop3(abuf);
-		_i.blend('yuv', this.get('argb'), yuv, this.attachment().afactor);
+		_i.blend('yuv', argb, yuv, this.attachment().afactor);
 
 		const	yuvAccumed = _i.chop3(_i.array('yuv', num))
 		,	hY = _i.array('histogram', 1)
@@ -358,26 +362,27 @@ Frame.prototype = {
 		,	argb = this.get('argb')
 		;
 
-
-		let	{abuf, gray} = this.attachment();
-		if (!gray || (gray.length !== num)) {
-			gray = _i.array('gray', num);
-			_i.convert(['argb', argb], ['gray', gray]);
-			this.attach('previous', gray);
+		let	{abuf, atype, pbuf, ptype} = this.attachment();
+		if (!pbuf || (pbuf.length !== num) || (ptype != 'gray')) {
+			pbuf = _i.array('gray', num);
+			_i.convert(['argb', argb], ['gray', pbuf]);
+			this.attach('pbuf', pbuf);
+			this.attach('ptype', 'gray');
 		}
-		if (!abuf || (abuf.length !== num)) {
+		if (!abuf || (abuf.length !== num) || (atype !== 'gray')) {
 			abuf = _i.array('gray', num);
 			abuf.set(gray);
 			this.attach('abuf', abuf);
+			this.attach('atype', 'gray');
 		}
 
-		_i.blend('y2y', gray, [abuf], this.attachment().afactor);
+		_i.blend('y2y', pbuf, [abuf], this.attachment().afactor);
 
-		_i.convert(['argb', argb], ['gray', gray]);
-		this.attach('previous', gray);
+		_i.convert(['argb', argb], ['gray', pbuf]);
+		this.attach('pbuf', pbuf);
 
 		const	grayDelta = _i.array('gray', num);
-		_i.diff([[gray], [abuf]], [grayDelta]);
+		_i.diff([[pbuf], [abuf]], [grayDelta]);
 		this.set('buffer', ['gray-d', grayDelta]);
 
 		return this.get('gray-d');
